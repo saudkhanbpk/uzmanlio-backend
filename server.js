@@ -5,6 +5,9 @@ import mongoose from "mongoose";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import profileRoutes from "./routes/expertInformationRoutes.js";
+import servicesRoutes from "./routes/servicesRoutes.js";
+import packagesRoutes from "./routes/packagesRoutes.js";
+import galleryRoutes from "./routes/galleryRoutes.js";
 
 dotenv.config();
 
@@ -57,8 +60,14 @@ app.get("/api/status", async (req, res) => {
 });
 
 
-// Profile routes (education, certificates, experience, etc.)
-app.use("/api/profile", profileRoutes);
+// Expert information routes
+app.use("/api/expert", profileRoutes);
+app.use("/api/expert", servicesRoutes);
+app.use("/api/expert", packagesRoutes);
+app.use("/api/expert", galleryRoutes);
+
+// Serve uploaded files
+app.use("/uploads", express.static("uploads"));
 
 // Graceful shutdown
 process.on("SIGINT", async () => {
