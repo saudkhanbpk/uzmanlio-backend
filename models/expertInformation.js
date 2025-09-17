@@ -90,12 +90,13 @@ const ExpertPaymentInfoSchema = new Schema({
   taxOffice: { type: String },
 });
 
+// Services Schema
 const ServiceSchema = new Schema({
   id: { type: String, default: uuidv4 },
   title: { type: String, required: true },
   description: { type: String },
   price: { type: Number, required: true },
-  duration: { type: Number },
+  duration: { type: Number }, // in minutes
   isActive: { type: Boolean, default: false },
   category: { type: String },
   features: [{ type: String }],
@@ -103,13 +104,14 @@ const ServiceSchema = new Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
+// Packages Schema
 const PackageSchema = new Schema({
   id: { type: String, default: uuidv4 },
   title: { type: String, required: true },
   description: { type: String },
   price: { type: Number, required: true },
   originalPrice: { type: Number },
-  duration: { type: Number },
+  duration: { type: Number }, // in days
   sessionsIncluded: { type: Number },
   isAvailable: { type: Boolean, default: false },
   isPurchased: { type: Boolean, default: false },
@@ -122,15 +124,17 @@ const PackageSchema = new Schema({
       expiryDate: { type: Date },
     },
   ],
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
 
+// Gallery Files Schema
 const GalleryFileSchema = new Schema({
   id: { type: String, default: uuidv4 },
   filename: { type: String, required: true },
   originalName: { type: String, required: true },
-  fileType: { type: String, required: true },
+  fileType: { type: String, required: true }, // 'image' or 'pdf'
   mimeType: { type: String, required: true },
   fileSize: { type: Number, required: true },
   filePath: { type: String, required: true },
@@ -186,6 +190,7 @@ const UserSchema = new Schema(
     diploma: [DiplomaSchema],
     languages: [LanguageSchema],
     skills: [SkillSchema],
+
     expertInformation: {
       percentage: { type: String },
       subs: [SubCategorySchema],
@@ -196,9 +201,12 @@ const UserSchema = new Schema(
     username: { type: String, unique: true, required: true },
     fiveMin: { type: Boolean, default: true },
     expertPackages: ExpertPackagesSchema,
+
+    // New fields for services, packages, and gallery
     services: [ServiceSchema],
     packages: [PackageSchema],
     galleryFiles: [GalleryFileSchema],
+
     vacationMode: { type: Boolean, default: false },
     expertType: { type: Boolean, default: false },
     expertAvaible: { type: Boolean, default: true },
@@ -242,6 +250,8 @@ const UserSchema = new Schema(
 const User = mongoose.model("User", UserSchema);
 export default User;
 
+
+// Also export individual schemas for potential separate use
 export {
   Title,
   EducationSchema,
