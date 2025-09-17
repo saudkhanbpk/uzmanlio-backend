@@ -1,125 +1,163 @@
-// routes/profile.js
-import {router as Router} from "express";
-import multer from "multer";
+
+import express from "express";
+import fs from "fs";
 import path from "path";
-import Title from "../models/expertInformation.js";
+import { fileURLToPath } from "url";
+import mongoose from "mongoose";
+import { upload } from "../middlewares/upload.js";
+import ExpertInformation from "../models/expertInformation.js";
 
 
-// const router = express.Router();
+const router = express.Router();
 
-// Add Title
-router.post("/addTitle", async (req, res) => {
+// Get __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+router.post("/:userId", async (req, res, next) => {
   try {
-    const { title, description } = req.body;
-    console.log("Title: ", title);
-
-    if (!title) {
-      return res.status(400).json({ error: "Title is required" });
-    }
-    const newTitle = new Title({ title, description });
-    await newTitle.save();
-    res.status(200).json({ message: "Title Added Successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Error Adding Title", details: error.message });
-  }
-});
-
-// File upload setup (local storage)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname.replace(/\s+/g, "_")),
-});
-const upload = multer({ storage });
-
-// Get profile (for now assume single user profile)
-router.get("/", async (req, res) => {
-  try {
-    const profile = await Profile.findOne();
-    res.json(profile || {});
-  } catch (err) {
-    res.status(500).json({ error: "Error fetching profile" });
-  }
-});
-
-// Create or update whole profile
-router.post("/", async (req, res) => {
-  try {
-    const data = req.body;
-    let profile = await Profile.findOne();
-
-    if (profile) {
-      profile.set(data);
-    } else {
-      profile = new Profile(data);
+    console.log("Received upload request for userId:", req.params.userId);
+    if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+      console.log("Invalid userId:", req.params.userId);
+      return res.status(400).json({ error: "Invalid user ID" });
     }
 
-    await profile.save();
-    res.json(profile);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error saving profile" });
-  }
-});
-
-// PATCH (partial update – for education, certificates, experience etc.)
-router.patch("/", async (req, res) => {
-  try {
-    const updates = req.body;
-    let profile = await Profile.findOne();
-
-    if (!profile) {
-      profile = new Profile(updates);
-    } else {
-      profile.set(updates);
+    // First fetch the user to get existing image info
+    const existingUser = await ExpertInformation.findById(req.params.userId);
+    if (existingUser && existingUser.ppFile) {
+      // Extract filename from ppFile path (e.g., "/Uploads/12345.png" -> "12345.png")
+      const existingFilename = path.basename(existingUser.ppFile);
+      console.log("Found existing image:", existingFilename);
+      req.query.imageId = existingFilename;
     }
 
-    await profile.save();
-    res.json(profile);
+    next();
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error updating profile" });
+    console.error("Error fetching user for image replacement:", err);
+    next();
   }
-});
-
-// Upload file
-router.post("/upload", upload.single("file"), async (req, res) => {
+}, upload.single("profileImage"), async (req, res) => {
   try {
-    const fileData = {
-      name: req.file.originalname,
-      type: req.file.mimetype,
-      size: (req.file.size / 1024).toFixed(2) + " KB",
-      url: `/uploads/${req.file.filename}`,
-    };
+    if (!req.file) {
+      console.log("No file uploaded");
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
-    let profile = await Profile.findOne();
-    if (!profile) profile = new Profile();
+    const filePath = path.join(__dirname, "..", "uploads", "Expert-Users", req.file.filename);
+    console.log("File saved to:", filePath);
+    if (!fs.existsSync(filePath)) {
+      console.error("File not found after upload:", filePath);
+      return res.status(500).json({ error: "File not saved to disk" });
+    }
 
-    profile.files.push(fileData);
-    await profile.save();
-
-    res.json(fileData);
-  } catch (err) {
-    res.status(500).json({ error: "File upload failed" });
-  }
-});
-
-// Delete file
-router.delete("/file/:fileId", async (req, res) => {
-  try {
-    const profile = await Profile.findOne();
-    if (!profile) return res.status(404).json({ error: "Profile not found" });
-
-    profile.files = profile.files.filter(
-      (f) => f._id.toString() !== req.params.fileId
+    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/Expert-Users/${req.file.filename}`;
+    console.log("Generated fileUrl:", fileUrl);
+    const expertInformation = await ExpertInformation.findByIdAndUpdate(
+      req.params.userId,
+      { pp: fileUrl, ppFile: `/uploads/Expert-Users/${req.file.filename}` },
+      { new: true }
     );
-    await profile.save();
 
-    res.json({ success: true });
+    if (!expertInformation) {
+      console.log("User not found for ID:", req.params.userId);
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log("Profile updated successfully for userId:", req.params.userId);
+    res.json({ message: "Profile picture uploaded", pp: fileUrl, expertInformation });
   } catch (err) {
-    res.status(500).json({ error: "Error deleting file" });
+    console.error("Upload error:", {
+      message: err.message,
+      stack: err.stack
+    });
+    res.status(500).json({ error: "Upload failed", details: err.message });
   }
 });
 
-// ✅ Export the router instance
-export default Router;
+router.get("/:userId", async (req, res) => {
+  try {
+    console.log("Fetching profile for userId:", req.params.userId);
+    if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+      console.log("Invalid userId:", req.params.userId);
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    const expertInformation = await ExpertInformation.findById(req.params.userId)
+
+
+    if (!expertInformation) {
+      console.log("User not found for ID:", req.params.userId);
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log("Profile fetched successfully for userId:", req.params.userId);
+    res.json(expertInformation);
+  } catch (err) {
+    console.error("Fetch error:", {
+      message: err.message,
+      stack: err.stack
+    });
+    res.status(500).json({ error: "Error fetching profile", details: err.message });
+  }
+});
+
+router.put("/:userId", async (req, res) => {
+  try {
+    console.log("Updating profile for userId:", req.params.userId);
+    if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+      console.log("Invalid userId:", req.params.userId);
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    const expertInformation = await ExpertInformation.findByIdAndUpdate(req.params.userId, req.body, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!expertInformation) {
+      console.log("User not found for ID:", req.params.userId);
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log("Profile updated successfully for userId:", req.params.userId);
+    res.json({ message: "Profile updated", expertInformation });
+  } catch (err) {
+    console.error("Update error:", {
+      message: err.message,
+      stack: err.stack
+    });
+    res.status(500).json({ error: "Error updating profile", details: err.message });
+  }
+});
+
+router.patch("/:userId", async (req, res) => {
+  try {
+    console.log("Patching profile for userId:", req.params.userId);
+    if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+      console.log("Invalid userId:", req.params.userId);
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    const expertInformation = await ExpertInformation.findByIdAndUpdate(
+      req.params.userId,
+      { $set: req.body },
+      { new: true, runValidators: true }
+    );
+
+    if (!expertInformation) {
+      console.log("User not found for ID:", req.params.userId);
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log("Profile patched successfully for userId:", req.params.userId);
+    res.json({ message: "Profile partially updated", expertInformation });
+  } catch (err) {
+    console.error("Patch error:", {
+      message: err.message,
+      stack: err.stack
+    });
+    res.status(500).json({ error: "Error patching profile", details: err.message });
+  }
+});
+
+export default router;

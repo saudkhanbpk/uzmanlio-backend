@@ -1,14 +1,13 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
-
 const { Schema } = mongoose;
 
 const Title = new Schema({
   id: { type: String, default: uuidv4 },
-  title: {type : String},
-  description: {type : String},
-})
+  title: { type: String },
+  description: { type: String },
+});
 
 // ---------------- Sub-Schemas ----------------
 const EducationSchema = new Schema({
@@ -24,11 +23,12 @@ const ExperienceSchema = new Schema({
   id: { type: String, default: uuidv4 },
   company: { type: String },
   position: { type: String },
+  description: { type: String },
   start: { type: Number },
   end: { type: Number, default: null },
   stillWork: { type: Boolean, default: false },
   country: { type: Schema.Types.ObjectId, ref: "Country" },
-  city: { type: Schema.Types.ObjectId, ref: "City" },
+  city: { type: Schema.Types.ObjectId, ref: "City" }, // Added to match population
 });
 
 const CertificateSchema = new Schema({
@@ -36,7 +36,19 @@ const CertificateSchema = new Schema({
   name: { type: String },
   company: { type: String },
   country: { type: Schema.Types.ObjectId, ref: "Country" },
-  city: { type: Schema.Types.ObjectId, ref: "City" },
+  city: { type: Schema.Types.ObjectId, ref: "City" }, // Added to match population
+  issueDate: { type: Date },
+  expiryDate: { type: Date },
+  credentialId: { type: String },
+  credentialUrl: { type: String },
+});
+
+const SkillSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  name: { type: String, required: true },
+  level: { type: Number, min: 0, max: 100, required: true },
+  category: { type: String },
+  description: { type: String },
 });
 
 const DiplomaSchema = new Schema({
@@ -51,13 +63,14 @@ const LanguageSchema = new Schema({
   level: { type: Number },
 });
 
+const Language = mongoose.model("Language", new Schema({ name: String }));
+
 const SubCategorySchema = new Schema({
   id: { type: String, default: uuidv4 },
   subCategory: { type: Schema.Types.ObjectId, ref: "SubCategory" },
 });
 
 const ExpertPackagesSchema = new Schema({
-
   hour: {
     selected: { type: Boolean, default: false },
     price: { type: Number },
@@ -70,42 +83,100 @@ const ExpertPackagesSchema = new Schema({
 
 const ExpertPaymentInfoSchema = new Schema({
   id: { type: String, default: uuidv4 },
-  type: { type: Boolean, default: false },
+  type: { type: Boolean, default: false }, // true for kurumsal, false for bireysel
   iban: { type: String },
   owner: { type: String },
+  taxNumber: { type: String },
+  taxOffice: { type: String },
 });
 
+const ServiceSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  title: { type: String, required: true },
+  description: { type: String },
+  price: { type: Number, required: true },
+  duration: { type: Number },
+  isActive: { type: Boolean, default: false },
+  category: { type: String },
+  features: [{ type: String }],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
 
-// ---------------- Main Schema ----------------
+const PackageSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  title: { type: String, required: true },
+  description: { type: String },
+  price: { type: Number, required: true },
+  originalPrice: { type: Number },
+  duration: { type: Number },
+  sessionsIncluded: { type: Number },
+  isAvailable: { type: Boolean, default: false },
+  isPurchased: { type: Boolean, default: false },
+  features: [{ type: String }],
+  validUntil: { type: Date },
+  purchasedBy: [
+    {
+      userId: { type: Schema.Types.ObjectId, ref: "User" },
+      purchaseDate: { type: Date, default: Date.now },
+      expiryDate: { type: Date },
+    },
+  ],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+const GalleryFileSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  filename: { type: String, required: true },
+  originalName: { type: String, required: true },
+  fileType: { type: String, required: true },
+  mimeType: { type: String, required: true },
+  fileSize: { type: Number, required: true },
+  filePath: { type: String, required: true },
+  fileUrl: { type: String, required: true },
+  description: { type: String },
+  isVisible: { type: Boolean, default: true },
+  uploadedAt: { type: Date, default: Date.now },
+});
+
+const SocialMediaSchema = new Schema({
+  website: { type: String },
+  linkedin: { type: String },
+  twitter: { type: String },
+  instagram: { type: String },
+  youtube: { type: String },
+  tiktok: { type: String },
+  facebook: { type: String },
+});
+
 const UserSchema = new Schema(
   {
-    password: { type: String, required: true }, // hashed
-    pp: { type: String }, // profile pic URL
+    password: { type: String, required: true },
+    pp: { type: String },
     ppFile: { type: String },
-
     information: {
-      name: { type: String },
+      name: { type: String, required: true },
+      surname: { type: String, required: true },
       birthday: { type: String },
       country: { type: Schema.Types.ObjectId, ref: "Country" },
-      city: { type: Schema.Types.ObjectId, ref: "City" },
-      district: { type: Schema.Types.ObjectId, ref: "District" },
+      city: { type: Schema.Types.ObjectId, ref: "City" }, // Added
+      district: { type: Schema.Types.ObjectId, ref: "District" }, // Added
       address: { type: String },
-      email: { type: String },
-      phone: { type: String },
+      email: { type: String, required: true, unique: true },
+      phone: { type: String, required: true },
       about: { type: String },
       trailerUrl: { type: String },
       identity: { type: Number },
       phoneCode: { type: String },
       gender: { type: String },
     },
-
+    socialMedia: { type: SocialMediaSchema, default: () => ({}) },
     video: { type: String },
     videoFile: { type: String },
     videoStatus: { type: Schema.Types.Mixed, default: null },
-
     title: { type: String },
     blogs: { type: Number, default: 0 },
-
     resume: {
       education: [EducationSchema],
     },
@@ -114,7 +185,7 @@ const UserSchema = new Schema(
     certificates: [CertificateSchema],
     diploma: [DiplomaSchema],
     languages: [LanguageSchema],
-
+    skills: [SkillSchema],
     expertInformation: {
       percentage: { type: String },
       subs: [SubCategorySchema],
@@ -122,59 +193,62 @@ const UserSchema = new Schema(
       image: { type: String },
       subMerchantID: { type: String },
     },
-
-    username: { type: String, unique: true },
+    username: { type: String, unique: true, required: true },
     fiveMin: { type: Boolean, default: true },
-
     expertPackages: ExpertPackagesSchema,
-
+    services: [ServiceSchema],
+    packages: [PackageSchema],
+    galleryFiles: [GalleryFileSchema],
     vacationMode: { type: Boolean, default: false },
     expertType: { type: Boolean, default: false },
     expertAvaible: { type: Boolean, default: true },
-    expertAvaibleHours: { type: Schema.Types.Mixed }, // flexible object
-
+    expertAvaibleHours: { type: Schema.Types.Mixed },
     expertPaymentInfo: ExpertPaymentInfoSchema,
-
     phoneVerifyCode: { type: Number },
     lastSend: { type: Date },
     lastOnline: { type: Date },
     tokenEmail: { type: Number },
     accountType: { type: Boolean, default: true },
     star: { type: Number, default: 0 },
-
     is_suspended: { type: Boolean, default: false },
     is_protected: { type: Boolean, default: false },
     is_phone_valid: { type: Boolean, default: false },
     is_mail_valid: { type: Boolean, default: false },
     is_verified: { type: Boolean, default: false },
-
     is_freezed: {
       date: { type: Number, default: 0 },
       status: { type: Boolean, default: false },
     },
-
     notification: {
       offer: { type: Boolean, default: true },
       blog: { type: Boolean, default: true },
       notificationWeb: { type: Boolean, default: true },
     },
-
     cardInfo: { type: Array, default: [] },
     favorites: { type: Array, default: [] },
-
     lastLogin: { type: String },
     token: { type: String },
-    is_waiting: { type: Number, default: 0 }, // 0 waiting, 1 approved, 2 rejected
-
+    is_waiting: { type: Number, default: 0 },
     agreement: {
       status: { type: Boolean, default: false },
       date: { type: String },
     },
-
     hourlyPrice: { type: Number, default: 0 },
     refCode: { type: String },
   },
   { timestamps: true }
 );
 
-export default mongoose.model("Title", Title);
+const User = mongoose.model("User", UserSchema);
+export default User;
+
+export {
+  Title,
+  EducationSchema,
+  ExperienceSchema,
+  CertificateSchema,
+  ServiceSchema,
+  PackageSchema,
+  GalleryFileSchema,
+  SocialMediaSchema,
+};
