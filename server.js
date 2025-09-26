@@ -9,6 +9,9 @@ import profileRoutes from "./routes/expertInformationRoutes.js";
 import servicesRoutes from "./routes/servicesRoutes.js";
 import packagesRoutes from "./routes/packagesRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
+import userEmailsRoutes from "./routes/userEmails.js";
+import { loadAndScheduleAll } from "./services/emailScheduler.js";
+import userCouponsRoutes from "./routes/userCoupons.js";
 
 
 // Get __dirname equivalent
@@ -34,6 +37,12 @@ mongoose
   .connect(mongoUrl, { dbName })
   .then(() => console.log("✅ Connected to MongoDB"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
+
+// After successful connection, load scheduled emails
+mongoose.connection.once('open', () => {
+  console.log('MongoDB connection open, loading scheduled emails...');
+  loadAndScheduleAll().catch(err => console.error('Failed to load scheduled emails:', err));
+});
 
 // Example StatusCheck schema
 const statusCheckSchema = new mongoose.Schema({
@@ -89,6 +98,10 @@ app.use("/api/expert", profileRoutes);
 app.use("/api/expert", servicesRoutes);
 app.use("/api/expert", packagesRoutes);
 app.use("/api/expert", galleryRoutes);
+// Coupons per user
+app.use("/api/expert/:userId/coupons", userCouponsRoutes);
+// Emails per user
+app.use("/api/expert/:userId/emails", userEmailsRoutes);
 
 // Serve uploaded files
 app.use("/uploads", express.static("uploads"));
