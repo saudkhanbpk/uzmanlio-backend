@@ -1,4 +1,3 @@
-// routes/galleryRoutes.js
 import express from "express";
 import multer from "multer";
 import path from "path";
@@ -23,7 +22,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ 
+const upload = multer({
   storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
@@ -32,7 +31,7 @@ const upload = multer({
     const allowedTypes = /jpeg|jpg|png|gif|pdf/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-    
+
     if (mimetype && extname) {
       return cb(null, true);
     } else {
@@ -83,10 +82,10 @@ router.post("/:userId/gallery", upload.single("file"), async (req, res) => {
 
     const { description } = req.body;
     const user = await findUserById(req.params.userId);
-    
+
     const fileType = req.file.mimetype.startsWith('image/') ? 'image' : 'pdf';
     const fileUrl = `/uploads/gallery/${req.file.filename}`;
-    
+
     const newFile = {
       id: uuidv4(),
       filename: req.file.filename,
@@ -100,14 +99,14 @@ router.post("/:userId/gallery", upload.single("file"), async (req, res) => {
       isVisible: true,
       uploadedAt: new Date()
     };
-    
+
     if (!user.galleryFiles) {
       user.galleryFiles = [];
     }
-    
+
     user.galleryFiles.push(newFile);
     await user.save();
-    
+
     res.json({ file: newFile, message: "File uploaded successfully" });
   } catch (error) {
     // Clean up uploaded file if database save fails
@@ -123,27 +122,27 @@ router.put("/:userId/gallery/:fileId", async (req, res) => {
   try {
     const { description, isVisible } = req.body;
     const user = await findUserById(req.params.userId);
-    
+
     const fileIndex = user.galleryFiles.findIndex(
       file => file.id === req.params.fileId
     );
-    
+
     if (fileIndex === -1) {
       return res.status(404).json({ error: "File not found" });
     }
-    
+
     if (description !== undefined) {
       user.galleryFiles[fileIndex].description = description;
     }
-    
+
     if (isVisible !== undefined) {
       user.galleryFiles[fileIndex].isVisible = isVisible;
     }
-    
+
     await user.save();
-    res.json({ 
-      file: user.galleryFiles[fileIndex], 
-      message: "File updated successfully" 
+    res.json({
+      file: user.galleryFiles[fileIndex],
+      message: "File updated successfully"
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -154,25 +153,25 @@ router.put("/:userId/gallery/:fileId", async (req, res) => {
 router.delete("/:userId/gallery/:fileId", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
-    
+
     const fileIndex = user.galleryFiles.findIndex(
       file => file.id === req.params.fileId
     );
-    
+
     if (fileIndex === -1) {
       return res.status(404).json({ error: "File not found" });
     }
-    
+
     const fileToDelete = user.galleryFiles[fileIndex];
-    
+
     // Remove file from filesystem
     deleteFile(fileToDelete.filePath);
-    
+
     // Remove from database
     user.galleryFiles = user.galleryFiles.filter(
       file => file.id !== req.params.fileId
     );
-    
+
     await user.save();
     res.json({ message: "File deleted successfully" });
   } catch (error) {
@@ -184,21 +183,21 @@ router.delete("/:userId/gallery/:fileId", async (req, res) => {
 router.patch("/:userId/gallery/:fileId/toggle-visibility", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
-    
+
     const fileIndex = user.galleryFiles.findIndex(
       file => file.id === req.params.fileId
     );
-    
+
     if (fileIndex === -1) {
       return res.status(404).json({ error: "File not found" });
     }
-    
+
     user.galleryFiles[fileIndex].isVisible = !user.galleryFiles[fileIndex].isVisible;
-    
+
     await user.save();
-    res.json({ 
-      file: user.galleryFiles[fileIndex], 
-      message: `File ${user.galleryFiles[fileIndex].isVisible ? 'made visible' : 'hidden'} successfully` 
+    res.json({
+      file: user.galleryFiles[fileIndex],
+      message: `File ${user.galleryFiles[fileIndex].isVisible ? 'made visible' : 'hidden'} successfully`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -209,22 +208,22 @@ router.patch("/:userId/gallery/:fileId/toggle-visibility", async (req, res) => {
 router.get("/:userId/gallery/:fileId/download", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
-    
+
     const file = user.galleryFiles.find(
       file => file.id === req.params.fileId
     );
-    
+
     if (!file) {
       return res.status(404).json({ error: "File not found" });
     }
-    
+
     if (!fs.existsSync(file.filePath)) {
       return res.status(404).json({ error: "File not found on disk" });
     }
-    
+
     res.setHeader('Content-Disposition', `attachment; filename="${file.originalName}"`);
     res.setHeader('Content-Type', file.mimeType);
-    
+
     const fileStream = fs.createReadStream(file.filePath);
     fileStream.pipe(res);
   } catch (error) {

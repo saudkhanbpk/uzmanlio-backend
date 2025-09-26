@@ -108,8 +108,8 @@ router.put("/:userId", async (req, res) => {
   try {
     console.log("Updating profile for userId:", req.params.userId);
     const expertInformation = await ExpertInformation.findByIdAndUpdate(
-      req.params.userId, 
-      req.body, 
+      req.params.userId,
+      req.body,
       {
         new: true,
         runValidators: true,

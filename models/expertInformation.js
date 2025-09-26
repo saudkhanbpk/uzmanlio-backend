@@ -9,6 +9,14 @@ const Title = new Schema({
   description: { type: String },
 });
 
+const CustomerSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  phone: { type: String },
+  createdAt: { type: Date, default: Date.now },
+});
+
 // ---------------- Sub-Schemas ----------------
 const EducationSchema = new Schema({
   id: { type: String, default: uuidv4 },
@@ -96,7 +104,7 @@ const ServiceSchema = new Schema({
   title: { type: String, required: true },
   description: { type: String },
   icon: { type: String },
-  iconBg: { type: String, default:'' },
+  iconBg: { type: String, default: '' },
   price: { type: String, default: '0' },
   duration: { type: String, default: '0' },
   category: { type: String },
@@ -200,6 +208,26 @@ const GalleryFileSchema = new Schema({
   uploadedAt: { type: Date, default: Date.now },
 });
 
+// ---------------- Email Schema ----------------
+const EmailSchema = new Schema({
+  subject: { type: String, required: true },
+  body: { type: String, required: true },
+  recipients: { type: [String], default: [] }, // array of email addresses
+  recipientType: { type: String, enum: ['all', 'selected'], default: 'all' },
+  scheduledAt: { type: Date, required: true },
+  status: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' },
+  attempts: { type: Number, default: 0 },
+  lastError: { type: String, default: '' },
+  sentAt: { type: Date }
+});
+
+// Extend EmailSchema for per-recipient tracking
+EmailSchema.add({
+  sentCount: { type: Number, default: 0 },
+  failedCount: { type: Number, default: 0 },
+  failedRecipients: { type: [String], default: [] }
+});
+
 const SocialMediaSchema = new Schema({
   website: { type: String },
   linkedin: { type: String },
@@ -262,6 +290,8 @@ const UserSchema = new Schema(
     services: [ServiceSchema],
     packages: [PackageSchema],
     galleryFiles: [GalleryFileSchema],
+    emails: [EmailSchema],
+    customers: [CustomerSchema],
 
     vacationMode: { type: Boolean, default: false },
     expertType: { type: Boolean, default: false },
@@ -316,5 +346,6 @@ export {
   ServiceSchema,
   PackageSchema,
   GalleryFileSchema,
+  CustomerSchema,
   SocialMediaSchema,
 };
