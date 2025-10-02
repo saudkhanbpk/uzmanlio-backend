@@ -238,6 +238,19 @@ const SocialMediaSchema = new Schema({
   facebook: { type: String },
 });
 
+const BlogSchema = new Schema({
+  id: { type: String, default: () => uuidv4() },
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  category: { type: String, required: true },
+  keywords: [{ type: String }],
+  status: { type: String, enum: ["draft", "published"], default: "draft" },
+  slug: { type: String, required: true },
+  author: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
 const UserSchema = new Schema(
   {
     password: { type: String, required: true },
@@ -264,7 +277,7 @@ const UserSchema = new Schema(
     videoFile: { type: String },
     videoStatus: { type: Schema.Types.Mixed, default: null },
     title: { type: String },
-    blogs: { type: Number, default: 0 },
+    blogs: [BlogSchema],
     resume: {
       education: [EducationSchema],
     },

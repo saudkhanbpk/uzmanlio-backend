@@ -5,14 +5,14 @@ import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
-import profileRoutes from "./routes/expertInformationRoutes.js";
-import servicesRoutes from "./routes/servicesRoutes.js";
-import packagesRoutes from "./routes/packagesRoutes.js";
-import galleryRoutes from "./routes/galleryRoutes.js";
-import userEmailsRoutes from "./routes/userEmails.js";
+import profileRoutes from "./routes/expertRoutes/expertInformationRoutes.js";
+import servicesRoutes from "./routes/expertRoutes/servicesRoutes.js";
+import packagesRoutes from "./routes/expertRoutes/packagesRoutes.js";
+import galleryRoutes from "./routes/expertRoutes/galleryRoutes.js";
+import userEmailsRoutes from "./routes/expertRoutes/userEmails.js";
 import { loadAndScheduleAll } from "./services/emailScheduler.js";
-import userCouponsRoutes from "./routes/userCoupons.js";
-
+import userCouponsRoutes from "./routes/expertRoutes/userCoupons.js";
+import bookingPage from "./routes/customerRoutes/bookingPage.js";
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -25,9 +25,9 @@ app.use(cors());
 
 
 // Serve static files
-const uploadsPath = path.join(__dirname, "Uploads");
+const uploadsPath = path.join(__dirname, "uploads");
 console.log("Serving static files from:", uploadsPath);
-app.use("/Uploads", express.static(uploadsPath));
+app.use("/uploads", express.static(uploadsPath));
 
 // MongoDB connection
 const mongoUrl = process.env.MONGO_URL || "mongodb://localhost:27017";
@@ -98,6 +98,7 @@ app.use("/api/expert", profileRoutes);
 app.use("/api/expert", servicesRoutes);
 app.use("/api/expert", packagesRoutes);
 app.use("/api/expert", galleryRoutes);
+
 // Coupons per user
 app.use("/api/expert/:userId/coupons", userCouponsRoutes);
 // Emails per user
@@ -112,6 +113,10 @@ process.on("SIGINT", async () => {
   console.log("MongoDB connection closed");
   process.exit(0);
 });
+
+// Customer Routes
+// Booking Page Routes
+app.use("/api/customers/:customerId/booking", bookingPage);
 
 // Start Server
 const PORT = process.env.PORT || 4000;

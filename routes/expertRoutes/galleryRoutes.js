@@ -3,14 +3,14 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
-import User from "../models/expertInformation.js";
+import User from "../../models/expertInformation.js";
 
 const router = express.Router();
 
 // File upload setup (local storage)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = "uploads/gallery/";
+    const uploadDir = "uploads/Experts_Files/gallery/";
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -84,7 +84,7 @@ router.post("/:userId/gallery", upload.single("file"), async (req, res) => {
     const user = await findUserById(req.params.userId);
 
     const fileType = req.file.mimetype.startsWith('image/') ? 'image' : 'pdf';
-    const fileUrl = `/uploads/gallery/${req.file.filename}`;
+    const fileUrl = `/uploads/Experts_Files/gallery/${req.file.filename}`;
 
     const newFile = {
       id: uuidv4(),

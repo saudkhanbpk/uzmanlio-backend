@@ -1,7 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import User from '../models/expertInformation.js';
-import { scheduleEmailJob, sendEmailNow, stopEmailJob } from '../services/emailScheduler.js';
+import User from '../../models/expertInformation.js';
+import { scheduleEmailJob, sendEmailNow, stopEmailJob } from '../../services/emailScheduler.js';
 
 const router = express.Router({ mergeParams: true });
 

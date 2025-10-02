@@ -4,8 +4,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { upload } from "../middlewares/upload.js";
-import ExpertInformation from "../models/expertInformation.js";
+import ExpertInformation from "../../models/expertInformation.js";
+import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
 
 const router = express.Router();
 
@@ -27,65 +27,178 @@ const findUserById = async (userId) => {
 
 // ==================== PROFILE IMAGE UPLOAD ====================
 
-router.post("/:userId/upload", async (req, res, next) => {
-  try {
-    console.log("Received upload request for userId:", req.params.userId);
-    if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
-      console.log("Invalid userId:", req.params.userId);
-      return res.status(400).json({ error: "Invalid user ID" });
+// Create expert profile upload configuration
+const expertProfileUpload = createMulterUpload({
+  uploadPath: "uploads/Expert-Users",
+  fieldName: "profileImage",
+  maxFiles: 1,
+  maxFileSize: 5, // 5MB
+  allowedExtensions: ["jpg", "jpeg", "png", "gif"],
+  fileNameGenerator: (req, file) => {
+    // If we have an existing image ID, use it (for replacement)
+    if (req.existingImageId) {
+      return req.existingImageId;
     }
-
-    // First fetch the user to get existing image info
-    const existingUser = await ExpertInformation.findById(req.params.userId);
-    if (existingUser && existingUser.ppFile) {
-      // Extract filename from ppFile path (e.g., "/uploads/Expert-Users/12345.png" -> "12345.png")
-      const existingFilename = path.basename(existingUser.ppFile);
-      console.log("Found existing image:", existingFilename);
-      req.query.imageId = existingFilename;
-    }
-
-    next();
-  } catch (err) {
-    console.error("Error fetching user for image replacement:", err);
-    next();
-  }
-}, upload.single("profileImage"), async (req, res) => {
-  try {
-    if (!req.file) {
-      console.log("No file uploaded");
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-
-    const filePath = path.join(__dirname, "..", "uploads", "Expert-Users", req.file.filename);
-    console.log("File saved to:", filePath);
-    if (!fs.existsSync(filePath)) {
-      console.error("File not found after upload:", filePath);
-      return res.status(500).json({ error: "File not saved to disk" });
-    }
-
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/Expert-Users/${req.file.filename}`;
-    console.log("Generated fileUrl:", fileUrl);
-    const expertInformation = await ExpertInformation.findByIdAndUpdate(
-      req.params.userId,
-      { pp: fileUrl, ppFile: `/uploads/Expert-Users/${req.file.filename}` },
-      { new: true }
-    );
-
-    if (!expertInformation) {
-      console.log("User not found for ID:", req.params.userId);
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    console.log("Profile picture uploaded successfully for userId:", req.params.userId);
-    res.json({ message: "Profile picture uploaded", pp: fileUrl, expertInformation });
-  } catch (err) {
-    console.error("Upload error:", {
-      message: err.message,
-      stack: err.stack
-    });
-    res.status(500).json({ error: "Upload failed", details: err.message });
+    // Otherwise generate new filename
+    const userId = req.params.userId || 'unknown';
+    const timestamp = Date.now();
+    const extension = path.extname(file.originalname).toLowerCase();
+    return `${userId}-${timestamp}${extension}`;
   }
 });
+
+// Profile picture upload route
+router.post("/:userId/upload",
+  // Validation and existing image check middleware
+  async (req, res, next) => {
+    try {
+      console.log("Received upload request for userId:", req.params.userId);
+
+      // Validate userId
+      if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+        console.log("Invalid userId:", req.params.userId);
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+
+      // Check for existing user and image
+      const existingUser = await ExpertInformation.findById(req.params.userId);
+      if (!existingUser) {
+        console.log("User not found:", req.params.userId);
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // If user has existing image, prepare for replacement
+      if (existingUser.ppFile) {
+        const existingFilename = path.basename(existingUser.ppFile);
+        console.log("Found existing image:", existingFilename);
+
+        // Store existing filename for potential replacement
+        req.existingImageId = existingFilename;
+
+        // Store full path for deletion after successful upload
+        req.existingImagePath = path.join(__dirname, "..", "..", existingUser.ppFile);
+      }
+
+      next();
+    } catch (err) {
+      console.error("Error in pre-upload middleware:", err);
+      return res.status(500).json({
+        error: "Pre-upload validation failed",
+        details: err.message
+      });
+    }
+  },
+
+  // Multer upload middleware
+  expertProfileUpload.single(),
+
+  // Error handling middleware
+  handleMulterError,
+
+  // Main upload handler
+  async (req, res) => {
+    try {
+      // Check if file was uploaded
+      if (!req.file) {
+        console.log("No file uploaded");
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      console.log("File uploaded:", {
+        originalname: req.file.originalname,
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      });
+
+      // Verify file exists on disk
+      const uploadedFilePath = req.file.path;
+      if (!fs.existsSync(uploadedFilePath)) {
+        console.error("File not found after upload:", uploadedFilePath);
+        return res.status(500).json({ error: "File upload failed - file not saved to disk" });
+      }
+
+      // Generate URLs for the uploaded file
+      const relativePath = `/uploads/Experts_Files/Expert-Users/${req.file.filename}`;
+      const fileUrl = `${req.protocol}://${req.get("host")}${relativePath}`;
+
+      console.log("Generated URLs:", {
+        relativePath,
+        fileUrl
+      });
+
+      // Update user profile with new image URLs
+      const updatedExpert = await ExpertInformation.findByIdAndUpdate(
+        req.params.userId,
+        {
+          pp: fileUrl,
+          ppFile: relativePath
+        },
+        {
+          new: true,
+          runValidators: true
+        }
+      );
+
+      if (!updatedExpert) {
+        // If update failed, delete the uploaded file
+        await deleteUploadedFile(uploadedFilePath);
+        return res.status(404).json({ error: "Failed to update user profile" });
+      }
+
+      // If we had an existing image and it's different from the new one, delete the old file
+      if (req.existingImagePath && req.existingImageId !== req.file.filename) {
+        try {
+          if (fs.existsSync(req.existingImagePath)) {
+            await deleteUploadedFile(req.existingImagePath);
+            console.log("Deleted old profile image:", req.existingImagePath);
+          }
+        } catch (deleteError) {
+          // Log error but don't fail the request
+          console.error("Error deleting old profile image:", deleteError);
+        }
+      }
+
+      console.log("Profile picture uploaded successfully for userId:", req.params.userId);
+
+      // Send success response
+      res.json({
+        success: true,
+        message: "Profile picture uploaded successfully",
+        data: {
+          pp: fileUrl,
+          ppFile: relativePath,
+          filename: req.file.filename,
+          size: req.file.size,
+          mimetype: req.file.mimetype
+        },
+        expertInformation: updatedExpert
+      });
+
+    } catch (err) {
+      console.error("Upload error:", {
+        message: err.message,
+        stack: err.stack
+      });
+
+      // If there was an error and we have an uploaded file, clean it up
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        try {
+          await deleteUploadedFile(req.file.path);
+          console.log("Cleaned up failed upload file");
+        } catch (cleanupError) {
+          console.error("Error cleaning up file:", cleanupError);
+        }
+      }
+
+      res.status(500).json({
+        error: "Upload failed",
+        details: err.message
+      });
+    }
+  }
+);
+
 
 // ==================== BASIC PROFILE ROUTES ====================
 

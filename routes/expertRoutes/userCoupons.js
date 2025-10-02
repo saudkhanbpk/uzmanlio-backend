@@ -1,7 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
-import Coupon from "../models/Coupon.js";
-import User from "../models/expertInformation.js";
+import Coupon from "../../models/Coupon.js";
+import User from "../../models/expertInformation.js";
 
 const router = express.Router({ mergeParams: true });
 
