@@ -9,6 +9,10 @@ import profileRoutes from "./routes/expertInformationRoutes.js";
 import servicesRoutes from "./routes/servicesRoutes.js";
 import packagesRoutes from "./routes/packagesRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
+import calendarAuthRoutes from "./routes/calendarAuthRoutes.js";
+import calendarSyncRoutes from "./routes/calendarSyncRoutes.js";
+import calendarWebhookRoutes from "./routes/calendarWebhookRoutes.js";
+import backgroundJobService from "./services/backgroundJobs.js";
 
 
 // Get __dirname equivalent
@@ -85,23 +89,46 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal Server Error", details: err.message });
 });
 // Expert information routes
-app.use("/api/expert", profileRoutes);
+app.use("/api/expert-information", profileRoutes);
 app.use("/api/expert", servicesRoutes);
 app.use("/api/expert", packagesRoutes);
 app.use("/api/expert", galleryRoutes);
+
+// Calendar integration routes
+app.use("/api/calendar/auth", calendarAuthRoutes);
+app.use("/api/calendar/sync", calendarSyncRoutes);
+app.use("/api/calendar/webhooks", calendarWebhookRoutes);
 
 // Serve uploaded files
 app.use("/uploads", express.static("uploads"));
 
 // Graceful shutdown
 process.on("SIGINT", async () => {
+  console.log("Shutting down gracefully...");
+  backgroundJobService.stopAllJobs();
   await mongoose.connection.close();
   console.log("MongoDB connection closed");
   process.exit(0);
 });
 
+process.on("SIGTERM", async () => {
+  console.log("Shutting down gracefully...");
+  backgroundJobService.stopAllJobs();
+  await mongoose.connection.close();
+  console.log("MongoDB connection closed");
+  process.exit(0);
+});
+
+// Initialize background jobs
+if (process.env.NODE_ENV !== 'test') {
+  backgroundJobService.init();
+}
+
 // Start Server
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📅 Calendar webhooks available at:`);
+  console.log(`   Google: ${process.env.BASE_URL || `http://localhost:${PORT}`}/api/calendar/webhooks/google`);
+  console.log(`   Microsoft: ${process.env.BASE_URL || `http://localhost:${PORT}`}/api/calendar/webhooks/microsoft`);
 });

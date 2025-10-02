@@ -14,7 +14,7 @@ const EducationSchema = new Schema({
   id: { type: String, default: uuidv4 },
   level: { type: String },
   university: { type: Schema.Types.ObjectId, ref: "University" },
-  name: { type: String }, // university name
+  name: { type: String },
   department: { type: String },
   graduationYear: { type: Number },
 });
@@ -28,7 +28,7 @@ const ExperienceSchema = new Schema({
   end: { type: Number, default: null },
   stillWork: { type: Boolean, default: false },
   country: { type: Schema.Types.ObjectId, ref: "Country" },
-  city: { type: Schema.Types.ObjectId, ref: "City" }, // Added to match population
+  city: { type: Schema.Types.ObjectId, ref: "City" },
 });
 
 const CertificateSchema = new Schema({
@@ -36,7 +36,7 @@ const CertificateSchema = new Schema({
   name: { type: String },
   company: { type: String },
   country: { type: Schema.Types.ObjectId, ref: "Country" },
-  city: { type: Schema.Types.ObjectId, ref: "City" }, // Added to match population
+  city: { type: Schema.Types.ObjectId, ref: "City" },
   issueDate: { type: Date },
   expiryDate: { type: Date },
   credentialId: { type: String },
@@ -49,6 +49,201 @@ const SkillSchema = new Schema({
   level: { type: Number, min: 0, max: 100, required: true },
   category: { type: String },
   description: { type: String },
+});
+
+const AppointmentSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  title: { type: String, required: true },
+  date: { type: String, required: true },
+  time: { type: String, required: true },
+  duration: { type: Number, required: true },
+  type: { type: String, enum: ["1-1", "group"], required: true },
+  status: {
+    type: String,
+    enum: ["confirmed", "pending", "cancelled"],
+    default: "pending",
+  },
+  clientName: { type: String },
+  clientEmail: { type: String },
+  notes: { type: String },
+  createdAt: { type: Date, default: Date.now },
+});
+
+const AvailabilitySchema = new Schema({
+  alwaysAvailable: { type: Boolean, default: false },
+  selectedSlots: [{ type: String }],
+  lastUpdated: { type: Date, default: Date.now },
+});
+
+const CalendarProviderSchema = new Schema({
+  provider: { type: String, enum: ["google", "microsoft"], required: true },
+  providerId: { type: String, required: true },
+  email: { type: String, required: true },
+  accessToken: { type: String, required: true },
+  refreshToken: { type: String, required: true },
+  tokenExpiry: { type: Date, required: true },
+  calendarId: { type: String },
+  subscriptionId: { type: String },
+  subscriptionExpiry: { type: Date },
+  isActive: { type: Boolean, default: true },
+  lastSync: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now },
+});
+
+const AppointmentMappingSchema = new Schema({
+  appointmentId: { type: String, required: true },
+  provider: { type: String, enum: ["google", "microsoft"], required: true },
+  providerEventId: { type: String, required: true },
+  calendarId: { type: String, required: true },
+  lastSynced: { type: Date, default: Date.now },
+});
+
+// ---------------- Forms System ----------------
+const FormFieldSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  type: {
+    type: String,
+    enum: [
+      "text",
+      "email",
+      "phone",
+      "single-choice",
+      "multiple-choice",
+      "ranking",
+      "file-upload",
+    ],
+    required: true,
+  },
+  label: { type: String, required: true },
+  required: { type: Boolean, default: false },
+  placeholder: { type: String },
+  options: [{ type: String }],
+  validation: {
+    minLength: { type: Number },
+    maxLength: { type: Number },
+    pattern: { type: String },
+  },
+});
+
+const FormResponseSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  respondentName: { type: String },
+  respondentEmail: { type: String },
+  respondentPhone: { type: String },
+  responses: [
+    {
+      fieldId: { type: String, required: true },
+      fieldLabel: { type: String, required: true },
+      fieldType: { type: String, required: true },
+      value: { type: Schema.Types.Mixed },
+      files: [{ type: String }],
+    },
+  ],
+  submittedAt: { type: Date, default: Date.now },
+  ipAddress: { type: String },
+  userAgent: { type: String },
+});
+
+const FormSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  title: { type: String, required: true },
+  description: { type: String },
+  status: {
+    type: String,
+    enum: ["draft", "active", "inactive", "archived"],
+    default: "draft",
+  },
+  fields: [FormFieldSchema],
+  responses: [FormResponseSchema],
+  participantCount: { type: Number, default: 0 },
+  settings: {
+    allowMultipleSubmissions: { type: Boolean, default: false },
+    requireLogin: { type: Boolean, default: false },
+    showProgressBar: { type: Boolean, default: true },
+    customTheme: {
+      primaryColor: { type: String, default: "#3B82F6" },
+      backgroundColor: { type: String, default: "#FFFFFF" },
+    },
+    notifications: {
+      emailOnSubmission: { type: Boolean, default: true },
+      emailAddress: { type: String },
+    },
+  },
+  analytics: {
+    views: { type: Number, default: 0 },
+    starts: { type: Number, default: 0 },
+    completions: { type: Number, default: 0 },
+    averageCompletionTime: { type: Number, default: 0 },
+  },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+// ---------------- Blog System ----------------
+const BlogSchema = new Schema({
+  id: { type: String, default: () => uuidv4() },
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  category: { type: String, required: true },
+  keywords: [{ type: String }],
+  status: { type: String, enum: ["draft", "published"], default: "draft" },
+  slug: { type: String, required: true },
+  author: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+// ---------------- Events System ----------------
+const EventSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  title: { type: String, required: true },
+  description: { type: String },
+  serviceId: { type: String },
+  serviceName: { type: String, required: true },
+  serviceType: { type: String, enum: ["service", "package"], required: true },
+  date: { type: String, required: true },
+  time: { type: String, required: true },
+  duration: { type: Number, required: true },
+  location: { type: String },
+  platform: { type: String },
+  eventType: { type: String, enum: ["online", "offline", "hybrid"], required: true },
+  meetingType: { type: String, enum: ["1-1", "grup", ""] },
+  price: { type: Number, required: true },
+  maxAttendees: { type: Number },
+  attendees: { type: Number, default: 0 },
+  category: { type: String, required: true },
+  status: {
+    type: String,
+    enum: ["pending", "approved", "completed", "cancelled"],
+    default: "pending",
+  },
+  paymentType: {
+    type: String,
+    enum: ["online", "havale-eft", "paketten-tahsil"],
+    default: "online",
+  },
+  isRecurring: { type: Boolean, default: false },
+  recurringType: { type: String, enum: ["haftalık", "aylık"] },
+  selectedClients: [
+    {
+      id: { type: String, required: true },
+      name: { type: String, required: true },
+      email: { type: String, required: true },
+      packages: [{ type: String }],
+    },
+  ],
+  appointmentNotes: { type: String },
+  files: [
+    {
+      name: { type: String, required: true },
+      url: { type: String, required: true },
+      type: { type: String, required: true },
+      size: { type: String, required: true },
+      uploadDate: { type: String, required: true },
+    },
+  ],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 });
 
 const DiplomaSchema = new Schema({
@@ -124,7 +319,6 @@ const PackageSchema = new Schema({
       expiryDate: { type: Date },
     },
   ],
-
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -154,6 +348,158 @@ const SocialMediaSchema = new Schema({
   facebook: { type: String },
 });
 
+// ---------------- Customer System ----------------
+const CustomerNoteSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  content: { type: String, required: true },
+  author: {
+    type: String,
+    enum: ["expert", "customer", "system"],
+    required: true,
+  },
+  authorName: { type: String, required: true },
+  files: [
+    {
+      name: { type: String, required: true },
+      type: { type: String, required: true },
+      size: { type: String },
+      url: { type: String, required: true },
+      uploadedAt: { type: Date, default: Date.now },
+    },
+  ],
+  isPrivate: { type: Boolean, default: false }, // Private notes only visible to expert
+  tags: [{ type: String }], // For categorizing notes
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+const CustomerAppointmentSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  appointmentId: { type: String }, // Reference to main appointment
+  serviceId: { type: String },
+  serviceName: { type: String },
+  packageId: { type: String },
+  packageName: { type: String },
+  date: { type: Date, required: true },
+  time: { type: String, required: true },
+  duration: { type: Number }, // in minutes
+  status: {
+    type: String,
+    enum: ["scheduled", "completed", "cancelled", "no-show", "rescheduled"],
+    default: "scheduled",
+  },
+  meetingType: {
+    type: String,
+    enum: ["online", "in-person", "phone", ""],
+    default: "online",
+  },
+  meetingLink: { type: String },
+  location: { type: String },
+  price: { type: Number },
+  paymentStatus: {
+    type: String,
+    enum: ["pending", "paid", "refunded", "cancelled"],
+    default: "pending",
+  },
+  notes: { type: String }, // Session notes
+  rating: { type: Number, min: 1, max: 5 }, // Customer rating
+  feedback: { type: String }, // Customer feedback
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+const CustomerSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  name: { type: String, required: true },
+  surname: { type: String, required: true },
+  email: { type: String, required: true },
+  phone: { type: String, required: true },
+
+  // Additional customer information
+  dateOfBirth: { type: Date },
+  gender: { type: String, enum: ["male", "female", "other", "prefer-not-to-say"] },
+  address: {
+    street: { type: String },
+    city: { type: String },
+    state: { type: String },
+    postalCode: { type: String },
+    country: { type: String },
+  },
+
+  // Professional information
+  occupation: { type: String },
+  company: { type: String },
+
+  // Customer preferences and settings
+  preferences: {
+    communicationMethod: {
+      type: String,
+      enum: ["email", "phone", "sms", "whatsapp"],
+      default: "email",
+    },
+    language: { type: String, default: "tr" },
+    timezone: { type: String, default: "Europe/Istanbul" },
+    reminderSettings: {
+      enabled: { type: Boolean, default: true },
+      beforeHours: { type: Number, default: 24 }, // Hours before appointment
+    },
+  },
+
+  // Customer status and categorization
+  status: {
+    type: String,
+    enum: ["active", "inactive", "blocked", "prospect"],
+    default: "active",
+  },
+  category: { type: String }, // Custom category for grouping customers
+  tags: [{ type: String }], // Custom tags for filtering
+
+  // Relationship and interaction tracking
+  source: {
+    type: String,
+    enum: ["website", "referral", "social-media", "advertisement", "walk-in", "other"],
+    default: "website",
+  },
+  referredBy: { type: String }, // Name of person who referred
+
+  // Appointment and service history
+  appointments: [CustomerAppointmentSchema],
+  totalAppointments: { type: Number, default: 0 },
+  completedAppointments: { type: Number, default: 0 },
+  cancelledAppointments: { type: Number, default: 0 },
+  noShowAppointments: { type: Number, default: 0 },
+
+  // Financial information
+  totalSpent: { type: Number, default: 0 },
+  outstandingBalance: { type: Number, default: 0 },
+  paymentMethod: { type: String },
+
+  // Communication and notes
+  notes: [CustomerNoteSchema],
+
+  // Important dates
+  firstAppointment: { type: Date },
+  lastAppointment: { type: Date },
+  lastContact: { type: Date },
+
+  // Customer satisfaction and feedback
+  averageRating: { type: Number, min: 0, max: 5, default: 0 },
+  totalRatings: { type: Number, default: 0 },
+
+  // Privacy and consent
+  consentGiven: {
+    dataProcessing: { type: Boolean, default: false },
+    marketing: { type: Boolean, default: false },
+    dateGiven: { type: Date },
+  },
+
+  // System fields
+  isArchived: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+// ---------------- User Schema ----------------
 const UserSchema = new Schema(
   {
     password: { type: String, required: true },
@@ -180,7 +526,6 @@ const UserSchema = new Schema(
     videoFile: { type: String },
     videoStatus: { type: Schema.Types.Mixed, default: null },
     title: { type: String },
-    blogs: { type: Number, default: 0 },
     resume: {
       education: [EducationSchema],
     },
@@ -206,6 +551,24 @@ const UserSchema = new Schema(
     services: [ServiceSchema],
     packages: [PackageSchema],
     galleryFiles: [GalleryFileSchema],
+
+    // Calendar and availability data
+    availability: { type: AvailabilitySchema, default: () => ({}) },
+    appointments: [AppointmentSchema],
+    calendarProviders: [CalendarProviderSchema],
+    appointmentMappings: [AppointmentMappingSchema],
+
+    // Events system
+    events: [EventSchema],
+
+    // Blog system
+    blogs: [BlogSchema],
+
+    // Forms system
+    forms: [FormSchema],
+
+    // Customers system
+    customers: [CustomerSchema],
 
     vacationMode: { type: Boolean, default: false },
     expertType: { type: Boolean, default: false },
@@ -250,15 +613,32 @@ const UserSchema = new Schema(
 const User = mongoose.model("User", UserSchema);
 export default User;
 
-
 // Also export individual schemas for potential separate use
 export {
   Title,
   EducationSchema,
   ExperienceSchema,
   CertificateSchema,
+  SkillSchema,
+  AppointmentSchema,
+  AvailabilitySchema,
+  CalendarProviderSchema,
+  AppointmentMappingSchema,
+  FormFieldSchema,
+  FormResponseSchema,
+  FormSchema,
+  BlogSchema,
+  EventSchema,
+  DiplomaSchema,
+  LanguageSchema,
+  SubCategorySchema,
+  ExpertPackagesSchema,
+  ExpertPaymentInfoSchema,
   ServiceSchema,
   PackageSchema,
   GalleryFileSchema,
   SocialMediaSchema,
+  CustomerNoteSchema,
+  CustomerAppointmentSchema,
+  CustomerSchema,
 };
