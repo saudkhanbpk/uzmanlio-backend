@@ -23,6 +23,7 @@
     "mongose": "^0.0.2-security",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
+    "node-mailer": "^0.1.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

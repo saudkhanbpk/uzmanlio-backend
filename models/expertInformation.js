@@ -6,8 +6,16 @@ const { Schema } = mongoose;
 const Title = new Schema({
   id: { type: String, default: uuidv4 },
   title: { type: String },
-  description: { type: String },
+  description: { type: String },  
 });
+
+// const CustomerSchema = new Schema({
+//   id: { type: String, default: uuidv4 },
+//   name: { type: String, required: true },
+//   email: { type: String, required: true },
+//   phone: { type: String },
+//   createdAt: { type: Date, default: Date.now },
+// });
 
 // ---------------- Sub-Schemas ----------------
 const EducationSchema = new Schema({
@@ -278,7 +286,7 @@ const ExpertPackagesSchema = new Schema({
 
 const ExpertPaymentInfoSchema = new Schema({
   id: { type: String, default: uuidv4 },
-  type: { type: Boolean, default: false }, // true for kurumsal, false for bireysel
+  type: { type: Boolean, default: false },
   iban: { type: String },
   owner: { type: String },
   taxNumber: { type: String },
@@ -287,41 +295,98 @@ const ExpertPaymentInfoSchema = new Schema({
 
 // Services Schema
 const ServiceSchema = new Schema({
-  id: { type: String, default: uuidv4 },
+  id: { type: String, required: true },
   title: { type: String, required: true },
   description: { type: String },
-  price: { type: Number, required: true },
-  duration: { type: Number }, // in minutes
-  isActive: { type: Boolean, default: false },
+  icon: { type: String },
+  iconBg: { type: String, default: '' },
+  price: { type: String, default: '0' },
+  duration: { type: String, default: '0' },
   category: { type: String },
   features: [{ type: String }],
+  date: { type: Date },
+  time: { type: String },
+  location: { type: String },
+  platform: { type: String },
+  eventType: {
+    type: String,
+    enum: ['online', 'offline', 'hybrid', ''],
+    default: 'online'
+  },
+  meetingType: {
+    type: String,
+    enum: ['1-1', 'grup', '']
+  },
+  maxAttendees: { type: Number },
+  isOfflineEvent: { type: Boolean, default: false },
+  selectedClients: [{
+    id: { type: Number },
+    name: { type: String },
+    email: { type: String }
+  }],
+  status: {
+    type: String, enum: ['active', 'inactive', 'onhold', ''], default: 'inactive'
+  },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
-// Packages Schema
+//  packages Schema
 const PackageSchema = new Schema({
-  id: { type: String, default: uuidv4 },
+  id: { type: String, required: true },
   title: { type: String, required: true },
-  description: { type: String },
-  price: { type: Number, required: true },
+  description: { type: String, default: '' },
+  price: { type: Number, default: 0 },
   originalPrice: { type: Number },
-  duration: { type: Number }, // in days
-  sessionsIncluded: { type: Number },
-  isAvailable: { type: Boolean, default: false },
+  duration: { type: Number, default: 0 }, // in minutes (for session duration)
+  appointmentCount: { type: Number, default: 1 }, // number of sessions/appointments
+  sessionsIncluded: { type: Number }, // legacy field, can be same as appointmentCount
+  category: {
+    type: String,
+    enum: ['egitim', 'danismanlik', 'workshop', 'mentorluk', ''],
+    default: ''
+  },
+  eventType: {
+    type: String,
+    enum: ['online', 'offline', 'hybrid'],
+    default: 'online'
+  },
+  meetingType: {
+    type: String,
+    enum: ['1-1', 'grup', ''],
+    default: ''
+  },
+  platform: { type: String, default: '' },
+  location: { type: String, default: '' },
+  date: { type: Date },
+  time: { type: String },
+  maxAttendees: { type: Number },
+  icon: { type: String, default: '📦' },
+  iconBg: { type: String, default: 'bg-primary-100' },
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'onhold'],
+    default: 'active'
+  },
+  isAvailable: { type: Boolean, default: true },
   isPurchased: { type: Boolean, default: false },
+  isOfflineEvent: { type: Boolean, default: false },
+  selectedClients: [{
+    id: { type: Number },
+    name: { type: String },
+    email: { type: String }
+  }],
   features: [{ type: String }],
   validUntil: { type: Date },
-  purchasedBy: [
-    {
-      userId: { type: Schema.Types.ObjectId, ref: "User" },
-      purchaseDate: { type: Date, default: Date.now },
-      expiryDate: { type: Date },
-    },
-  ],
+  purchasedBy: [{
+    userId: { type: Schema.Types.ObjectId, ref: "User" },
+    purchaseDate: { type: Date, default: Date.now },
+    expiryDate: { type: Date },
+    sessionsUsed: { type: Number, default: 0 }
+  }],
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
+  updatedAt: { type: Date, default: Date.now }
+})
 
 // Gallery Files Schema
 const GalleryFileSchema = new Schema({
@@ -336,6 +401,26 @@ const GalleryFileSchema = new Schema({
   description: { type: String },
   isVisible: { type: Boolean, default: true },
   uploadedAt: { type: Date, default: Date.now },
+});
+
+// ---------------- Email Schema ----------------
+const EmailSchema = new Schema({
+  subject: { type: String, required: true },
+  body: { type: String, required: true },
+  recipients: { type: [String], default: [] }, // array of email addresses
+  recipientType: { type: String, enum: ['all', 'selected'], default: 'all' },
+  scheduledAt: { type: Date, required: true },
+  status: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' },
+  attempts: { type: Number, default: 0 },
+  lastError: { type: String, default: '' },
+  sentAt: { type: Date }
+});
+
+// Extend EmailSchema for per-recipient tracking
+EmailSchema.add({
+  sentCount: { type: Number, default: 0 },
+  failedCount: { type: Number, default: 0 },
+  failedRecipients: { type: [String], default: [] }
 });
 
 const SocialMediaSchema = new Schema({
@@ -551,6 +636,8 @@ const UserSchema = new Schema(
     services: [ServiceSchema],
     packages: [PackageSchema],
     galleryFiles: [GalleryFileSchema],
+    emails: [EmailSchema],
+    customers: [CustomerSchema],
 
     // Calendar and availability data
     availability: { type: AvailabilitySchema, default: () => ({}) },
@@ -637,8 +724,9 @@ export {
   ServiceSchema,
   PackageSchema,
   GalleryFileSchema,
+  CustomerSchema,
   SocialMediaSchema,
   CustomerNoteSchema,
   CustomerAppointmentSchema,
-  CustomerSchema,
+  // CustomerSchema,
 };

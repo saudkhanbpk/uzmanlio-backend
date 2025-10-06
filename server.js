@@ -5,15 +5,18 @@ import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
-import profileRoutes from "./routes/expertInformationRoutes.js";
-import servicesRoutes from "./routes/servicesRoutes.js";
-import packagesRoutes from "./routes/packagesRoutes.js";
-import galleryRoutes from "./routes/galleryRoutes.js";
+import profileRoutes from "./routes/expertRoutes/expertInformationRoutes.js";
+import servicesRoutes from "./routes/expertRoutes/servicesRoutes.js";
+import packagesRoutes from "./routes/expertRoutes/packagesRoutes.js";
+import galleryRoutes from "./routes/expertRoutes/galleryRoutes.js";
+import userEmailsRoutes from "./routes/expertRoutes/userEmails.js";
+import { loadAndScheduleAll } from "./services/emailScheduler.js";
+import userCouponsRoutes from "./routes/expertRoutes/userCoupons.js";
+import bookingPage from "./routes/customerRoutes/bookingPage.js";
 import calendarAuthRoutes from "./routes/calendarAuthRoutes.js";
 import calendarSyncRoutes from "./routes/calendarSyncRoutes.js";
 import calendarWebhookRoutes from "./routes/calendarWebhookRoutes.js";
 import backgroundJobService from "./services/backgroundJobs.js";
-
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -26,9 +29,9 @@ app.use(cors());
 
 
 // Serve static files
-const uploadsPath = path.join(__dirname, "Uploads");
+const uploadsPath = path.join(__dirname, "uploads");
 console.log("Serving static files from:", uploadsPath);
-app.use("/Uploads", express.static(uploadsPath));
+app.use("/uploads", express.static(uploadsPath));
 
 // MongoDB connection
 const mongoUrl = process.env.MONGO_URL || "mongodb://localhost:27017";
@@ -38,6 +41,12 @@ mongoose
   .connect(mongoUrl, { dbName })
   .then(() => console.log("✅ Connected to MongoDB"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
+
+// After successful connection, load scheduled emails
+mongoose.connection.once('open', () => {
+  console.log('MongoDB connection open, loading scheduled emails...');
+  loadAndScheduleAll().catch(err => console.error('Failed to load scheduled emails:', err));
+});
 
 // Example StatusCheck schema
 const statusCheckSchema = new mongoose.Schema({
@@ -89,7 +98,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal Server Error", details: err.message });
 });
 // Expert information routes
-app.use("/api/expert-information", profileRoutes);
+app.use("/api/expert", profileRoutes);
 app.use("/api/expert", servicesRoutes);
 app.use("/api/expert", packagesRoutes);
 app.use("/api/expert", galleryRoutes);
@@ -98,6 +107,10 @@ app.use("/api/expert", galleryRoutes);
 app.use("/api/calendar/auth", calendarAuthRoutes);
 app.use("/api/calendar/sync", calendarSyncRoutes);
 app.use("/api/calendar/webhooks", calendarWebhookRoutes);
+// Coupons per user
+app.use("/api/expert/:userId/coupons", userCouponsRoutes);
+// Emails per user
+app.use("/api/expert/:userId/emails", userEmailsRoutes);
 
 // Serve uploaded files
 app.use("/uploads", express.static("uploads"));
@@ -123,6 +136,9 @@ process.on("SIGTERM", async () => {
 if (process.env.NODE_ENV !== 'test') {
   backgroundJobService.init();
 }
+// Customer Routes
+// Booking Page Routes
+app.use("/api/customers/:customerId/booking", bookingPage);
 
 // Start Server
 const PORT = process.env.PORT || 4000;
