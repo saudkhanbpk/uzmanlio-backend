@@ -9,14 +9,6 @@ const Title = new Schema({
   description: { type: String },  
 });
 
-// const CustomerSchema = new Schema({
-//   id: { type: String, default: uuidv4 },
-//   name: { type: String, required: true },
-//   email: { type: String, required: true },
-//   phone: { type: String },
-//   createdAt: { type: Date, default: Date.now },
-// });
-
 // ---------------- Sub-Schemas ----------------
 const EducationSchema = new Schema({
   id: { type: String, default: uuidv4 },
@@ -493,6 +485,14 @@ const CustomerAppointmentSchema = new Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
+const cardSchema = new Schema({
+  id: { type: String, default: uuidv4 },
+  cardNumber: { type: String, required: true },
+  cardHolderName: { type: String, required: true },
+  cardExpiry: { type: String, required: true },
+  cardCvv: { type: String, required: true },
+});
+
 const CustomerSchema = new Schema({
   id: { type: String, default: uuidv4 },
   name: { type: String, required: true },
@@ -606,6 +606,15 @@ const UserSchema = new Schema(
       phoneCode: { type: String },
       gender: { type: String },
     },
+    subscription:{
+      id : {type:String , default: uuidv4()},
+      Type : {type:String , enum:["individual","institutional"]},
+      Price: {type:Number},
+      Duration : {type:String , enum:["yearly", "monthly"]},
+      startDate : {type:Date, default:Date.now()},
+      endDate : {type:Date, default:Date.now()},
+    },
+    cards: [cardSchema],
     socialMedia: { type: SocialMediaSchema, default: () => ({}) },
     video: { type: String },
     videoFile: { type: String },

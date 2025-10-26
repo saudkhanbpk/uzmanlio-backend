@@ -17,6 +17,8 @@ import calendarAuthRoutes from "./routes/calendarAuthRoutes.js";
 import calendarSyncRoutes from "./routes/calendarSyncRoutes.js";
 import calendarWebhookRoutes from "./routes/calendarWebhookRoutes.js";
 import backgroundJobService from "./services/backgroundJobs.js";
+import subscriptionRoutes from "./routes/expertRoutes/subscriptionRoutes.js";
+
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -102,6 +104,7 @@ app.use("/api/expert", profileRoutes);
 app.use("/api/expert", servicesRoutes);
 app.use("/api/expert", packagesRoutes);
 app.use("/api/expert", galleryRoutes);
+app.use("/api/expert", subscriptionRoutes);
 
 // Calendar integration routes
 app.use("/api/calendar/auth", calendarAuthRoutes);

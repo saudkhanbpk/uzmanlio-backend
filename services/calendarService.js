@@ -41,7 +41,7 @@ export class GoogleCalendarService {
   }
 
   async exchangeCodeForTokens(code) {
-    const { tokens } = await this.oauth2Client.getAccessToken(code);
+    const { tokens } = await this.oauth2Client.getToken(code);
     return tokens;
   }
 
