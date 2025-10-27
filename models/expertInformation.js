@@ -608,7 +608,7 @@ const UserSchema = new Schema(
     },
     subscription:{
       id : {type:String , default: uuidv4()},
-      Type : {type:String , enum:["individual","institutional"]},
+      type : {type:String , enum:["individual","institutional"]},
       Price: {type:Number},
       Duration : {type:String , enum:["yearly", "monthly"]},
       startDate : {type:Date, default:Date.now()},
