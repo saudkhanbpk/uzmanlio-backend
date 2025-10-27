@@ -29,7 +29,7 @@ const findUserById = async (userId) => {
 
 // Create expert profile upload configuration
 const expertProfileUpload = createMulterUpload({
-  uploadPath: "uploads/Expert-Users",
+  uploadPath: "uploads/Experts_Files/Expert-Users",
   fieldName: "profileImage",
   maxFiles: 1,
   maxFileSize: 5, // 5MB

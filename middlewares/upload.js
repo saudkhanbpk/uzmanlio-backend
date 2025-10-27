@@ -27,8 +27,8 @@ export const createMulterUpload = (options = {}) => {
   const {
     uploadPath = "uploads/general",
     fieldName = "files",
-    maxFiles = 10,
-    maxFileSize = 5, // in MB
+    maxFiles = 50,
+    maxFileSize = 50, // in 50MB
     allowedExtensions = ["jpg", "jpeg", "png", "gif"],
     allowedMimeTypes = null,
     fileNameGenerator = null,
@@ -178,7 +178,7 @@ export const uploadConfigs = {
     uploadPath: "uploads/profiles",
     fieldName: "profileImage",
     maxFiles: 1,
-    maxFileSize: 2,
+    maxFileSize: 15,
     allowedExtensions: ["jpg", "jpeg", "png", "gif"],
     fileNamePrefix: "profile",
   }),
@@ -187,9 +187,9 @@ export const uploadConfigs = {
   documents: createMulterUpload({
     uploadPath: "uploads/documents",
     fieldName: "documents",
-    maxFiles: 5,
-    maxFileSize: 10,
-    allowedExtensions: ["pdf", "doc", "docx", "txt"],
+    maxFiles: 10,
+    maxFileSize: 50,
+    allowedExtensions: ["pdf", "doc", "docx", "txt", "mp4", "mp3"],
     fileNamePrefix: "doc",
   }),
 
@@ -198,7 +198,7 @@ export const uploadConfigs = {
     uploadPath: "uploads/bookings",
     fieldName: "files",
     maxFiles: 10,
-    maxFileSize: 5,
+    maxFileSize: 50,
     allowedExtensions: ["jpg", "jpeg", "png", "pdf", "doc", "docx"],
     fileNameGenerator: (req, file) => {
       const customerId = req.params?.customerId || "unknown";
@@ -214,7 +214,7 @@ export const uploadConfigs = {
     fieldName: "file",
     maxFiles: 1,
     maxFileSize: 5,
-    allowedExtensions: ["jpg", "jpeg", "png", "gif", "pdf", "doc", "docx"],
+    allowedExtensions: ["jpg", "jpeg", "png", "gif", "pdf", "doc", "docx",],
   }),
 };
 

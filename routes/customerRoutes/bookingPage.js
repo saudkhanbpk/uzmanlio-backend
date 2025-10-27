@@ -3,8 +3,9 @@ import { v4 as uuidv4 } from "uuid";
 import mongoose from "mongoose";
 import User from "../../models/expertInformation.js";
 import { createMulterUpload, handleMulterError } from '../../middlewares/upload.js';
+import Coupon from "../../models/Coupon.js";
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 // Helper function to find user by ID
 const findUserById = async (userId) => {
@@ -18,22 +19,23 @@ const findUserById = async (userId) => {
   return user;
 };
 
-router.get("/:userId", async (req, res) => {
+
+router.get("/:userId/:expertID", async (req, res) => {
   // Check if DB is connected
   if (!mongoose.connection.readyState) {
     return res.status(503).json({ error: "Service Unavailable" });
   }
 
   try {
-    const { userId } = req.params;
+    const { userId, expertID } = req.params;
 
     // Validate ID
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
+    if (!mongoose.Types.ObjectId.isValid(expertID)) {
       return res.status(400).json({ error: "Invalid user ID" });
     }
 
     // ✅ Fetch user and exclude confidential fields
-    const user = await User.findById(userId)
+    const user = await User.findById(expertID)
       .select([
         "-password",
         "-token",
@@ -69,7 +71,6 @@ router.get("/test-booking", (req, res) => {
 });
 
 
-
 // Create custom upload configuration for booking
 const bookingUpload = createMulterUpload({
   uploadPath: "uploads/CustomerFiles/NotesFormsFiles",
@@ -80,7 +81,7 @@ const bookingUpload = createMulterUpload({
 });
 
 // Use in route
-router.post("/form",
+router.post("/:customerId/form",
   bookingUpload.array(), // Uses default field name 'files'
   handleMulterError,
   async (req, res) => {
@@ -267,20 +268,44 @@ router.get("/:userId/packages/available", async (req, res) => {
   }
 });
 
-router.get("/validate-coupon/:couponCode", async (req, res) => {
-  const { customerId, couponCode } = req.params;
-  const { expertId } = req.body;
+router.post("/:customerId/validate-coupon", async (req, res) => {
+  const { customerId, couponCode, expertId } = req.body;
+
   if (!customerId || !couponCode || !expertId) {
     return res.status(400).json({ error: "customerId, couponCode, and expertId are required" });
   }
-console("⬆️⬆️⬆️⬆️Counpon code ", customerId , couponCode)
-  // Validate the coupon code (this is just a placeholder)
-  const isValid = couponCode === "VALID_COUPON";
 
-  if (isValid) {
-    res.json({ valid: true, discount: 10 }); // 10% discount
-  } else {
-    res.json({ valid: false });
+  try {
+    // 1️⃣ Find coupon by code and owner
+    const coupon = await Coupon.findOne({
+      owner: expertId,
+      code: couponCode,        // matches "JANO"
+      status: "active",        // ensure it's active
+    });
+
+    if (!coupon) {
+      return res.status(404).json({ error: "Coupon not found or inactive" });
+    }
+
+    // 2️⃣ Check expiry date
+    const now = new Date();
+    if (coupon.expiryDate && coupon.expiryDate < now) {
+      return res.status(400).json({ error: "Coupon has expired" });
+    }
+
+    // 3️⃣ Check usage limits
+    if (coupon.usageCount >= coupon.maxUsage) {
+      return res.status(400).json({ error: "Coupon usage limit reached" });
+    }
+
+    // 4️⃣ Return coupon details
+    res.json({
+      type: coupon.type,
+      value: coupon.value,
+    });
+  } catch (err) {
+    console.error("Error validating coupon:", err);
+    res.status(500).json({ error: "Error validating coupon", details: err.message });
   }
 });
 

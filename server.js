@@ -116,7 +116,9 @@ process.on("SIGINT", async () => {
 
 // Customer Routes
 // Booking Page Routes
-app.use("/api/customers/:customerId/booking", bookingPage);
+app.use("/api/booking/customers", bookingPage);
+
+
 
 // Start Server
 const PORT = process.env.PORT || 4000;
