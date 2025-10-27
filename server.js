@@ -13,6 +13,12 @@ import userEmailsRoutes from "./routes/expertRoutes/userEmails.js";
 import { loadAndScheduleAll } from "./services/emailScheduler.js";
 import userCouponsRoutes from "./routes/expertRoutes/userCoupons.js";
 import bookingPage from "./routes/customerRoutes/bookingPage.js";
+import calendarAuthRoutes from "./routes/calendarAuthRoutes.js";
+import calendarSyncRoutes from "./routes/calendarSyncRoutes.js";
+import calendarWebhookRoutes from "./routes/calendarWebhookRoutes.js";
+import backgroundJobService from "./services/backgroundJobs.js";
+import subscriptionRoutes from "./routes/expertRoutes/subscriptionRoutes.js";
+
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -98,7 +104,12 @@ app.use("/api/expert", profileRoutes);
 app.use("/api/expert", servicesRoutes);
 app.use("/api/expert", packagesRoutes);
 app.use("/api/expert", galleryRoutes);
+app.use("/api/expert", subscriptionRoutes);
 
+// Calendar integration routes
+app.use("/api/calendar/auth", calendarAuthRoutes);
+app.use("/api/calendar/sync", calendarSyncRoutes);
+app.use("/api/calendar/webhooks", calendarWebhookRoutes);
 // Coupons per user
 app.use("/api/expert/:userId/coupons", userCouponsRoutes);
 // Emails per user
@@ -109,11 +120,25 @@ app.use("/uploads", express.static("uploads"));
 
 // Graceful shutdown
 process.on("SIGINT", async () => {
+  console.log("Shutting down gracefully...");
+  backgroundJobService.stopAllJobs();
   await mongoose.connection.close();
   console.log("MongoDB connection closed");
   process.exit(0);
 });
 
+process.on("SIGTERM", async () => {
+  console.log("Shutting down gracefully...");
+  backgroundJobService.stopAllJobs();
+  await mongoose.connection.close();
+  console.log("MongoDB connection closed");
+  process.exit(0);
+});
+
+// Initialize background jobs
+if (process.env.NODE_ENV !== 'test') {
+  backgroundJobService.init();
+}
 // Customer Routes
 // Booking Page Routes
 app.use("/api/booking/customers", bookingPage);
@@ -124,4 +149,7 @@ app.use("/api/booking/customers", bookingPage);
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📅 Calendar webhooks available at:`);
+  console.log(`   Google: ${process.env.BASE_URL || `http://localhost:${PORT}`}/api/calendar/webhooks/google`);
+  console.log(`   Microsoft: ${process.env.BASE_URL || `http://localhost:${PORT}`}/api/calendar/webhooks/microsoft`);
 });
