@@ -17,10 +17,10 @@ export const encryptToken = (token) => {
 
 export const decryptToken = (encryptedToken) => {
   console.log("Token to decrypt:",encryptedToken)
-  const bytes = CryptoJS.AES.decrypt(encryptedToken, ENCRYPTION_KEY);
-  const decryptedToken= bytes.toString(CryptoJS.enc.Utf8);
-  console.log("Token Decrypted:",decryptedToken)
-  return decryptedToken;
+  // const bytes = CryptoJS.AES.decrypt(encryptedToken, ENCRYPTION_KEY);
+  // const decryptedToken= bytes.toString(CryptoJS.enc.Utf8);
+  // console.log("Token Decrypted:",decryptedToken)
+  return encryptedToken;
 };
 
 // Google Calendar Service
