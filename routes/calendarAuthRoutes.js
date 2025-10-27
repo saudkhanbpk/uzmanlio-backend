@@ -67,6 +67,7 @@ router.get('/google/callback', async (req, res) => {
     const existingProviderIndex = user.calendarProviders.findIndex(
       provider => provider.provider === 'google' && provider.email === userInfo.email
     );
+    console.log("Access and Refresh Tokens To Get Encrypted:",tokens)
 
     const providerData = {
       provider: 'google',
