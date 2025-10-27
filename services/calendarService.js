@@ -42,17 +42,27 @@ export class GoogleCalendarService {
 
   async exchangeCodeForTokens(code) {
     const { tokens } = await this.oauth2Client.getToken(code);
+     this.oauth2Client.setCredentials(tokens);
     return tokens;
   }
 
-  async refreshAccessToken(refreshToken) {
-    this.oauth2Client.setCredentials({
-      refresh_token: decryptToken(refreshToken)
-    });
+  // async refreshAccessToken(refreshToken) {
+  //   this.oauth2Client.setCredentials({
+  //     refresh_token: decryptToken(refreshToken)
+  //   });
 
-    const { credentials } = await this.oauth2Client.refreshAccessToken();
-    return credentials;
-  }
+  //   const { credentials } = await this.oauth2Client.refreshAccessToken();
+  //   return credentials;
+  // }
+  async refreshAccessToken(refreshToken) {
+  this.oauth2Client.setCredentials({
+    refresh_token: decryptToken(refreshToken)
+  });
+
+  const { credentials } = await this.oauth2Client.refreshToken(refreshToken);
+  return credentials;
+}
+
 
   async getUserInfo(accessToken) {
     this.oauth2Client.setCredentials({
