@@ -5,9 +5,16 @@ import User from "../../models/expertInformation.js";
 import { createMulterUpload, handleMulterError } from '../../middlewares/upload.js';
 import Coupon from "../../models/Coupon.js";
 
+// ================== NEW IMPORTS ==================
+// Import the models you'll be writing data to.
+import Customer from '../../models/customer.js';
+import Order from '../../models/orders.js';
+import CustomerAppointments from '../../models/customerAppointment.js';
+import CustomerNote from '../../models/customerNotes.js';
+
 const router = express.Router({ mergeParams: true });
 
-// Helper function to find user by ID
+// Helper function to find user by ID (no changes needed)
 const findUserById = async (userId) => {
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     throw new Error('Invalid user ID');
@@ -19,42 +26,28 @@ const findUserById = async (userId) => {
   return user;
 };
 
-
+// GET Expert Details Route (no changes needed)
 router.get("/:userId/:expertID", async (req, res) => {
-  // Check if DB is connected
   if (!mongoose.connection.readyState) {
     return res.status(503).json({ error: "Service Unavailable" });
   }
-
   try {
     const { userId, expertID } = req.params;
-
-    // Validate ID
     if (!mongoose.Types.ObjectId.isValid(expertID)) {
       return res.status(400).json({ error: "Invalid user ID" });
     }
-
-    // ✅ Fetch user and exclude confidential fields
     const user = await User.findById(expertID)
       .select([
-        "-password",
-        "-token",
-        "-tokenEmail",
-        "-phoneVerifyCode",
-        "-cardInfo",
-        "-emails",
-        "-customers",
-        "-expertPaymentInfo",
+        "-password", "-token", "-tokenEmail", "-phoneVerifyCode",
+        "-cardInfo", "-emails", "-customers", "-expertPaymentInfo",
       ])
       .populate("information.country", "name")
       .populate("information.city", "name")
       .populate("information.district", "name")
-      .populate("expertInformation.category", "name")
-
+      .populate("expertInformation.category", "name");
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    console.log("Fetched user:", user);
     res.json(user);
   } catch (err) {
     console.error("Fetch error:", err);
@@ -62,177 +55,243 @@ router.get("/:userId/:expertID", async (req, res) => {
   }
 });
 
-
-// ==================== PACKAGES ROUTES ====================
-
-// Test Booking Page Route
+// Test Booking Page Route (no changes needed)
 router.get("/test-booking", (req, res) => {
   res.json({ message: "Booking page route is working!" });
 });
 
 
-// Create custom upload configuration for booking
+// ==================== MAIN BOOKING FORM SUBMISSION ROUTE (FULLY IMPLEMENTED) ====================
+
+// Multer upload configuration (no changes needed)
 const bookingUpload = createMulterUpload({
   uploadPath: "uploads/CustomerFiles/NotesFormsFiles",
   maxFiles: 5,
-  maxFileSize: 10,
-  allowedExtensions: ["jpg", "jpeg", "png", "pdf", "doc", "docx"],
+  maxFileSize: 10, // 10MB
+  allowedExtensions: ["jpg", "jpeg", "png", "pdf", "doc", "docx", "txt", "mp4", "mp3"],
   fileNamePrefix: "booking",
 });
 
-// Use in route
-router.post("/:customerId/form",
-  bookingUpload.array(), // Uses default field name 'files'
+
+// ✅ Utility function to safely parse dates
+const safeDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+// ✅ Booking form route
+router.post(
+  "/:customerId/form",
+  bookingUpload.array("files"),
   handleMulterError,
   async (req, res) => {
     try {
-      console.log('\n========== NEW BOOKING FORM SUBMISSION ==========');
-      console.log('Timestamp:', new Date().toISOString());
-      console.log('Customer ID from URL:', req.params.customerId);
+      console.log("\n========== 🧾 NEW BOOKING FORM ==========");
+      console.log("Timestamp:", new Date().toISOString());
 
-      // Log request headers
-      console.log('\n--- REQUEST HEADERS ---');
-      console.log('Content-Type:', req.headers['content-type']);
-      console.log('User-Agent:', req.headers['user-agent']);
-      console.log('Origin:', req.headers.origin);
-      console.log('IP Address:', req.ip || req.connection.remoteAddress);
-
-      // Log raw body data (if any)
-      console.log('\n--- RAW BODY DATA ---');
-      console.log('Body:', req.body);
-
-      // Parse booking data if it exists
-      let bookingData = null;
-      if (req.body.bookingData) {
-        try {
-          bookingData = JSON.parse(req.body.bookingData);
-          console.log('\n--- PARSED BOOKING DATA ---');
-          console.log(JSON.stringify(bookingData, null, 2));
-
-          // Log specific sections for clarity
-          console.log('\n--- SERVICE DETAILS ---');
-          console.log('Service Type:', bookingData.serviceType);
-          console.log('Service ID:', bookingData.serviceId);
-          console.log('Service Details:', JSON.stringify(bookingData.serviceDetails, null, 2));
-
-          console.log('\n--- CLIENT INFORMATION ---');
-          console.log('Name:', bookingData.clientInfo?.firstName, bookingData.clientInfo?.lastName);
-          console.log('Email:', bookingData.clientInfo?.email);
-          console.log('Phone:', bookingData.clientInfo?.phone);
-
-          console.log('\n--- BOOKING DETAILS ---');
-          console.log('Date:', bookingData.date);
-          console.log('Time:', bookingData.time);
-          console.log('Order Notes:', bookingData.orderNotes);
-
-          console.log('\n--- PAYMENT INFORMATION ---');
-          console.log('Card Last Four:', bookingData.paymentInfo?.cardLastFour);
-          console.log('Name on Card:', bookingData.paymentInfo?.nameOnCard);
-
-          console.log('\n--- PRICING ---');
-          console.log('Subtotal:', bookingData.subtotal);
-          console.log('Discount:', bookingData.discount);
-          console.log('Total:', bookingData.total);
-          console.log('Coupon:', bookingData.coupon);
-
-          console.log('\n--- PROVIDER INFORMATION ---');
-          console.log('Provider ID:', bookingData.providerId);
-          console.log('Provider Name:', bookingData.providerName);
-
-          console.log('\n--- ADDITIONAL INFO ---');
-          console.log('Terms Accepted:', bookingData.termsAccepted);
-          console.log('Timestamp:', bookingData.timestamp);
-          console.log('Source:', bookingData.source);
-          console.log('IP Address:', bookingData.ipAddress);
-          console.log('User Agent:', bookingData.userAgent);
-
-        } catch (parseError) {
-          console.error('Error parsing booking data:', parseError);
-        }
+      // --- Step 1: Parse and validate input ---
+      if (!req.body.bookingData) {
+        return res.status(400).json({ success: false, error: "Missing bookingData" });
       }
 
-      // Log uploaded files
-      console.log('\n--- UPLOADED FILES ---');
-      if (req.files && req.files.length > 0) {
-        console.log('Number of files:', req.files.length);
-        req.files.forEach((file, index) => {
-          console.log(`\nFile ${index + 1}:`);
-          console.log('  Original Name:', file.originalname);
-          console.log('  Filename:', file.filename);
-          console.log('  Mimetype:', file.mimetype);
-          console.log('  Size:', file.size, 'bytes');
-          console.log('  Path:', file.path);
+      const bookingData = JSON.parse(req.body.bookingData);
+      console.log("📦 Parsed bookingData:", JSON.stringify(bookingData, null, 2));
+      console.log("📎 Uploaded files:", req.files?.length || 0);
+
+      const {
+        clientInfo,
+        selectedOffering,
+        serviceType,
+        packageType,
+        providerId,
+        providerName,
+        date,
+        time,
+        total,
+        subtotal,
+        paymentInfo,
+        orderNotes,
+        termsAccepted,
+      } = bookingData;
+
+      // --- Step 2: Validate required fields ---
+      if (!clientInfo?.email || !selectedOffering?.id) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required booking fields (clientInfo or selectedOffering)",
         });
-      } else {
-        console.log('No files uploaded');
       }
 
-      console.log('\n========== END OF BOOKING SUBMISSION ==========\n');
+      // Individual services must have date/time; others get assigned later by expert
+      if (["bireysel", "hizmet"].includes(serviceType) && (!date || !time)) {
+        return res.status(400).json({
+          success: false,
+          error: "Date and time are required for individual services",
+        });
+      }
 
-      // Here you would typically:
-      // 1. Validate the data
-      // 2. Save to database
-      // 3. Send confirmation email
-      // 4. Process payment
+      // --- Step 3: Normalize date/time for non-individual bookings ---
+      const normalizedDate =
+        ["grup", "paket"].includes(serviceType) ? null : safeDate(date);
+      const normalizedTime =
+        ["grup", "paket"].includes(serviceType) ? null : time || null;
 
-      // For now, just send a success response
-      res.status(201).json({
+      // --- Step 4: Map frontend serviceType → backend eventType ---
+
+      console.log("🔄 Mapping serviceType/packageType to eventType...", serviceType);
+      // ✅ Determine event type based on whichever field is active
+      const mappedEventType = packageType
+        ? "package"
+        : serviceType
+          ? "service"
+          : "service"; // fallback (defaults to 'service')
+
+
+      // --- Step 5: Find or create customer (upsert by email) ---
+      const customer = await Customer.findOneAndUpdate(
+        { email: clientInfo.email },
+        {
+          $setOnInsert: {
+            name: clientInfo.firstName,
+            surname: clientInfo.lastName,
+            email: clientInfo.email,
+            phone: clientInfo.phone,
+            status: "active",
+            source: bookingData.source || "website",
+            firstAppointment: safeDate(date),
+            consentGiven: {
+              termsAcceptionStatus: !!termsAccepted,
+              dataProcessingTerms: !!termsAccepted,
+              marketingTerms: !!termsAccepted,
+              dateGiven: new Date(),
+            },
+          },
+        },
+        { new: true, upsert: true }
+      );
+
+      // --- Step 6: Create appointment record ---
+      const appointment = await CustomerAppointments.create({
+        serviceId: mappedEventType === "service" ? selectedOffering.id : undefined,
+        serviceName: mappedEventType === "service" ? selectedOffering.title : undefined,
+        packageId: mappedEventType === "package" ? selectedOffering.id : undefined,
+        packageName: mappedEventType === "package" ? selectedOffering.title : undefined,
+        date: normalizedDate,
+        time: normalizedTime,
+        duration: selectedOffering.duration || 60,
+        status: "scheduled",
+        price: total,
+        paymentStatus: "pending",
+        notes: orderNotes,
+        meetingType: selectedOffering.meetingType || "",
+        eventType: selectedOffering.eventType || "online",
+      });
+
+      // --- Step 7: Create note if notes/files exist ---
+      let note = null;
+      if (orderNotes || (req.files && req.files.length > 0)) {
+        note = await CustomerNote.create({
+          content: orderNotes || "Booking submission with attachments.",
+          author: "customer",
+          authorName: `${customer.name} ${customer.surname}`,
+          files:
+            req.files?.map((f) => ({
+              name: f.originalname,
+              type: f.mimetype,
+              size: f.size,
+              url: f.path,
+            })) || [],
+        });
+      }
+
+      // --- Step 8: Update customer info ---
+      customer.appointments.push(appointment._id);
+      if (note) customer.notes.push(note._id);
+      customer.totalAppointments = (customer.totalAppointments || 0) + 1;
+      customer.lastAppointment = safeDate(date);
+      customer.totalSpent = (customer.totalSpent || 0) + total;
+      await customer.save();
+
+      // --- Step 9: Create order record ---
+      const order = await Order.create({
+        orderDetails: {
+          events: [
+            {
+              eventType: mappedEventType,
+              service:
+                mappedEventType === "service"
+                  ? {
+                    name: selectedOffering.title,
+                    description: selectedOffering.description,
+                    price: subtotal,
+                    duration: selectedOffering.duration,
+                    sessions: selectedOffering.sessions || 1,
+                    meetingType: selectedOffering.meetingType,
+                  }
+                  : undefined,
+              package:
+                mappedEventType === "package"
+                  ? {
+                    name: selectedOffering.title,
+                    details: selectedOffering.details,
+                    price: subtotal,
+                    meetingType: selectedOffering.meetingType,
+                  }
+                  : undefined,
+            },
+          ],
+          totalAmount: total,
+        },
+        paymentInfo: {
+          method: paymentInfo?.method || "card",
+          status: "pending",
+          transactionId: `TRX-${uuidv4()}`,
+          cardInfo: {
+            cardNumber: paymentInfo?.cardNumber || "****",
+            cardHolderName: paymentInfo?.cardHolderName || "Unknown",
+            cardExpiry: paymentInfo?.cardExpiry || "",
+            cardCvv: paymentInfo?.cardCvv || "",
+          },
+        },
+        userInfo: {
+          userId: customer._id,
+          name: `${customer.name} ${customer.surname}`,
+          email: customer.email,
+          phone: customer.phone,
+        },
+        expertInfo: {
+          expertId: providerId,
+          name: providerName,
+          accountNo: "PENDING_FETCH",
+          specialization: "PENDING_FETCH",
+          email: "PENDING_FETCH",
+        },
+        status: "pending",
+      });
+
+      console.log("✅ Booking successfully created:", order._id);
+
+      // --- Step 10: Send response ---
+      return res.status(201).json({
         success: true,
-        message: "Booking received successfully!",
-        bookingId: bookingData?.customerId || req.params.customerId,
-        customerId: bookingData?.customerId || req.params.customerId,
-        timestamp: new Date().toISOString(),
-        filesReceived: req.files ? req.files.length : 0,
-        data: {
-          booking: bookingData,
-          files: req.files ? req.files.map(f => ({
-            originalName: f.originalname,
-            filename: f.filename,
-            size: f.size
-          })) : []
-        }
+        message: "Booking created successfully",
+        data: { customer, appointment, order, note },
       });
 
     } catch (error) {
-      console.error('\n========== ERROR IN BOOKING SUBMISSION ==========');
-      console.error('Error:', error);
-      console.error('Stack:', error.stack);
-      console.log('========== END ERROR ==========\n');
-
-      res.status(500).json({
+      console.error("❌ Error during booking submission:", error);
+      return res.status(500).json({
         success: false,
         error: "Failed to process booking",
-        message: error.message
+        message: error.message,
       });
     }
-  });
-
-// Error handling middleware for multer
-router.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    console.error('Multer error:', error);
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        error: 'File too large',
-        message: 'File size should not exceed 5MB'
-      });
-    }
-    return res.status(400).json({
-      success: false,
-      error: 'File upload error',
-      message: error.message
-    });
-  } else if (error) {
-    console.error('General error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Server error',
-      message: error.message
-    });
   }
-  next();
-});
+);
+
+
+
 
 // Get all packages
 router.get("/:userId/packages", async (req, res) => {

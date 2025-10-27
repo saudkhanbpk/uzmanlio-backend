@@ -1,22 +1,22 @@
+// order.js
+
 import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const eventSchema = new Schema({
     eventType: { type: String, enum: ['service', 'package'], required: true },
     service: {
-        // Only present if eventType is 'service'
         name: { type: String },
         description: { type: String },
         price: { type: Number },
-        duration: { type: Number }, // in minutes
+        duration: { type: Number },
         sessions: { type: Number, default: 1 }
     },
     package: {
-        // Only present if eventType is 'package'
         name: { type: String },
         details: { type: String },
         price: { type: Number },
-        
+        // REMOVED the stray "text" keyword from here
     },
     quantity: { type: Number, default: 1 }
 }, { _id: false });
@@ -28,11 +28,17 @@ const orderSchema = new Schema({
         orderDate: { type: Date, default: Date.now }
     },
     paymentInfo: {
-        method: { type: String, required: true },
-        status: { type: String, required: true },
-        transactionId: { type: String },
-        paidAt: { type: Date }
+        method: { type: String, default: "card" },
+        status: { type: String, default: "pending" },
+        transactionId: { type: String, default: () => `TRX-${uuidv4()}` },
+        cardInfo: {
+            cardNumber: { type: String },
+            cardHolderName: { type: String },
+            cardExpiry: { type: String },
+            cardCvv: { type: String },
+        },
     },
+
     userInfo: {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
         name: { type: String, required: true },
@@ -46,7 +52,10 @@ const orderSchema = new Schema({
         specialization: { type: String },
         email: { type: String }
     },
-    status: { type: String, default: 'pending' }
+    status: { type: String, default: 'pending' },
+    couponUsage: { type: Boolean, default: false }
+}, {
+    timestamps: true // Good practice to add this here as well
 });
 
 const Order = mongoose.model('Order', orderSchema);

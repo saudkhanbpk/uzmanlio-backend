@@ -1,8 +1,11 @@
-import mongoose from "mongoose";
+// customerNotes.js
 
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 const { Schema } = mongoose;
 
- const CustomerNoteSchema = new Schema({
+// EXPORT THE SCHEMA so it can be used in other files
+export const CustomerNoteSchema = new Schema({
     id: { type: String, default: uuidv4 },
     content: { type: String, required: true },
     author: {
@@ -21,10 +24,14 @@ const { Schema } = mongoose;
             uploadedAt: { type: Date, default: Date.now },
         },
     ],
-    isPrivate: { type: Boolean, default: false }, // Private notes only visible to expert
-    tags: [{ type: String }], // For categorizing notes
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now },
+    isPrivate: { type: Boolean, default: false },
+    tags: [{ type: String }],
+}, {
+    // Use Mongoose's built-in timestamps for createdAt and updatedAt
+    timestamps: true 
 });
+
+// The model is created but not the primary export if the schema is needed elsewhere
 const CustomerNote = mongoose.model("CustomerNote", CustomerNoteSchema);
+
 export default CustomerNote;

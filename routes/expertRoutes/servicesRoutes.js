@@ -66,7 +66,7 @@ router.post("/:userId/services", async (req, res) => {
       location: location || '',
       platform: platform || '',
       eventType,
-      meetingType: meetingType || '',
+      meetingType: meetingType || '1-1',
       maxAttendees: maxAttendees || null,
       isOfflineEvent: isOfflineEvent || false,
       selectedClients: selectedClients || [],

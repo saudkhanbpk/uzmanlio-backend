@@ -1,16 +1,20 @@
-import mongoose from "mongoose";
+// customerAppointment.js
 
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 const { Schema } = mongoose;
- const CustomerAppointmentSchema = new Schema({
+
+// EXPORT THE SCHEMA
+export const CustomerAppointmentSchema = new Schema({
     id: { type: String, default: uuidv4 },
-    appointmentId: { type: String }, // Reference to main appointment
+    appointmentId: { type: String },
     serviceId: { type: String },
     serviceName: { type: String },
     packageId: { type: String },
     packageName: { type: String },
-    date: { type: Date, required: true },
-    time: { type: String, required: true },
-    duration: { type: Number }, // in minutes
+    date: { type: Date },
+    time: { type: String },
+    duration: { type: Number },
     status: {
         type: String,
         enum: ["scheduled", "completed", "cancelled", "no-show", "rescheduled"],
@@ -18,9 +22,11 @@ const { Schema } = mongoose;
     },
     meetingType: {
         type: String,
-        enum: ["online", "in-person", "phone", ""],
-        default: "online",
+        enum: ["1-1", "grup", ""],
+        default: "",
     },
+    eventType: { type: String, enum: ["online", "offline", "hybrid", ""], required: true },
+
     meetingLink: { type: String },
     location: { type: String },
     price: { type: Number },
@@ -29,12 +35,16 @@ const { Schema } = mongoose;
         enum: ["pending", "paid", "refunded", "cancelled"],
         default: "pending",
     },
-    notes: { type: String }, // Session notes
-    rating: { type: Number, min: 1, max: 5 }, // Customer rating
-    feedback: { type: String }, // Customer feedback
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now },
+    notes: { type: String },
+    providerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Expert' },
+    providerName: { type: String },
+    rating: { type: Number, min: 1, max: 5 },
+    feedback: { type: String },
+}, {
+    timestamps: true // Automatically handles createdAt and updatedAt
 });
 
+
 const CustomerAppointments = mongoose.model("CustomerAppointment", CustomerAppointmentSchema);
+
 export default CustomerAppointments;

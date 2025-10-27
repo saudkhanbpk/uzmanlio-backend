@@ -29,7 +29,7 @@ export const createMulterUpload = (options = {}) => {
     fieldName = "files",
     maxFiles = 50,
     maxFileSize = 50, // in 50MB
-    allowedExtensions = ["jpg", "jpeg", "png", "gif"],
+    allowedExtensions = ["jpg", "jpeg", "png", "gif","docx","doc", "pdf","txt", "mp4", "mp3"],
     allowedMimeTypes = null,
     fileNameGenerator = null,
     preserveOriginalName = false,
@@ -199,7 +199,7 @@ export const uploadConfigs = {
     fieldName: "files",
     maxFiles: 10,
     maxFileSize: 50,
-    allowedExtensions: ["jpg", "jpeg", "png", "pdf", "doc", "docx"],
+    allowedExtensions: ["jpg", "jpeg", "png", "pdf", "doc", "docx","txt", "mp4", "mp3"],
     fileNameGenerator: (req, file) => {
       const customerId = req.params?.customerId || "unknown";
       const bookingId = req.body?.bookingId || Date.now();

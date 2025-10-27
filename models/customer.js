@@ -1,17 +1,18 @@
-
-import  CustomerAppointments from "./customerAppointment.js";
-import  CustomerNote from "./customerNotes.js";
+// customer.js
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
+
 const { Schema } = mongoose;
 
- const CustomerSchema = new Schema({
-    id: { type: String, default: uuidv4 },
+const CustomerSchema = new Schema({
+    id: { type: String, default: uuidv4, unique: true, required: true },
     name: { type: String, required: true },
     surname: { type: String, required: true },
-    email: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
     phone: { type: String, required: true },
+
+    // REMOVED the stray "text" keyword from here
 
     // Additional customer information
     dateOfBirth: { type: Date },
@@ -49,8 +50,8 @@ const { Schema } = mongoose;
         enum: ["active", "inactive", "blocked", "prospect"],
         default: "active",
     },
-    category: { type: String }, // Custom category for grouping customers
-    tags: [{ type: String }], // Custom tags for filtering
+    category: { type: String },
+    tags: [{ type: String }],
 
     // Relationship and interaction tracking
     source: {
@@ -58,10 +59,10 @@ const { Schema } = mongoose;
         enum: ["website", "referral", "social-media", "advertisement", "walk-in", "other"],
         default: "website",
     },
-    referredBy: { type: String }, // Name of person who referred
+    referredBy: { type: String },
 
     // Appointment and service history
-    appointments: [CustomerAppointments],
+    appointments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CustomerAppointment' }],
     totalAppointments: { type: Number, default: 0 },
     completedAppointments: { type: Number, default: 0 },
     cancelledAppointments: { type: Number, default: 0 },
@@ -73,7 +74,7 @@ const { Schema } = mongoose;
     paymentMethod: { type: String },
 
     // Communication and notes
-    notes: [CustomerNote],
+    notes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CustomerNote' }],
 
     // Important dates
     firstAppointment: { type: Date },
@@ -86,15 +87,18 @@ const { Schema } = mongoose;
 
     // Privacy and consent
     consentGiven: {
-        dataProcessing: { type: Boolean, default: false },
-        marketing: { type: Boolean, default: false },
+        termsAcceptionStatus: { type: Boolean, default: false },
+        dataProcessingTerms: { type: Boolean, default: false },
+        marketingTerms: { type: Boolean, default: false },
         dateGiven: { type: Date },
     },
 
     // System fields
     isArchived: { type: Boolean, default: false },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now },
+
+}, {
+    // This option automatically adds and manages createdAt and updatedAt fields
+    timestamps: true
 });
 
 const Customer = mongoose.model("Customer", CustomerSchema);
