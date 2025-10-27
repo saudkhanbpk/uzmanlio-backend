@@ -325,7 +325,7 @@ router.get("/:userId/profile", async (req, res) => {
     };
 
     console.log("Complete profile fetched successfully for userId:", req.params.userId);
-    res.json(profile);
+    res.json(user);
   } catch (error) {
     console.error("=== PROFILE ERROR DEBUG ===");
     console.error("Error message:", error.message);
