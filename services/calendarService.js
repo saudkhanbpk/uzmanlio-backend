@@ -5,16 +5,22 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const ENCRYPTION_KEY = process.env.CALENDAR_ENCRYPTION_KEY || 'default-key-change-in-production';
+const ENCRYPTION_KEY = process.env.CALENDAR_ENCRYPTION_KEY || '37d5baac21de6cf4e91459343db6ef2e678a4a61eb2570402246e311c02370c5';
 
 // Encryption utilities
 export const encryptToken = (token) => {
-  return CryptoJS.AES.encrypt(token, ENCRYPTION_KEY).toString();
+  console.log("Token to Encrypt:",token)
+  const encryptedToken =CryptoJS.AES.encrypt(token, ENCRYPTION_KEY).toString();
+  console.log("Token Encrypted:",encryptedToken)
+  return encryptedToken;
 };
 
 export const decryptToken = (encryptedToken) => {
+  console.log("Token to decrypt:",encryptedToken)
   const bytes = CryptoJS.AES.decrypt(encryptedToken, ENCRYPTION_KEY);
-  return bytes.toString(CryptoJS.enc.Utf8);
+  const decryptedToken= bytes.toString(CryptoJS.enc.Utf8);
+  console.log("Token Decrypted:",decryptedToken)
+  return decryptedToken;
 };
 
 // Google Calendar Service
