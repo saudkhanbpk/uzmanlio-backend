@@ -16,12 +16,23 @@ export const encryptToken = (token) => {
 };
 
 export const decryptToken = (encryptedToken) => {
-  console.log("Token to decrypt:",encryptedToken)
-  const bytes = CryptoJS.AES.decrypt(encryptedToken, ENCRYPTION_KEY);
-  const decryptedToken= bytes.toString(CryptoJS.enc.Utf8);
-  console.log("Token Decrypted:",decryptedToken)
-  return encryptedToken;
+  if (!encryptedToken || typeof encryptedToken !== 'string') return encryptedToken;
+
+  // If token looks like a normal Google token (starts with ya29.), skip decryption
+  if (encryptedToken.startsWith('ya29.') || encryptedToken.startsWith('1//')) {
+    return encryptedToken;
+  }
+
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedToken, ENCRYPTION_KEY);
+    const decryptedToken = bytes.toString(CryptoJS.enc.Utf8);
+    return decryptedToken || encryptedToken;
+  } catch (error) {
+    console.error('Decryption failed, returning raw token:', error);
+    return encryptedToken;
+  }
 };
+
 
 // Google Calendar Service
 export class GoogleCalendarService {
