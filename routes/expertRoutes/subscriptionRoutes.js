@@ -51,7 +51,7 @@ router.post("/:userId/new-subscription", async (req, res) => {
         const now = new Date();
         user.subscription = {
             id: uuidv4(),
-            Plantype: currentPlan,
+            Plantype: subscriptionType,
             Price: price,
             Duration: billingPeriod,
             startDate: Date.now(),
