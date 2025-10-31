@@ -131,8 +131,10 @@ router.get('/google/callback', async (req, res) => {
       console.log("UserID for Sync :", userId)
       console.log("Events for Sync :", user.events)
       const events = user.events;
+      const provider = user.calendarProviders.find(provider => provider.provider === 'google');
+      
       if(events.length > 0){
-        calendarSyncService.syncMultipleAppointmentsToProvider(userId, events, user.calendarProviders)
+        calendarSyncService.syncMultipleAppointmentsToProvider(userId, events, provider)
       }
       
     } catch (error) {
