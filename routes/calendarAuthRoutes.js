@@ -1,10 +1,13 @@
 import express from 'express';
 import { GoogleCalendarService, MicrosoftCalendarService, encryptToken } from '../services/calendarService.js';
 import User from '../models/expertInformation.js';
+import { CalendarSyncService } from '../services/calendarSyncService.js';
 
 const router = express.Router();
 const googleService = new GoogleCalendarService();
 const microsoftService = new MicrosoftCalendarService();
+const calendarSyncService = new CalendarSyncService();
+
 
 // Helper function to find user by ID
 const findUserById = async (userId) => {
@@ -122,6 +125,19 @@ router.get('/google/callback', async (req, res) => {
         isActive: true
       }
     });
+
+   //Uploading the Current Events Of user To Google Calendar from database if Any
+    try {
+      console.log("UserID for Sync :", userId)
+      console.log("Events for Sync :", user.events)
+      const events = user.events;
+      if(events.length > 0){
+        calendarSyncService.syncMultipleAppointmentsToProvider(userId, events, user.calendarProviders)
+      }
+      
+    } catch (error) {
+      
+    }
   } catch (error) {
     console.error('Google OAuth callback error:', error);
     res.status(500).json({ error: error.message });

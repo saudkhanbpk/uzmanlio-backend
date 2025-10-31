@@ -107,6 +107,118 @@ export class CalendarSyncService {
     }
   }
 
+
+
+  //Sync Multiple Events To Google OR Outlook
+  async syncMultipleAppointmentsToProvider(userId, appointments, provider) {
+  try {
+    const user = await User.findById(userId);
+    if (!user) throw new Error("User not found");
+
+    const calendarProvider = user.calendarProviders.find(
+      (cp) => cp._id.toString() === provider.id && cp.isActive
+    );
+
+    if (!calendarProvider) {
+      throw new Error("Calendar provider not found or inactive");
+    }
+
+    // Check if token needs refresh
+    if (new Date() >= calendarProvider.tokenExpiry) {
+      await this.refreshProviderToken(user, calendarProvider);
+    }
+
+    const syncedResults = [];
+
+    // Loop through all appointments
+    for (const appointment of appointments) {
+      try {
+        const eventData = this.appointmentToEventData(appointment);
+        let providerEvent;
+
+        // Check if appointment already exists in external calendar
+        const existingMapping = user.appointmentMappings.find(
+          (mapping) =>
+            mapping.appointmentId === appointment.id &&
+            mapping.provider === calendarProvider.provider
+        );
+
+        if (existingMapping) {
+          // Update existing event
+          if (calendarProvider.provider === "google") {
+            providerEvent = await this.googleService.updateEvent(
+              calendarProvider.accessToken,
+              calendarProvider.calendarId,
+              existingMapping.providerEventId,
+              eventData
+            );
+          } else if (calendarProvider.provider === "microsoft") {
+            providerEvent = await this.microsoftService.updateEvent(
+              calendarProvider.accessToken,
+              calendarProvider.calendarId,
+              existingMapping.providerEventId,
+              eventData
+            );
+          }
+
+          // Update mapping info
+          existingMapping.lastSynced = new Date();
+        } else {
+          // Create new event
+          if (calendarProvider.provider === "google") {
+            providerEvent = await this.googleService.createEvent(
+              calendarProvider.accessToken,
+              calendarProvider.calendarId,
+              eventData
+            );
+          } else if (calendarProvider.provider === "microsoft") {
+            providerEvent = await this.microsoftService.createEvent(
+              calendarProvider.accessToken,
+              calendarProvider.calendarId,
+              eventData
+            );
+          }
+
+          // Add new mapping
+          user.appointmentMappings.push({
+            appointmentId: appointment.id,
+            provider: calendarProvider.provider,
+            providerEventId: providerEvent.id,
+            calendarId: calendarProvider.calendarId || "primary",
+            lastSynced: new Date(),
+          });
+        }
+
+        syncedResults.push({
+          appointmentId: appointment.id,
+          providerEvent,
+          status: "success",
+        });
+      } catch (appointmentError) {
+        console.error(
+          `Failed to sync appointment ${appointment.id} to ${calendarProvider.provider}:`,
+          appointmentError
+        );
+        syncedResults.push({
+          appointmentId: appointment.id,
+          error: appointmentError.message,
+          status: "failed",
+        });
+      }
+    }
+
+    // Update last sync time once for provider
+    calendarProvider.lastSync = new Date();
+    await user.save();
+
+    return syncedResults;
+  } catch (error) {
+    console.error(`Failed to sync appointments to ${provider.provider}:`, error);
+    throw error;
+  }
+}
+
+
   // Delete appointment from external calendar
   async deleteAppointmentFromProvider(userId, appointmentId, provider) {
     try {
@@ -207,9 +319,9 @@ export class CalendarSyncService {
       let newTokens;
 
       if (provider.provider === 'google') {
-        newTokens = await this.googleService.refreshAccessToken(provider.refreshToken);
+        newTokens = await this.googleService.refreshAccessToken(decryptToken(provider.refreshToken));
       } else if (provider.provider === 'microsoft') {
-        newTokens = await this.microsoftService.refreshAccessToken(provider.refreshToken);
+        newTokens = await this.microsoftService.refreshAccessToken(decryptToken(provider.refreshToken));
       }
 
       if (newTokens) {
