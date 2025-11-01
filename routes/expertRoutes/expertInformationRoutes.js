@@ -8,7 +8,6 @@ import { createMulterUpload, handleMulterError } from "../../middlewares/upload.
 import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
 
-const caledndarSyncService = new calendarSyncService();
 
 const router = express.Router();
 

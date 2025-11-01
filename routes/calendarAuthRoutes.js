@@ -6,7 +6,6 @@ import { CalendarSyncService } from '../services/calendarSyncService.js';
 const router = express.Router();
 const googleService = new GoogleCalendarService();
 const microsoftService = new MicrosoftCalendarService();
-const calendarSyncService = new CalendarSyncService();
 
 
 // Helper function to find user by ID
