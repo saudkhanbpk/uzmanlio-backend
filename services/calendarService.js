@@ -163,27 +163,33 @@ export class GoogleCalendarService {
     });
   }
 
-  async watchCalendar(accessToken, calendarId, webhookUrl) {
-    this.oauth2Client.setCredentials({
-      access_token: decryptToken(accessToken)
-    });
+async watchCalendar(accessToken, calendarId, webhookUrl) {
+  this.oauth2Client.setCredentials({
+    access_token: decryptToken(accessToken)
+  });
+  const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+  const watchRequest = {
+    id: `uzmanlio-${Date.now()}`,
+    type: 'web_hook',
+    address: webhookUrl,
+    token: process.env.GOOGLE_WEBHOOK_TOKEN,
+  };
 
-    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-    
-    const watchRequest = {
-      id: `uzmanlio-${Date.now()}`,
-      type: 'web_hook',
-      address: webhookUrl,
-      token: process.env.GOOGLE_WEBHOOK_TOKEN,
-    };
+  const response = await calendar.events.watch({
+    calendarId: calendarId || 'primary',
+    resource: watchRequest,
+  });
 
-    const response = await calendar.events.watch({
-      calendarId: calendarId || 'primary',
-      resource: watchRequest,
-    });
+  const data = response.data;
 
-    return response.data;
+  // ✅ Always include a fallback expiration
+  if (!data.expiration || isNaN(Number(data.expiration))) {
+    data.expiration = Date.now() + 24 * 60 * 60 * 1000; // Default to +1 day
   }
+
+  return data;
+}
+
 
   async stopWatching(accessToken, channelId, resourceId) {
     this.oauth2Client.setCredentials({
@@ -254,7 +260,7 @@ export class MicrosoftCalendarService {
     const params = new URLSearchParams();
     params.append('client_id', this.clientId);
     params.append('client_secret', this.clientSecret);
-    params.append('refresh_token', decryptToken(refreshToken));
+    params.append('refresh_token', refreshToken);
     params.append('grant_type', 'refresh_token');
 
     const response = await fetch(tokenUrl, {

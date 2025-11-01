@@ -97,23 +97,29 @@ router.get('/google/callback', async (req, res) => {
     await user.save();
 
     // Setup webhook subscription
-    try {
-      const webhookUrl = `${process.env.BASE_URL}/api/calendar/webhooks/google`;
-      const subscription = await googleService.watchCalendar(
-        tokens.access_token, 
-        'primary', 
-        webhookUrl
-      );
+  try {
+  const webhookUrl = `${process.env.BASE_URL}/api/calendar/webhooks/google`;
+  const subscription = await googleService.watchCalendar(tokens.access_token, 'primary', webhookUrl);
 
-      // Update provider with subscription info
-      const providerIndex = existingProviderIndex >= 0 ? existingProviderIndex : user.calendarProviders.length - 1;
-      user.calendarProviders[providerIndex].subscriptionId = subscription.id;
-      user.calendarProviders[providerIndex].subscriptionExpiry = new Date(subscription.expiration);
-      await user.save();
-    } catch (webhookError) {
-      console.error('Failed to setup Google webhook:', webhookError);
-      // Continue without webhook - sync will work manually
-    }
+  console.log("📡 Google webhook response:", subscription); // 🔍 check what it actually returns
+
+  const providerIndex = existingProviderIndex >= 0 ? existingProviderIndex : user.calendarProviders.length - 1;
+
+  user.calendarProviders[providerIndex].subscriptionId = subscription.id;
+
+  // ✅ Safely handle expiration
+  if (subscription.expiration && !isNaN(Number(subscription.expiration))) {
+    user.calendarProviders[providerIndex].subscriptionExpiry = new Date(Number(subscription.expiration));
+  } else {
+    console.warn("⚠️ Missing expiration in Google response, setting fallback expiry.");
+    user.calendarProviders[providerIndex].subscriptionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // +1 day
+  }
+
+  await user.save();
+} catch (webhookError) {
+  console.error("❌ Failed to setup Google webhook:", webhookError);
+}
+
 
     res.json({ 
       success: true, 

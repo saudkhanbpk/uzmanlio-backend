@@ -14,7 +14,7 @@ export class CalendarSyncService {
 
     return {
       title: appointment.title,
-      description: `Uzmanlio Appointment\n\nType: ${appointment.type}\nDuration: ${appointment.duration} minutes\nStatus: ${appointment.status}${appointment.notes ? `\n\nNotes: ${appointment.notes}` : ''}`,
+      description: `Uzmanlio Appointment\nType: ${appointment.serviceType}\nDuration: ${appointment.duration} minutes\nStatus: ${appointment.status}${appointment.notes ? `\n\nNotes: ${appointment.notes}` : ''}`,
       startDateTime: startDateTime.toISOString(),
       endDateTime: endDateTime.toISOString(),
       timeZone: timeZone,
