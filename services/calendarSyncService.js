@@ -23,120 +23,123 @@ export class CalendarSyncService {
   }
 
   // Sync appointment to external calendar
-  async syncAppointmentToProvider(userId, appointment, provider) {
-    try {
-      const user = await User.findById(userId);
-      if (!user) throw new Error('User not found');
-
-      const calendarProvider = user.calendarProviders.find(
-        cp => cp._id.toString() === provider.id && cp.isActive
-      );
-
-      if (!calendarProvider) {
-        throw new Error('Calendar provider not found or inactive');
-      }
-
-      // Check if token needs refresh
-      if (new Date() >= calendarProvider.tokenExpiry) {
-        await this.refreshProviderToken(user, calendarProvider);
-      }
-
-      const eventData = this.appointmentToEventData(appointment);
-      let providerEvent;
-
-      // Check if appointment already exists in external calendar
-      const existingMapping = user.appointmentMappings.find(
-        mapping => mapping.appointmentId === appointment.id && 
-                   mapping.provider === calendarProvider.provider
-      );
-
-      if (existingMapping) {
-        // Update existing event
-        if (calendarProvider.provider === 'google') {
-          providerEvent = await this.googleService.updateEvent(
-            calendarProvider.accessToken,
-            calendarProvider.calendarId,
-            existingMapping.providerEventId,
-            eventData
-          );
-        } else if (calendarProvider.provider === 'microsoft') {
-          providerEvent = await this.microsoftService.updateEvent(
-            calendarProvider.accessToken,
-            calendarProvider.calendarId,
-            existingMapping.providerEventId,
-            eventData
-          );
-        }
-
-        // Update mapping
-        existingMapping.lastSynced = new Date();
-      } else {
-        // Create new event
-        if (calendarProvider.provider === 'google') {
-          providerEvent = await this.googleService.createEvent(
-            calendarProvider.accessToken,
-            calendarProvider.calendarId,
-            eventData
-          );
-        } else if (calendarProvider.provider === 'microsoft') {
-          providerEvent = await this.microsoftService.createEvent(
-            calendarProvider.accessToken,
-            calendarProvider.calendarId,
-            eventData
-          );
-        }
-
-        // Create mapping
-        user.appointmentMappings.push({
-          appointmentId: appointment.id,
-          provider: calendarProvider.provider,
-          providerEventId: providerEvent.id,
-          calendarId: calendarProvider.calendarId || 'primary',
-          lastSynced: new Date()
-        });
-      }
-
-      // Update last sync time
-      calendarProvider.lastSync = new Date();
-      await user.save();
-
-      return providerEvent;
-    } catch (error) {
-      console.error(`Failed to sync appointment to ${provider.provider}:`, error);
-      throw error;
-    }
-  }
-
-
-
-  //Sync Multiple Events To Google OR Outlook
-  async syncMultipleAppointmentsToProvider(userId, appointments, provider) {
+async syncAppointmentToProvider(userId, appointment, provider) {
   try {
     const user = await User.findById(userId);
     if (!user) throw new Error("User not found");
 
+    // ✅ Use providerId instead of _id/id
     const calendarProvider = user.calendarProviders.find(
-      (cp) => cp._id.toString() === provider.id && cp.isActive
+      (cp) => cp.providerId === provider.providerId && cp.isActive
     );
 
     if (!calendarProvider) {
       throw new Error("Calendar provider not found or inactive");
     }
 
-    // Check if token needs refresh
+    // Refresh token if expired
+    if (new Date() >= calendarProvider.tokenExpiry) {
+      await this.refreshProviderToken(user, calendarProvider);
+    }
+
+    const eventData = this.appointmentToEventData(appointment);
+    let providerEvent;
+
+    // Check if appointment already exists
+    const existingMapping = user.appointmentMappings.find(
+      (mapping) =>
+        mapping.appointmentId === appointment.id &&
+        mapping.provider === calendarProvider.provider
+    );
+
+    if (existingMapping) {
+      // ✅ Update existing event
+      if (calendarProvider.provider === "google") {
+        providerEvent = await this.googleService.updateEvent(
+          calendarProvider.accessToken,
+          calendarProvider.calendarId,
+          existingMapping.providerEventId,
+          eventData
+        );
+      } else if (calendarProvider.provider === "microsoft") {
+        providerEvent = await this.microsoftService.updateEvent(
+          calendarProvider.accessToken,
+          calendarProvider.calendarId,
+          existingMapping.providerEventId,
+          eventData
+        );
+      }
+
+      existingMapping.lastSynced = new Date();
+    } else {
+      // ✅ Create new event
+      if (calendarProvider.provider === "google") {
+        providerEvent = await this.googleService.createEvent(
+          calendarProvider.accessToken,
+          calendarProvider.calendarId,
+          eventData
+        );
+      } else if (calendarProvider.provider === "microsoft") {
+        providerEvent = await this.microsoftService.createEvent(
+          calendarProvider.accessToken,
+          calendarProvider.calendarId,
+          eventData
+        );
+      }
+
+      // Add mapping
+      user.appointmentMappings.push({
+        appointmentId: appointment.id,
+        provider: calendarProvider.provider,
+        providerEventId: providerEvent.id,
+        calendarId: calendarProvider.calendarId || "primary",
+        lastSynced: new Date(),
+      });
+    }
+
+    // ✅ Update last sync
+    calendarProvider.lastSync = new Date();
+    await user.save();
+
+    return providerEvent;
+  } catch (error) {
+    console.error(`❌ Failed to sync appointment to ${provider.provider}:`, error);
+    throw error;
+  }
+}
+
+
+
+
+  //Sync Multiple Events To Google OR Outlook
+async syncMultipleAppointmentsToProvider(userId, appointments, provider) {
+  try {
+    const user = await User.findById(userId);
+    if (!user) throw new Error("User not found");
+
+    // ✅ Use providerId instead of _id/id
+    const calendarProvider = user.calendarProviders.find(
+      (cp) => cp.providerId === provider.providerId && cp.isActive
+    );
+
+    if (!calendarProvider) {
+      throw new Error("Calendar provider not found or inactive");
+    }
+
+    // ✅ Refresh token if expired
     if (new Date() >= calendarProvider.tokenExpiry) {
       await this.refreshProviderToken(user, calendarProvider);
     }
 
     const syncedResults = [];
 
-    // Loop through all appointments
+    // ✅ Loop through all appointments
     for (const appointment of appointments) {
       try {
         const eventData = this.appointmentToEventData(appointment);
         let providerEvent;
 
-        // Check if appointment already exists in external calendar
+        // ✅ Check if appointment already exists
         const existingMapping = user.appointmentMappings.find(
           (mapping) =>
             mapping.appointmentId === appointment.id &&
@@ -161,7 +164,6 @@ export class CalendarSyncService {
             );
           }
 
-          // Update mapping info
           existingMapping.lastSynced = new Date();
         } else {
           // Create new event
@@ -189,6 +191,7 @@ export class CalendarSyncService {
           });
         }
 
+        // ✅ Add to results
         syncedResults.push({
           appointmentId: appointment.id,
           providerEvent,
@@ -196,7 +199,7 @@ export class CalendarSyncService {
         });
       } catch (appointmentError) {
         console.error(
-          `Failed to sync appointment ${appointment.id} to ${calendarProvider.provider}:`,
+          `❌ Failed to sync appointment ${appointment.id} to ${calendarProvider.provider}:`,
           appointmentError
         );
         syncedResults.push({
@@ -206,14 +209,13 @@ export class CalendarSyncService {
         });
       }
     }
-
-    // Update last sync time once for provider
+    // ✅ Update provider sync time
     calendarProvider.lastSync = new Date();
     await user.save();
 
     return syncedResults;
   } catch (error) {
-    console.error(`Failed to sync appointments to ${provider.provider}:`, error);
+    console.error(`❌ Failed to sync appointments to ${provider.provider}:`, error);
     throw error;
   }
 }

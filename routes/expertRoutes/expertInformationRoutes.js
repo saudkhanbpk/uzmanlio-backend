@@ -4,9 +4,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { createMulterUpload,handleMulterError } from "../../middlewares/upload.js";
+import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
 import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
+
+const caledndarSyncService = new calendarSyncService();
 
 const router = express.Router();
 
@@ -1275,6 +1277,31 @@ router.post("/:userId/events", async (req, res) => {
     user.events.push(newEvent);
     await user.save();
 
+    if (user.calendarProviders && user.calendarProviders.length > 0) {
+      const activeProviders = user.calendarProviders.filter(cp => cp.isActive);
+
+      if (activeProviders.length > 0) {
+        // Run sync in background (asynchroniously)
+        // setImmediate(async () => {
+          for (const provider of activeProviders) {
+            try {
+             const response = await calendarSyncService.syncAppointmentToProvider(req.params.userId,newEvent,provider)
+             if(response.success){
+              console.log("sunced Event To Calendar Successfully")
+             }else{
+              console.log("Sunc Failed to Calendar",error)
+             }
+            } catch (error) {
+              console.error(`❌ Failed to sync event to ${provider.provider}:`, error);
+            }
+          }
+        // });
+      }
+    }
+
+
+
+
     res.status(201).json({
       event: newEvent,
       message: "Event created successfully"
@@ -1483,49 +1510,49 @@ router.get("/:userId/blogs/slug/:slug", async (req, res) => {
 router.post("/:userId/blogs", async (req, res) => {
   try {
     // Cleanup script to fix corrupted blogs arrays
-// async function cleanupCorruptedBlogs() {
-//   try {
-//     const users = await User.find({ 'blogs': { $exists: true } });
-    
-//     for (const user of users) {
-//       let needsUpdate = false;
-      
-//       if (Array.isArray(user.blogs)) {
-//         const cleanedBlogs = user.blogs.filter(blog => 
-//           blog && typeof blog === 'object' && !Array.isArray(blog)
-//         );
-        
-//         if (cleanedBlogs.length !== user.blogs.length) {
-//           user.blogs = cleanedBlogs;
-//           needsUpdate = true;
-//         }
-//       }
-      
-//       if (needsUpdate) {
-//         await user.save();
-//         console.log(`Fixed blogs for user: ${user._id}`);
-//       }
-//     }
-    
-//     console.log('Cleanup completed');
-//   } catch (error) {
-//     console.error('Cleanup error:', error);
-//   }
-// }
+    // async function cleanupCorruptedBlogs() {
+    //   try {
+    //     const users = await User.find({ 'blogs': { $exists: true } });
 
-// // Run this once to clean up the data
-// cleanupCorruptedBlogs();
+    //     for (const user of users) {
+    //       let needsUpdate = false;
+
+    //       if (Array.isArray(user.blogs)) {
+    //         const cleanedBlogs = user.blogs.filter(blog => 
+    //           blog && typeof blog === 'object' && !Array.isArray(blog)
+    //         );
+
+    //         if (cleanedBlogs.length !== user.blogs.length) {
+    //           user.blogs = cleanedBlogs;
+    //           needsUpdate = true;
+    //         }
+    //       }
+
+    //       if (needsUpdate) {
+    //         await user.save();
+    //         console.log(`Fixed blogs for user: ${user._id}`);
+    //       }
+    //     }
+
+    //     console.log('Cleanup completed');
+    //   } catch (error) {
+    //     console.error('Cleanup error:', error);
+    //   }
+    // }
+
+    // // Run this once to clean up the data
+    // cleanupCorruptedBlogs();
     const user = await findUserById(req.params.userId);
     console.log("USER is Found:", user);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    
+
     const blogData = req.body;
 
     // Fix corrupted blogs array - remove any non-object entries
     if (Array.isArray(user.blogs)) {
-      user.blogs = user.blogs.filter(blog => 
+      user.blogs = user.blogs.filter(blog =>
         blog && typeof blog === 'object' && !Array.isArray(blog)
       );
     } else {
