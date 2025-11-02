@@ -120,35 +120,71 @@ export class GoogleCalendarService {
     return response.data;
   }
 
+  // async updateEvent(accessToken, calendarId, eventId, eventData) {
+  //   this.oauth2Client.setCredentials({
+  //     access_token: decryptToken(accessToken)
+  //   });
+
+  //   const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+    
+  //   const event = {
+  //     summary: eventData.title,
+  //     description: eventData.description || '',
+  //     start: {
+  //       dateTime: eventData.startDateTime,
+  //       timeZone: eventData.timeZone || 'UTC',
+  //     },
+  //     end: {
+  //       dateTime: eventData.endDateTime,
+  //       timeZone: eventData.timeZone || 'UTC',
+  //     },
+  //     attendees: eventData.attendees || [],
+  //   };
+
+  //   const response = await calendar.events.update({
+  //     calendarId: calendarId || 'primary',
+  //     eventId: eventId,
+  //     resource: event,
+  //   });
+
+  //   return response.data;
+  // }
+
   async updateEvent(accessToken, calendarId, eventId, eventData) {
+  try {
     this.oauth2Client.setCredentials({
-      access_token: decryptToken(accessToken)
+      access_token: decryptToken(accessToken),
     });
 
-    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-    
+    const calendar = google.calendar({ version: "v3", auth: this.oauth2Client });
+
     const event = {
       summary: eventData.title,
-      description: eventData.description || '',
+      description: eventData.description || "",
       start: {
-        dateTime: eventData.startDateTime,
-        timeZone: eventData.timeZone || 'UTC',
+        dateTime: new Date(eventData.startDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
       },
       end: {
-        dateTime: eventData.endDateTime,
-        timeZone: eventData.timeZone || 'UTC',
+        dateTime: new Date(eventData.endDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
       },
       attendees: eventData.attendees || [],
     };
 
     const response = await calendar.events.update({
-      calendarId: calendarId || 'primary',
-      eventId: eventId,
+      calendarId: calendarId || "primary",
+      eventId,
       resource: event,
     });
 
     return response.data;
+  } catch (error) {
+    console.error("❌ Google updateEvent error:", error);
+    throw new Error(`Failed to update Google event: ${error.message}`);
   }
+}
+
 
   async deleteEvent(accessToken, calendarId, eventId) {
     this.oauth2Client.setCredentials({
@@ -330,45 +366,95 @@ export class MicrosoftCalendarService {
     return await response.json();
   }
 
+  // async updateEvent(accessToken, calendarId, eventId, eventData) {
+  //   const event = {
+  //     subject: eventData.title,
+  //     body: {
+  //       contentType: 'HTML',
+  //       content: eventData.description || '',
+  //     },
+  //     start: {
+  //       dateTime: eventData.startDateTime,
+  //       timeZone: eventData.timeZone || 'UTC',
+  //     },
+  //     end: {
+  //       dateTime: eventData.endDateTime,
+  //       timeZone: eventData.timeZone || 'UTC',
+  //     },
+  //     attendees: eventData.attendees?.map(email => ({
+  //       emailAddress: { address: email, name: email },
+  //     })) || [],
+  //   };
+
+  //   const eventPath = calendarId ?
+  //     `/me/calendars/${calendarId}/events/${eventId}` :
+  //     `/me/events/${eventId}`;
+
+  //   const response = await fetch(`https://graph.microsoft.com/v1.0${eventPath}`, {
+  //     method: 'PATCH',
+  //     headers: {
+  //       'Authorization': `Bearer ${decryptToken(accessToken)}`,
+  //       'Content-Type': 'application/json'
+  //     },
+  //     body: JSON.stringify(event)
+  //   });
+
+  //   if (!response.ok) {
+  //     throw new Error(`Failed to update event: ${response.statusText}`);
+  //   }
+
+  //   return await response.json();
+  // }
   async updateEvent(accessToken, calendarId, eventId, eventData) {
+  try {
+    const decryptedToken = decryptToken(accessToken);
+
     const event = {
       subject: eventData.title,
       body: {
-        contentType: 'HTML',
-        content: eventData.description || '',
+        contentType: "HTML",
+        content: eventData.description || "",
       },
       start: {
-        dateTime: eventData.startDateTime,
-        timeZone: eventData.timeZone || 'UTC',
+        dateTime: new Date(eventData.startDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
       },
       end: {
-        dateTime: eventData.endDateTime,
-        timeZone: eventData.timeZone || 'UTC',
+        dateTime: new Date(eventData.endDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
       },
-      attendees: eventData.attendees?.map(email => ({
-        emailAddress: { address: email, name: email },
-      })) || [],
+      attendees:
+        eventData.attendees?.map((email) => ({
+          emailAddress: { address: email, name: email },
+          type: "required",
+        })) || [],
     };
 
-    const eventPath = calendarId ?
-      `/me/calendars/${calendarId}/events/${eventId}` :
-      `/me/events/${eventId}`;
+    const eventPath = calendarId
+      ? `/me/calendars/${calendarId}/events/${eventId}`
+      : `/me/events/${eventId}`;
 
     const response = await fetch(`https://graph.microsoft.com/v1.0${eventPath}`, {
-      method: 'PATCH',
+      method: "PATCH",
       headers: {
-        'Authorization': `Bearer ${decryptToken(accessToken)}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${decryptedToken}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(event)
+      body: JSON.stringify(event),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update event: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Microsoft update failed: ${response.status} ${errorText}`);
     }
 
     return await response.json();
+  } catch (error) {
+    console.error("❌ Microsoft updateEvent error:", error);
+    throw new Error(`Failed to update Microsoft event: ${error.message}`);
   }
+}
+
 
   async deleteEvent(accessToken, calendarId, eventId) {
     const eventPath = calendarId ?

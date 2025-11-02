@@ -1352,6 +1352,24 @@ router.put("/:userId/events/:eventId", async (req, res) => {
     user.events[eventIndex] = updatedEvent;
     await user.save();
 
+    // Sync to connected calendars in background
+    const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
+
+    if (providers.length > 0) {
+      setImmediate(async () => {
+        for (const provider of providers) {
+          try {
+            await updateAppointmentInProvider(req.params.userId, updatedEvent, provider);
+            console.log(`Synced event ${updatedEvent.title} to ${provider.provider}`);
+          } catch (error) {
+            console.error(`Failed syncing ${updatedEvent.title} to ${provider.provider}:`, error);
+          }
+        }
+      });
+    } else {
+      console.log("No active calendar providers found for user", req.params.userId);
+    }
+
     res.json({
       event: updatedEvent,
       message: "Event updated successfully"
@@ -1381,6 +1399,24 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
 
     await user.save();
 
+    // Sync to connected calendars in background
+    const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
+
+    if (providers.length > 0) {
+      setImmediate(async () => {
+        for (const provider of providers) {
+          try {
+            await updateAppointmentInProvider(req.params.userId, updatedEvent, provider);
+            console.log(`Synced event ${updatedEvent.title} to ${provider.provider}`);
+          } catch (error) {
+            console.error(`Failed syncing ${updatedEvent.title} to ${provider.provider}:`, error);
+          }
+        }
+      });
+    } else {
+      console.log("No active calendar providers found for user", req.params.userId);
+    }
+
     res.json({
       event: user.events[eventIndex],
       message: `Event status updated to ${status}`
@@ -1402,6 +1438,24 @@ router.delete("/:userId/events/:eventId", async (req, res) => {
 
     user.events.splice(eventIndex, 1);
     await user.save();
+
+        // Sync to connected calendars in background
+    const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
+
+    if (providers.length > 0) {
+      setImmediate(async () => {
+        for (const provider of providers) {
+          try {
+            await deleteAppointmentFromProvider(req.params.userId, updatedEvent, provider);
+            console.log(`Deleted event ${updatedEvent.title} from ${provider.provider}`);
+          } catch (error) {
+            console.error(`Failed Deleting ${updatedEvent.title} from ${provider.provider}:`, error);
+          }
+        }
+      });
+    } else {
+      console.log("No active calendar providers found for user", req.params.userId);
+    }
 
     res.json({ message: "Event deleted successfully" });
   } catch (error) {
