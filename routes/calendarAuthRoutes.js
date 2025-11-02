@@ -230,6 +230,21 @@ router.get('/microsoft/callback', async (req, res) => {
 
     await user.save();
 
+     //Uploading the Current Events Of user To Google Calendar from database if Any
+    try {
+      console.log("UserID for Sync :", userId)
+      console.log("Events for Sync :", user.events)
+      const events = user.events;
+      const provider = user.calendarProviders.find(provider => provider.provider === 'microsoft');
+      
+      if(events.length > 0){
+        calendarSyncService.syncMultipleAppointmentsToProvider(userId, events, provider)
+      }
+      
+    } catch (error) {
+      
+    }
+
     res.json({ 
       success: true, 
       message: 'Microsoft Calendar connected successfully',
