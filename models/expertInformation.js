@@ -6,7 +6,7 @@ const { Schema } = mongoose;
 const Title = new Schema({
   id: { type: String, default: uuidv4 },
   title: { type: String },
-  description: { type: String },  
+  description: { type: String },
 });
 
 // ---------------- Sub-Schemas ----------------
@@ -606,13 +606,13 @@ const UserSchema = new Schema(
       phoneCode: { type: String },
       gender: { type: String },
     },
-    subscription:{
-      id : {type:String , default: uuidv4()},
-      Type : {type:String , enum:["individual","institutional"]},
-      Price: {type:Number},
-      Duration : {type:String , enum:["yearly", "monthly"]},
-      startDate : {type:Date, default:Date.now()},
-      endDate : {type:Date, default:Date.now()},
+    subscription: {
+      id: { type: String, default: uuidv4 },
+      plantype: { type: String, enum: ["individual", "institutional"], required: true },
+      price: { type: Number, required: true },
+      duration: { type: String, enum: ["yearly", "monthly"], required: true },
+      startDate: { type: Date, default: Date.now },
+      endDate: { type: Date, default: Date.now },
     },
     cards: [cardSchema],
     socialMedia: { type: SocialMediaSchema, default: () => ({}) },

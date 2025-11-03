@@ -4,6 +4,9 @@
 .idea/
 .vscode/
 .env
+env
+.env/
+env/
 
 # Dependencies
 node_modules/
@@ -79,3 +82,4 @@ agenthub/agents/youtube/db
 
 # Mobile development
 android-sdk/ 
+.env

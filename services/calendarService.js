@@ -5,17 +5,34 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const ENCRYPTION_KEY = process.env.CALENDAR_ENCRYPTION_KEY || 'default-key-change-in-production';
+const ENCRYPTION_KEY = process.env.CALENDAR_ENCRYPTION_KEY || '37d5baac21de6cf4e91459343db6ef2e678a4a61eb2570402246e311c02370c5';
 
 // Encryption utilities
 export const encryptToken = (token) => {
-  return CryptoJS.AES.encrypt(token, ENCRYPTION_KEY).toString();
+  console.log("Token to Encrypt:",token)
+  const encryptedToken =CryptoJS.AES.encrypt(token, ENCRYPTION_KEY).toString();
+  console.log("Token Encrypted:",encryptedToken)
+  return encryptedToken;
 };
 
 export const decryptToken = (encryptedToken) => {
-  const bytes = CryptoJS.AES.decrypt(encryptedToken, ENCRYPTION_KEY);
-  return bytes.toString(CryptoJS.enc.Utf8);
+  if (!encryptedToken || typeof encryptedToken !== 'string') return encryptedToken;
+
+  // If token looks like a normal Google token (starts with ya29.), skip decryption
+  if (encryptedToken.startsWith('ya29.') || encryptedToken.startsWith('1//')) {
+    return encryptedToken;
+  }
+
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedToken, ENCRYPTION_KEY);
+    const decryptedToken = bytes.toString(CryptoJS.enc.Utf8);
+    return decryptedToken || encryptedToken;
+  } catch (error) {
+    console.error('Decryption failed, returning raw token:', error);
+    return encryptedToken;
+  }
 };
+
 
 // Google Calendar Service
 export class GoogleCalendarService {
@@ -103,35 +120,71 @@ export class GoogleCalendarService {
     return response.data;
   }
 
+  // async updateEvent(accessToken, calendarId, eventId, eventData) {
+  //   this.oauth2Client.setCredentials({
+  //     access_token: decryptToken(accessToken)
+  //   });
+
+  //   const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+    
+  //   const event = {
+  //     summary: eventData.title,
+  //     description: eventData.description || '',
+  //     start: {
+  //       dateTime: eventData.startDateTime,
+  //       timeZone: eventData.timeZone || 'UTC',
+  //     },
+  //     end: {
+  //       dateTime: eventData.endDateTime,
+  //       timeZone: eventData.timeZone || 'UTC',
+  //     },
+  //     attendees: eventData.attendees || [],
+  //   };
+
+  //   const response = await calendar.events.update({
+  //     calendarId: calendarId || 'primary',
+  //     eventId: eventId,
+  //     resource: event,
+  //   });
+
+  //   return response.data;
+  // }
+
   async updateEvent(accessToken, calendarId, eventId, eventData) {
+  try {
     this.oauth2Client.setCredentials({
-      access_token: decryptToken(accessToken)
+      access_token: decryptToken(accessToken),
     });
 
-    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-    
+    const calendar = google.calendar({ version: "v3", auth: this.oauth2Client });
+
     const event = {
       summary: eventData.title,
-      description: eventData.description || '',
+      description: eventData.description || "",
       start: {
-        dateTime: eventData.startDateTime,
-        timeZone: eventData.timeZone || 'UTC',
+        dateTime: new Date(eventData.startDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
       },
       end: {
-        dateTime: eventData.endDateTime,
-        timeZone: eventData.timeZone || 'UTC',
+        dateTime: new Date(eventData.endDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
       },
       attendees: eventData.attendees || [],
     };
 
     const response = await calendar.events.update({
-      calendarId: calendarId || 'primary',
-      eventId: eventId,
+      calendarId: calendarId || "primary",
+      eventId,
       resource: event,
     });
 
     return response.data;
+  } catch (error) {
+    console.error("❌ Google updateEvent error:", error);
+    throw new Error(`Failed to update Google event: ${error.message}`);
   }
+}
+
 
   async deleteEvent(accessToken, calendarId, eventId) {
     this.oauth2Client.setCredentials({
@@ -146,27 +199,33 @@ export class GoogleCalendarService {
     });
   }
 
-  async watchCalendar(accessToken, calendarId, webhookUrl) {
-    this.oauth2Client.setCredentials({
-      access_token: decryptToken(accessToken)
-    });
+async watchCalendar(accessToken, calendarId, webhookUrl) {
+  this.oauth2Client.setCredentials({
+    access_token: decryptToken(accessToken)
+  });
+  const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+  const watchRequest = {
+    id: `uzmanlio-${Date.now()}`,
+    type: 'web_hook',
+    address: webhookUrl,
+    token: process.env.GOOGLE_WEBHOOK_TOKEN,
+  };
 
-    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-    
-    const watchRequest = {
-      id: `uzmanlio-${Date.now()}`,
-      type: 'web_hook',
-      address: webhookUrl,
-      token: process.env.GOOGLE_WEBHOOK_TOKEN,
-    };
+  const response = await calendar.events.watch({
+    calendarId: calendarId || 'primary',
+    resource: watchRequest,
+  });
 
-    const response = await calendar.events.watch({
-      calendarId: calendarId || 'primary',
-      resource: watchRequest,
-    });
+  const data = response.data;
 
-    return response.data;
+  // ✅ Always include a fallback expiration
+  if (!data.expiration || isNaN(Number(data.expiration))) {
+    data.expiration = Date.now() + 24 * 60 * 60 * 1000; // Default to +1 day
   }
+
+  return data;
+}
+
 
   async stopWatching(accessToken, channelId, resourceId) {
     this.oauth2Client.setCredentials({
@@ -237,7 +296,7 @@ export class MicrosoftCalendarService {
     const params = new URLSearchParams();
     params.append('client_id', this.clientId);
     params.append('client_secret', this.clientSecret);
-    params.append('refresh_token', decryptToken(refreshToken));
+    params.append('refresh_token', refreshToken);
     params.append('grant_type', 'refresh_token');
 
     const response = await fetch(tokenUrl, {
@@ -307,45 +366,95 @@ export class MicrosoftCalendarService {
     return await response.json();
   }
 
+  // async updateEvent(accessToken, calendarId, eventId, eventData) {
+  //   const event = {
+  //     subject: eventData.title,
+  //     body: {
+  //       contentType: 'HTML',
+  //       content: eventData.description || '',
+  //     },
+  //     start: {
+  //       dateTime: eventData.startDateTime,
+  //       timeZone: eventData.timeZone || 'UTC',
+  //     },
+  //     end: {
+  //       dateTime: eventData.endDateTime,
+  //       timeZone: eventData.timeZone || 'UTC',
+  //     },
+  //     attendees: eventData.attendees?.map(email => ({
+  //       emailAddress: { address: email, name: email },
+  //     })) || [],
+  //   };
+
+  //   const eventPath = calendarId ?
+  //     `/me/calendars/${calendarId}/events/${eventId}` :
+  //     `/me/events/${eventId}`;
+
+  //   const response = await fetch(`https://graph.microsoft.com/v1.0${eventPath}`, {
+  //     method: 'PATCH',
+  //     headers: {
+  //       'Authorization': `Bearer ${decryptToken(accessToken)}`,
+  //       'Content-Type': 'application/json'
+  //     },
+  //     body: JSON.stringify(event)
+  //   });
+
+  //   if (!response.ok) {
+  //     throw new Error(`Failed to update event: ${response.statusText}`);
+  //   }
+
+  //   return await response.json();
+  // }
   async updateEvent(accessToken, calendarId, eventId, eventData) {
+  try {
+    const decryptedToken = decryptToken(accessToken);
+
     const event = {
       subject: eventData.title,
       body: {
-        contentType: 'HTML',
-        content: eventData.description || '',
+        contentType: "HTML",
+        content: eventData.description || "",
       },
       start: {
-        dateTime: eventData.startDateTime,
-        timeZone: eventData.timeZone || 'UTC',
+        dateTime: new Date(eventData.startDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
       },
       end: {
-        dateTime: eventData.endDateTime,
-        timeZone: eventData.timeZone || 'UTC',
+        dateTime: new Date(eventData.endDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
       },
-      attendees: eventData.attendees?.map(email => ({
-        emailAddress: { address: email, name: email },
-      })) || [],
+      attendees:
+        eventData.attendees?.map((email) => ({
+          emailAddress: { address: email, name: email },
+          type: "required",
+        })) || [],
     };
 
-    const eventPath = calendarId ?
-      `/me/calendars/${calendarId}/events/${eventId}` :
-      `/me/events/${eventId}`;
+    const eventPath = calendarId
+      ? `/me/calendars/${calendarId}/events/${eventId}`
+      : `/me/events/${eventId}`;
 
     const response = await fetch(`https://graph.microsoft.com/v1.0${eventPath}`, {
-      method: 'PATCH',
+      method: "PATCH",
       headers: {
-        'Authorization': `Bearer ${decryptToken(accessToken)}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${decryptedToken}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(event)
+      body: JSON.stringify(event),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update event: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Microsoft update failed: ${response.status} ${errorText}`);
     }
 
     return await response.json();
+  } catch (error) {
+    console.error("❌ Microsoft updateEvent error:", error);
+    throw new Error(`Failed to update Microsoft event: ${error.message}`);
   }
+}
+
 
   async deleteEvent(accessToken, calendarId, eventId) {
     const eventPath = calendarId ?
