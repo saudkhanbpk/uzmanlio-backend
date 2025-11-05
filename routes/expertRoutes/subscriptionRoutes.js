@@ -21,7 +21,7 @@ router.post("/:userId/new-subscription", async (req, res) => {
     try {
         console.log("Adding the Payment Information and Creating New Subscription");
         const { userId } = req.params;
-        const { cardHolderName, cardNumber, cardCvv, cardExpiry, currentPlan, subscriptionDuration, price, billingPeriod, subscriptionType } = req.body;
+        const { cardHolderName, cardNumber, cardCvv, cardExpiry, currentPlan, subscriptionDuration, price, duration, plantype } = req.body;
         console.log("Data Received For Card", req.body)
         
         const user = await findUserById(userId); // Add await here
@@ -51,11 +51,11 @@ router.post("/:userId/new-subscription", async (req, res) => {
         const now = new Date();
         user.subscription = {
             id: uuidv4(),
-            plantype: subscriptionType,
+            plantype: plantype,
             price: price,
-            duration: billingPeriod,
+            duration: duration,
             startDate: Date.now(),
-            endDate: billingPeriod === "monthly" 
+            endDate: duration === "monthly" 
                 ? new Date(now.setMonth(now.getMonth() + 1))
                 : new Date(now.setFullYear(now.getFullYear() + 1))
         };
