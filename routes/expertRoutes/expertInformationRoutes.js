@@ -294,44 +294,10 @@ router.post("/:userId/upload",
 // Get complete expert profile (specific route first)
 router.get("/:userId/profile", async (req, res) => {
   try {
-    console.log("=== PROFILE REQUEST DEBUG ===");
-    console.log("Requested userId:", req.params.userId);
-    console.log("UserId type:", typeof req.params.userId);
-    console.log("UserId length:", req.params.userId.length);
-    console.log("Is valid ObjectId:", mongoose.Types.ObjectId.isValid(req.params.userId));
-
+    console.log("Fetching complete profile for userId:", req.params.userId);
     const user = await findUserById(req.params.userId);
-    console.log("User found:", !!user);
-    console.log("User _id:", user._id);
-
-    const profile = {
-      title: user.title || '',
-      titles: user.titles || [],
-      expertCategories: user.expertInformation?.subs || [],
-      education: user.resume?.education || [],
-      certificates: user.certificates || [],
-      experience: user.experience || [],
-      skills: user.skills || [],
-      services: user.services || [],
-      packages: user.packages || [],
-      gallery: user.galleryFiles || [],
-      activePackages: (user.packages || []).filter(pkg => pkg.isPurchased),
-      availablePackages: (user.packages || []).filter(pkg => pkg.isAvailable && !pkg.isPurchased),
-      availability: user.availability || { alwaysAvailable: false, selectedSlots: [], lastUpdated: new Date() },
-      appointments: user.appointments || [],
-      events: user.events || [],
-      blogs: user.blogs || [],
-      forms: user.forms || [],
-      customers: user.customers || []
-    };
-
-    console.log("Complete profile fetched successfully for userId:", req.params.userId);
     res.json(user);
   } catch (error) {
-    console.error("=== PROFILE ERROR DEBUG ===");
-    console.error("Error message:", error.message);
-    console.error("Error stack:", error.stack);
-    console.error("Requested userId:", req.params.userId);
     res.status(404).json({
       error: error.message,
       requestedUserId: req.params.userId,

@@ -608,6 +608,8 @@ const UserSchema = new Schema(
     },
     subscription: {
       id: { type: String, default: uuidv4 },
+      institutionId: { type: Schema.Types.ObjectId, ref: "Institution" || null},
+      seats: { type: Number, default: 0 },
       plantype: { type: String, enum: ["individual", "institutional"], required: true },
       price: { type: Number, required: true },
       duration: { type: String, enum: ["yearly", "monthly"], required: true },
