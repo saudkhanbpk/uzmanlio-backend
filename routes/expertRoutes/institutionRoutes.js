@@ -120,33 +120,23 @@ const institutionFilesUpload = createMulterUpload({
 
 /////////Get Institution Profile/////////
 router.get("/:userId/institution", async (req, res) => {
-    const userId = req.params.userId;
-    try {
-      const user = await findUserById(userId);
-      if (user){
-      const institution = await Institution.findOne({ Admin: user._id });
-      return res.json({ institution });
-      }
-
-      // If user has no institution, return empty object
-      if (!institution) {
-        return res.json({ institution: {} });
-      }
-
-      // const institution = await findInstitutionByID(institutionID);
-    } catch (error) {
-      console.error("Error fetching institution:", error);
-      res.status(500).json({ error: error.message });
-    }
+  try {
+    const user = await findUserById(req.params.userId);
+    const institution = await Institution.findOne({ Admin: user._id });
+    return res.json({ institution: institution || {} });
+  } catch (error) {
+    console.error("Error fetching institution:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 
 /////////Update Institution Profile/////////
 // Use multer middleware to handle multipart form data
-router.put("/:userId/institution/Update",institutionFilesUpload.fields([
+router.put("/:userId/institution/Update", institutionFilesUpload.fields([
     { name: 'logo', maxCount: 1 },
     { name: 'axe', maxCount: 1 }
-  ]),async (req, res) => {
+  ]), async (req, res) => {
     try {
         console.log("Updating institution:", req.params.userId);
         console.log("Request body:", req.body);
@@ -155,16 +145,15 @@ router.put("/:userId/institution/Update",institutionFilesUpload.fields([
         const { name, bio, about } = req.body;
         const user = await findUserById(req.params.userId);
 
-        // Get file paths if uploaded
+        // Get file paths if uploaded (match field names sent by frontend)
         const logoPath = req.files?.logo?.[0]?.path || null;
         const axePath = req.files?.axe?.[0]?.path || null;
 
-        // Get institution ID from user
-        const institution = await Institution.findOne({Admin : user._id});
+        // allow reassignment when creating new institution
+        let institution = await Institution.findOne({ Admin: user._id });
 
-        if(!institution){
+        if (!institution) {
           console.log("Creating new institution");
-          // Create new institution
           institution = new Institution({
             Admin: user._id,
             name,
@@ -176,6 +165,7 @@ router.put("/:userId/institution/Update",institutionFilesUpload.fields([
             invitedUsers: []
           });
           await institution.save();
+          user.subscription = user.subscription || {};
           user.subscription.institutionId = institution._id;
           await user.save();
 
@@ -199,7 +189,7 @@ router.put("/:userId/institution/Update",institutionFilesUpload.fields([
           message: "Institution updated successfully"
         });
 
-    }catch (error) {
+    } catch (error) {
       console.error("Error updating institution:", error);
       res.status(500).json({ error: error.message });
     }
@@ -207,11 +197,11 @@ router.put("/:userId/institution/Update",institutionFilesUpload.fields([
 
 // ========== INVITED USERS ROUTES ==========
 
-// Get invited users for institution
+// Get invited users for institution — use user._id
 router.get("/:userId/institution/invited-users", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
-    const institution = await Institution.findOne({Admin : req.params.userId})
+    const institution = await Institution.findOne({ Admin: user._id });
     if (!institution) {
       return res.json({ invitedUsers: [] });
     }
@@ -299,17 +289,16 @@ router.delete("/:userId/institution/invited-users/:id", async (req, res) => {
   }
 });
 
-// Resend invitation to user
+// Resend invitation — fix missing variable check
 router.post("/:userId/institution/resend-invite/:email", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
     const institution = await Institution.findOne({ Admin: user._id });
 
-    if (!institutionID) {
+    if (!institution) {
       return res.status(400).json({ error: "User has no institution" });
     }
 
-    // Find and update invited user
     const invitedUser = institution.invitedUsers?.find(u => u.email === req.params.email);
     if (!invitedUser) {
       return res.status(404).json({ error: "Invited user not found" });
