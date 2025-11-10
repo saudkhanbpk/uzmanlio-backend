@@ -44,6 +44,10 @@ export class GoogleCalendarService {
     );
   }
 
+
+
+//Getting the authURL from google to send it to frontend as a response  and to redirect the frontend to the 
+//google sign in Page
   getAuthUrl() {
     const scopes = [
       'https://www.googleapis.com/auth/calendar.events',

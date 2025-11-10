@@ -921,8 +921,9 @@ router.put("/:userId/availability", async (req, res) => {
     };
 
     await user.save();
+    const updatedUser = await findUserById(req.params.userId);
     res.json({
-      availability: user.availability,
+      availability: updatedUser.availability,
       message: "Availability settings updated successfully"
     });
   } catch (error) {

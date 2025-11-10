@@ -52,7 +52,9 @@ router.post("/:userId/new-subscription", async (req, res) => {
         user.subscription = {
             id: uuidv4(),
             plantype: plantype,
-            seats: selectedSeats? Number(selectedSeats) : 1,
+            isAdmin: true,
+            // seats: selectedSeats? Number(selectedSeats) : 1,
+            seats: plantype === "institutional" ? selectedSeats : 0,
             price: price,
             duration: duration,
             startDate: Date.now(),
