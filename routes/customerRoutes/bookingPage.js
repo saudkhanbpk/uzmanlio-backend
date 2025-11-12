@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import User from "../../models/expertInformation.js";
 import { createMulterUpload, handleMulterError } from '../../middlewares/upload.js';
 import Coupon from "../../models/Coupon.js";
+import Institution from "../../models/institution.js";
 
 // ================== NEW IMPORTS ==================
 // Import the models you'll be writing data to.
@@ -25,6 +26,52 @@ const findUserById = async (userId) => {
   }
   return user;
 };
+
+
+router.get("/experts-institutions", async (req, res) => {
+  try {
+    const now = new Date();
+
+    // Get all experts with active subscriptions
+    const experts = await User.find({
+      "subscription.isAdmin": true,
+      "subscription.endDate": { $gt: now }
+    });
+
+    // Get institutions and populate admin
+    const institutions = await Institution.find()
+      .populate("Admin")
+      .exec();
+
+    // Filter only those institutions whose admin has an active subscription
+    const activeInstitutions = institutions.filter(
+      inst => inst.Admin && inst.Admin.subscription && inst.Admin.subscription.endDate > now
+    );
+
+    // ✅ Populate the users inside each institution (only with "information" and "titles")
+    const institutionsWithUsers = await Promise.all(
+      activeInstitutions.map(async (inst) => {
+        const users = await User.find(
+          { _id: { $in: inst.users } },
+          { information: 1, titles: 1 } // <-- only these fields
+        );
+
+        // return the institution with the users info
+        return {
+          ...inst.toObject(),
+          users
+        };
+      })
+    );
+
+    res.json({ experts, institutions: institutionsWithUsers });
+  } catch (error) {
+    console.error("Error fetching experts/institutions:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 // GET Expert Details Route (no changes needed)
 router.get("/:userId/:expertID", async (req, res) => {

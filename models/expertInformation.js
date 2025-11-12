@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+
+
 
 const { Schema } = mongoose;
 
@@ -27,16 +31,16 @@ const ExperienceSchema = new Schema({
   start: { type: Number },
   end: { type: Number, default: null },
   stillWork: { type: Boolean, default: false },
-  country: { type: Schema.Types.ObjectId, ref: "Country" },
-  city: { type: Schema.Types.ObjectId, ref: "City" },
+  country: {type:String},
+  city: {type:String},
 });
 
 const CertificateSchema = new Schema({
   id: { type: String, default: uuidv4 },
   name: { type: String },
   company: { type: String },
-  country: { type: Schema.Types.ObjectId, ref: "Country" },
-  city: { type: Schema.Types.ObjectId, ref: "City" },
+  country: {type:String},
+  city: {type:String},
   issueDate: { type: Date },
   expiryDate: { type: Date },
   credentialId: { type: String },
@@ -587,18 +591,18 @@ const CustomerSchema = new Schema({
 // ---------------- User Schema ----------------
 const UserSchema = new Schema(
   {
-    password: { type: String, required: true },
     pp: { type: String },
     ppFile: { type: String },
     information: {
       name: { type: String, required: true },
       surname: { type: String, required: true },
       birthday: { type: String },
-      country: { type: Schema.Types.ObjectId, ref: "Country" },
-      city: { type: Schema.Types.ObjectId, ref: "City" }, // Added
-      district: { type: Schema.Types.ObjectId, ref: "District" }, // Added
+      country: {type:String},
+      city: {type:String}, // Added
+      district: {type:String}, // Added
       address: { type: String },
       email: { type: String, required: true, unique: true },
+      password: { type: String, required: true },
       phone: { type: String, required: true },
       about: { type: String },
       trailerUrl: { type: String },
@@ -640,7 +644,7 @@ const UserSchema = new Schema(
       image: { type: String },
       subMerchantID: { type: String },
     },
-    username: { type: String, unique: true, required: true },
+    username: { type: String, },
     fiveMin: { type: Boolean, default: true },
     expertPackages: ExpertPackagesSchema,
 
@@ -708,6 +712,43 @@ const UserSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Hash password before save
+UserSchema.pre("save", async function(next) {
+  if (!this.isModified("information.password")) return next();
+  this.information.password = await bcrypt.hash(this.information.password, 10);
+  next();
+});
+
+// Compare password method
+UserSchema.methods.ComparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.information.password);
+};
+
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "access-secret";
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret";
+
+//Generate Access token
+UserSchema.methods.generateAccessToken = function() {
+  return jwt.sign({ id: this._id }, ACCESS_TOKEN_SECRET, { expiresIn: "45m" });
+};
+
+//Generate Refresh tokens
+UserSchema.methods.generateRefreshToken = function() {
+  return jwt.sign({ id: this._id }, REFRESH_TOKEN_SECRET, { expiresIn: "30d" });
+};
+
+
+// Verify Access Token
+UserSchema.methods.verifyAccessToken = (token) => {
+  return jwt.verify(token, ACCESS_TOKEN_SECRET);
+};
+
+// Verify Refresh Token
+UserSchema.methods.verifyRefreshToken = (token) => {
+  return jwt.verify(token, REFRESH_TOKEN_SECRET);
+};
+
 
 const User = mongoose.model("User", UserSchema);
 export default User;

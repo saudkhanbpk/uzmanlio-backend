@@ -87,55 +87,7 @@ router.get("/debug/users", async (req, res) => {
   }
 });
 
-// Debug route to create test user (for development only)
-router.post("/debug/create-test-user", async (req, res) => {
-  try {
-    // Check if user already exists
-    const existingUser = await User.findById("68c94094d011cdb0e5fa2caa");
-    if (existingUser) {
-      return res.json({
-        message: "Test user already exists",
-        userId: "68c94094d011cdb0e5fa2caa",
-        user: existingUser
-      });
-    }
 
-    const testUser = new User({
-      _id: new mongoose.Types.ObjectId("68c94094d011cdb0e5fa2caa"),
-      name: "Test Expert",
-      email: "test@example.com",
-      title: "Test Expert Title",
-      expertInformation: {
-        subs: ["Test Category"]
-      },
-      services: [],
-      packages: [],
-      events: [],
-      blogs: [],
-      forms: [],
-      customers: [],
-      availability: {
-        alwaysAvailable: false,
-        selectedSlots: [],
-        lastUpdated: new Date()
-      },
-      appointments: []
-    });
-
-    await testUser.save();
-    res.json({
-      message: "Test user created successfully",
-      userId: testUser._id,
-      user: testUser
-    });
-  } catch (error) {
-    if (error.code === 11000) {
-      res.json({ message: "Test user already exists", userId: "68c94094d011cdb0e5fa2caa" });
-    } else {
-      res.status(500).json({ error: error.message });
-    }
-  }
-});
 // Profile picture upload route
 router.post("/:userId/upload",
   // Validation and existing image check middleware

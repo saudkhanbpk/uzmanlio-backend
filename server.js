@@ -19,7 +19,7 @@ import calendarWebhookRoutes from "./routes/calendarWebhookRoutes.js";
 import backgroundJobService from "./services/backgroundJobs.js";
 import subscriptionRoutes from "./routes/expertRoutes/subscriptionRoutes.js";
 import institutionRoutes from "./routes/expertRoutes/institutionRoutes.js";
-
+import authRoutes from "./routes/expertRoutes/authRoutes.js"
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -101,6 +101,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal Server Error", details: err.message });
 });
 // Expert information routes
+app.use("/api/expert", authRoutes);
 app.use("/api/expert", profileRoutes);
 app.use("/api/expert", servicesRoutes);
 app.use("/api/expert", packagesRoutes);
@@ -119,6 +120,8 @@ app.use("/api/expert/:userId/emails", userEmailsRoutes);
 
 // Serve uploaded files
 app.use("/uploads", express.static("uploads"));
+
+//customer Routes
 
 // Graceful shutdown
 process.on("SIGINT", async () => {
