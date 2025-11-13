@@ -27,6 +27,47 @@ const findUserById = async (userId) => {
   return user;
 };
 
+router.get("/:institutionID/blogs-forms", async (req, res) => {
+  try {
+    const { institutionID } = req.params;
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(institutionID)) {
+      return res.status(400).json({ error: "Invalid institution ID" });
+    }
+
+    // Find the institution and get its users
+    const institution = await Institution.findById(institutionID).populate({
+      path: "users", // populate the user references
+      select: "information blogs forms", // select only needed fields
+    });
+
+    if (!institution) {
+      return res.status(404).json({ error: "Institution not found" });
+    }
+
+    // Map over users to structure the data
+    const usersWithBlogsAndForms = institution.users.map(user => ({
+      userId: user._id,
+      name: user.information?.name ,
+      blogs: user.blogs || [],
+      forms: user.forms || [],
+    }));
+
+    res.json({
+      institutionId: institution._id,
+      institutionName: institution.name,
+      users: usersWithBlogsAndForms,
+    });
+  } catch (err) {
+    console.error("Fetch error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
 
 router.get("/experts-institutions", async (req, res) => {
   try {
@@ -74,12 +115,12 @@ router.get("/experts-institutions", async (req, res) => {
 
 
 // GET Expert Details Route (no changes needed)
-router.get("/:userId/:expertID", async (req, res) => {
+router.get("/:expertID", async (req, res) => {
   if (!mongoose.connection.readyState) {
     return res.status(503).json({ error: "Service Unavailable" });
   }
   try {
-    const { userId, expertID } = req.params;
+    const { expertID } = req.params;
     if (!mongoose.Types.ObjectId.isValid(expertID)) {
       return res.status(400).json({ error: "Invalid user ID" });
     }
