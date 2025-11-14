@@ -671,7 +671,7 @@ const UserSchema = new Schema(
     forms: [FormSchema],
 
     // Customers system
-    customers: [CustomerSchema],
+    // customers: [CustomerSchema],
 
     vacationMode: { type: Boolean, default: false },
     expertType: { type: Boolean, default: false },

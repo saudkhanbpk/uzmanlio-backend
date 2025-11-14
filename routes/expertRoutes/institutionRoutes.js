@@ -133,67 +133,87 @@ router.get("/:userId/institution", async (req, res) => {
 
 /////////Update Institution Profile/////////
 // Use multer middleware to handle multipart form data
+
 router.put("/:userId/institution/Update", institutionFilesUpload.fields([
-    { name: 'logo', maxCount: 1 },
-    { name: 'axe', maxCount: 1 }
-  ]), async (req, res) => {
-    try {
-        console.log("Updating institution:", req.params.userId);
-        console.log("Request body:", req.body);
-        console.log("Uploaded files:", req.files);
+  { name: 'logo', maxCount: 1 },
+  { name: 'axe', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    console.log("Updating institution:", req.params.userId);
 
-        const { name, bio, about } = req.body;
-        const user = await findUserById(req.params.userId);
+    const { name, bio, about } = req.body;
+    const user = await findUserById(req.params.userId);
 
-        // Get file paths if uploaded (match field names sent by frontend)
-        const logoPath = req.files?.logo?.[0]?.path || null;
-        const axePath = req.files?.axe?.[0]?.path || null;
+    const logoPath = req.files?.logo?.[0]?.path || null;
+    const axePath = req.files?.axe?.[0]?.path || null;
 
-        // allow reassignment when creating new institution
-        let institution = await Institution.findOne({ Admin: user._id });
+    let institution = await Institution.findOne({ Admin: user._id });
 
-        if (!institution) {
-          console.log("Creating new institution");
-          institution = new Institution({
-            Admin: user._id,
-            name,
-            bio,
-            about,
-            logo: logoPath || null,
-            officialAxe: axePath || null,
-            users: [user._id],
-            invitedUsers: []
-          });
-          await institution.save();
-          user.subscription = user.subscription || {};
-          user.subscription.institutionId = institution._id;
-          await user.save();
+    // 1️⃣ Create new institution if not found
+    if (!institution) {
+      institution = new Institution({
+        Admin: user._id,
+        name,
+        bio,
+        about,
+        logo: logoPath || null,
+        officialAxe: axePath || null,
+        users: [user._id],
+        invitedUsers: []
+      });
 
-          return res.json({
-            institution,
-            message: "Institution created successfully"
-          });
-        }
+      await institution.save();
 
-        // Update existing institution fields
-        if (name) institution.name = name;
-        if (bio) institution.bio = bio;
-        if (about) institution.about = about;
-        if (logoPath) institution.logo = logoPath;
-        if (axePath) institution.officialAxe = axePath;
+      user.subscription = user.subscription || {};
+      user.subscription.institutionId = institution._id;
+      await user.save();
 
-        await institution.save();
-
-        res.json({
-          institution,
-          message: "Institution updated successfully"
-        });
-
-    } catch (error) {
-      console.error("Error updating institution:", error);
-      res.status(500).json({ error: error.message });
+      return res.json({
+        institution,
+        message: "Institution created successfully"
+      });
     }
+
+    // 2️⃣ Update Existing Institution
+    if (name) institution.name = name;
+    if (bio) institution.bio = bio;
+    if (about) institution.about = about;
+
+    // -------------------------------
+    // 🟦 DELETE OLD LOGO IF NEW LOGO IS UPLOADED
+    // -------------------------------
+    if (logoPath) {
+      if (institution.logo && fs.existsSync(institution.logo)) {
+        fs.unlinkSync(institution.logo);
+        console.log("Old logo deleted:", institution.logo);
+      }
+      institution.logo = logoPath;
+    }
+
+    // -------------------------------
+    // 🟩 DELETE OLD AXE IF NEW AXE IS UPLOADED
+    // -------------------------------
+    if (axePath) {
+      if (institution.officialAxe && fs.existsSync(institution.officialAxe)) {
+        fs.unlinkSync(institution.officialAxe);
+        console.log("Old axe deleted:", institution.officialAxe);
+      }
+      institution.officialAxe = axePath;
+    }
+
+    await institution.save();
+
+    return res.json({
+      institution,
+      message: "Institution updated successfully"
+    });
+
+  } catch (error) {
+    console.error("Error updating institution:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
+
 
 // ========== INVITED USERS ROUTES ==========
 
