@@ -170,7 +170,7 @@ const safeDate = (value) => {
 
 // ✅ Booking form route
 router.post(
-  "/:customerId/form",
+  "/:finalCustomerId/form",
   bookingUpload.array("files"),
   handleMulterError,
   async (req, res) => {
