@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
 import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
-
+import Customer from "../../models/customer.js";
 
 const router = express.Router();
 
@@ -258,20 +258,55 @@ router.get("/:userId/profile", async (req, res) => {
   }
 });
 
+// router.get("/:userId", async (req, res) => {
+//   try {
+//     console.log("Fetching profile for userId:", req.params.userId);
+//     const expertInformation = await findUserById(req.params.userId);
+//     console.log("Profile fetched successfully for userId:", req.params.userId);
+//     res.json(expertInformation);
+//   } catch (err) {
+//     console.error("Fetch error:", {
+//       message: err.message,
+//       stack: err.stack
+//     });
+//     res.status(err.message === 'Invalid user ID' ? 400 : 404).json({ error: err.message });
+//   }
+// });
+
 router.get("/:userId", async (req, res) => {
   try {
     console.log("Fetching profile for userId:", req.params.userId);
-    const expertInformation = await findUserById(req.params.userId);
-    console.log("Profile fetched successfully for userId:", req.params.userId);
-    res.json(expertInformation);
+
+    // Find user and populate customers
+    const user = await User.findById(req.params.userId)
+      .populate({
+        path: "customers.customerId",  // populate the customer reference
+        model: "Customer"
+      })
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Map customers to include full customer data + isArchived/addedAt
+    const customers = (user.customers || []).map(c => ({
+      ...(c.customerId || {}),      // full Customer document, fallback to empty object
+      isArchived: c.isArchived || false, 
+      addedAt: c.addedAt || null
+    }));
+
+    // Return user with populated customers
+    res.json({ ...user, customers });
+
   } catch (err) {
-    console.error("Fetch error:", {
-      message: err.message,
-      stack: err.stack
-    });
+    console.error("Fetch error:", { message: err.message, stack: err.stack });
     res.status(err.message === 'Invalid user ID' ? 400 : 404).json({ error: err.message });
   }
 });
+
+
+
 
 router.put("/:userId", async (req, res) => {
   try {
@@ -1201,18 +1236,18 @@ router.post("/:userId/events", async (req, res) => {
       if (activeProviders.length > 0) {
         // Run sync in background (asynchroniously)
         // setImmediate(async () => {
-          for (const provider of activeProviders) {
-            try {
-             const response = await calendarSyncService.syncAppointmentToProvider(req.params.userId,newEvent,provider)
-             if(response.success){
+        for (const provider of activeProviders) {
+          try {
+            const response = await calendarSyncService.syncAppointmentToProvider(req.params.userId, newEvent, provider)
+            if (response.success) {
               console.log("sunced Event To Calendar Successfully")
-             }else{
-              console.log("Sunc Failed to Calendar",error)
-             }
-            } catch (error) {
-              console.error(`❌ Failed to sync event to ${provider.provider}:`, error);
+            } else {
+              console.log("Sunc Failed to Calendar", error)
             }
+          } catch (error) {
+            console.error(`❌ Failed to sync event to ${provider.provider}:`, error);
           }
+        }
         // });
       }
     }
@@ -1358,7 +1393,7 @@ router.delete("/:userId/events/:eventId", async (req, res) => {
     user.events.splice(eventIndex, 1);
     await user.save();
 
-        // Sync to connected calendars in background
+    // Sync to connected calendars in background
     const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
 
     if (providers.length > 0) {
@@ -2083,53 +2118,723 @@ router.get("/:userId/forms/stats", async (req, res) => {
 
 // ==================== CUSTOMERS ROUTES ====================
 
+// // Get all customers for a user
+// router.get("/:userId/customers", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const { status, category, search } = req.query;
+
+//     let customers = user.customers || [];
+
+//     // Filter by status
+//     if (status && status !== 'all') {
+//       customers = customers.filter(customer => customer.status === status);
+//     }
+
+//     // Filter by category
+//     if (category && category !== 'all') {
+//       customers = customers.filter(customer => customer.category === category);
+//     }
+
+//     // Search functionality
+//     if (search) {
+//       const searchLower = search.toLowerCase();
+//       customers = customers.filter(customer =>
+//         customer.name.toLowerCase().includes(searchLower) ||
+//         customer.surname.toLowerCase().includes(searchLower) ||
+//         customer.email.toLowerCase().includes(searchLower) ||
+//         customer.phone.includes(search)
+//       );
+//     }
+
+//     // Sort by last contact date (most recent first)
+//     customers.sort((a, b) => new Date(b.lastContact || b.updatedAt) - new Date(a.lastContact || a.updatedAt));
+
+//     res.json({ customers });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Get single customer by ID
+// router.get("/:userId/customers/:customerId", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customer = user.customers?.find(customer => customer.id === req.params.customerId);
+
+//     if (!customer) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     res.json({ customer });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Create new customer
+// router.post("/:userId/customers", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customerData = req.body;
+
+//     // Check if customer with same email already exists
+//     const existingCustomer = user.customers?.find(c => c.email === customerData.email);
+//     if (existingCustomer) {
+//       return res.status(400).json({ error: "Bu e-posta adresi ile kayıtlı bir danışan zaten mevcut" });
+//     }
+
+//     // Generate unique ID for the customer
+//     const customerId = uuidv4();
+
+//     const newCustomer = {
+//       id: customerId,
+//       name: customerData.name,
+//       surname: customerData.surname,
+//       email: customerData.email,
+//       phone: customerData.phone,
+//       dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : undefined,
+//       gender: customerData.gender,
+//       address: customerData.address || {},
+//       occupation: customerData.occupation,
+//       company: customerData.company,
+//       preferences: {
+//         communicationMethod: customerData.preferences?.communicationMethod || 'email',
+//         language: customerData.preferences?.language || 'tr',
+//         timezone: customerData.preferences?.timezone || 'Europe/Istanbul',
+//         reminderSettings: {
+//           enabled: customerData.preferences?.reminderSettings?.enabled !== false,
+//           beforeHours: customerData.preferences?.reminderSettings?.beforeHours || 24
+//         }
+//       },
+//       status: customerData.status || 'active',
+//       category: customerData.category,
+//       tags: customerData.tags || [],
+//       source: customerData.source || 'website',
+//       referredBy: customerData.referredBy,
+//       appointments: [],
+//       totalAppointments: 0,
+//       completedAppointments: 0,
+//       cancelledAppointments: 0,
+//       noShowAppointments: 0,
+//       totalSpent: 0,
+//       outstandingBalance: 0,
+//       paymentMethod: customerData.paymentMethod,
+//       notes: [],
+//       averageRating: 0,
+//       totalRatings: 0,
+//       consentGiven: {
+//         dataProcessing: customerData.consentGiven?.dataProcessing || false,
+//         marketing: customerData.consentGiven?.marketing || false,
+//         dateGiven: customerData.consentGiven?.dataProcessing ? new Date() : undefined
+//       },
+//       isArchived: false,
+//       createdAt: new Date(),
+//       updatedAt: new Date()
+//     };
+
+//     if (!user.customers) {
+//       user.customers = [];
+//     }
+//     user.customers.push(newCustomer);
+//     await user.save();
+
+//     res.status(201).json({
+//       customer: newCustomer,
+//       message: "Danışan başarıyla eklendi"
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Update customer
+// router.put("/:userId/customers/:customerId", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+
+//     if (customerIndex === -1) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     const customerData = req.body;
+
+//     // Check if email is being changed and if it conflicts with another customer
+//     if (customerData.email !== user.customers[customerIndex].email) {
+//       const existingCustomer = user.customers.find(c =>
+//         c.email === customerData.email && c.id !== req.params.customerId
+//       );
+//       if (existingCustomer) {
+//         return res.status(400).json({ error: "Bu e-posta adresi ile kayıtlı başka bir danışan mevcut" });
+//       }
+//     }
+
+//     const updatedCustomer = {
+//       ...user.customers[customerIndex],
+//       name: customerData.name,
+//       surname: customerData.surname,
+//       email: customerData.email,
+//       phone: customerData.phone,
+//       dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : user.customers[customerIndex].dateOfBirth,
+//       gender: customerData.gender,
+//       address: { ...user.customers[customerIndex].address, ...customerData.address },
+//       occupation: customerData.occupation,
+//       company: customerData.company,
+//       preferences: {
+//         ...user.customers[customerIndex].preferences,
+//         ...customerData.preferences
+//       },
+//       status: customerData.status,
+//       category: customerData.category,
+//       tags: customerData.tags || user.customers[customerIndex].tags,
+//       source: customerData.source,
+//       referredBy: customerData.referredBy,
+//       paymentMethod: customerData.paymentMethod,
+//       consentGiven: {
+//         ...user.customers[customerIndex].consentGiven,
+//         ...customerData.consentGiven
+//       },
+//       updatedAt: new Date()
+//     };
+
+//     user.customers[customerIndex] = updatedCustomer;
+//     await user.save();
+
+//     res.json({
+//       customer: updatedCustomer,
+//       message: "Danışan bilgileri başarıyla güncellendi"
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Delete customer
+// router.delete("/:userId/customers/:customerId", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+
+//     if (customerIndex === -1) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     user.customers.splice(customerIndex, 1);
+//     await user.save();
+
+//     res.json({ message: "Danışan başarıyla silindi" });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Archive/Unarchive customer
+// router.patch("/:userId/customers/:customerId/archive", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+
+//     if (customerIndex === -1) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     const { isArchived } = req.body;
+//     user.customers[customerIndex].isArchived = isArchived;
+//     user.customers[customerIndex].updatedAt = new Date();
+
+//     await user.save();
+
+//     res.json({
+//       customer: user.customers[customerIndex],
+//       message: `Danışan ${isArchived ? 'arşivlendi' : 'arşivden çıkarıldı'}`
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Update customer status
+// router.patch("/:userId/customers/:customerId/status", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+
+//     if (customerIndex === -1) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     const { status } = req.body;
+//     if (!['active', 'inactive', 'blocked', 'prospect'].includes(status)) {
+//       return res.status(400).json({ error: "Invalid status" });
+//     }
+
+//     user.customers[customerIndex].status = status;
+//     user.customers[customerIndex].updatedAt = new Date();
+
+//     await user.save();
+
+//     res.json({
+//       customer: user.customers[customerIndex],
+//       message: `Danışan durumu ${status} olarak güncellendi`
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // ==================== CUSTOMER NOTES ROUTES ====================
+
+// // Get customer notes
+// router.get("/:userId/customers/:customerId/notes", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customer = user.customers?.find(customer => customer.id === req.params.customerId);
+
+//     if (!customer) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     // Sort notes by creation date (newest first)
+//     const notes = (customer.notes || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+//     res.json({
+//       notes,
+//       customer: {
+//         id: customer.id,
+//         name: customer.name,
+//         surname: customer.surname,
+//         email: customer.email
+//       }
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Add customer note
+// router.post("/:userId/customers/:customerId/notes", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+
+//     if (customerIndex === -1) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     const noteData = req.body;
+//     const noteId = uuidv4();
+
+//     const newNote = {
+//       id: noteId,
+//       content: noteData.content,
+//       author: noteData.author || 'expert',
+//       authorName: noteData.authorName || user.information?.name || 'Expert',
+//       files: noteData.files || [],
+//       isPrivate: noteData.isPrivate || false,
+//       tags: noteData.tags || [],
+//       createdAt: new Date(),
+//       updatedAt: new Date()
+//     };
+
+//     if (!user.customers[customerIndex].notes) {
+//       user.customers[customerIndex].notes = [];
+//     }
+//     user.customers[customerIndex].notes.push(newNote);
+//     user.customers[customerIndex].lastContact = new Date();
+//     user.customers[customerIndex].updatedAt = new Date();
+
+//     await user.save();
+
+//     res.status(201).json({
+//       note: newNote,
+//       message: "Not başarıyla eklendi"
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Update customer note
+// router.put("/:userId/customers/:customerId/notes/:noteId", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+
+//     if (customerIndex === -1) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     const noteIndex = user.customers[customerIndex].notes.findIndex(note => note.id === req.params.noteId);
+//     if (noteIndex === -1) {
+//       return res.status(404).json({ error: "Note not found" });
+//     }
+
+//     const noteData = req.body;
+//     const updatedNote = {
+//       ...user.customers[customerIndex].notes[noteIndex],
+//       content: noteData.content,
+//       files: noteData.files || user.customers[customerIndex].notes[noteIndex].files,
+//       isPrivate: noteData.isPrivate,
+//       tags: noteData.tags || user.customers[customerIndex].notes[noteIndex].tags,
+//       updatedAt: new Date()
+//     };
+
+//     user.customers[customerIndex].notes[noteIndex] = updatedNote;
+//     user.customers[customerIndex].updatedAt = new Date();
+
+//     await user.save();
+
+//     res.json({
+//       note: updatedNote,
+//       message: "Not başarıyla güncellendi"
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Delete customer note
+// router.delete("/:userId/customers/:customerId/notes/:noteId", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+
+//     if (customerIndex === -1) {
+//       return res.status(404).json({ error: "Customer not found" });
+//     }
+
+//     const noteIndex = user.customers[customerIndex].notes.findIndex(note => note.id === req.params.noteId);
+//     if (noteIndex === -1) {
+//       return res.status(404).json({ error: "Note not found" });
+//     }
+
+//     user.customers[customerIndex].notes.splice(noteIndex, 1);
+//     user.customers[customerIndex].updatedAt = new Date();
+
+//     await user.save();
+
+//     res.json({ message: "Not başarıyla silindi" });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // ==================== CUSTOMER STATISTICS ROUTES ====================
+
+// // Get customer statistics
+// router.get("/:userId/customersStats", async (req, res) => {
+//   console.log("Route Hitted")
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     console.log("USER ID from stats:", user)
+//     const customers = user.customers || [];
+
+//     const stats = {
+//       total: customers.length,
+//       active: customers.filter(c => c.status === 'active').length,
+//       inactive: customers.filter(c => c.status === 'inactive').length,
+//       blocked: customers.filter(c => c.status === 'blocked').length,
+//       prospects: customers.filter(c => c.status === 'prospect').length,
+//       archived: customers.filter(c => c.isArchived).length,
+
+//       // Appointment statistics
+//       totalAppointments: customers.reduce((sum, c) => sum + (c.totalAppointments || 0), 0),
+//       completedAppointments: customers.reduce((sum, c) => sum + (c.completedAppointments || 0), 0),
+//       cancelledAppointments: customers.reduce((sum, c) => sum + (c.cancelledAppointments || 0), 0),
+//       noShowAppointments: customers.reduce((sum, c) => sum + (c.noShowAppointments || 0), 0),
+
+//       // Financial statistics
+//       totalRevenue: customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0),
+//       outstandingBalance: customers.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0),
+
+//       // Recent activity
+//       newCustomersThisMonth: customers.filter(c => {
+//         const createdDate = new Date(c.createdAt);
+//         const now = new Date();
+//         return createdDate.getMonth() === now.getMonth() && createdDate.getFullYear() === now.getFullYear();
+//       }).length,
+
+//       recentCustomers: customers
+//         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+//         .slice(0, 5)
+//         .map(c => ({
+//           id: c.id,
+//           name: `${c.name} ${c.surname}`,
+//           email: c.email,
+//           createdAt: c.createdAt,
+//           totalSpent: c.totalSpent || 0
+//         })),
+
+//       // Customer sources
+//       sourceBreakdown: customers.reduce((acc, c) => {
+//         const source = c.source || 'unknown';
+//         acc[source] = (acc[source] || 0) + 1;
+//         return acc;
+//       }, {}),
+
+//       // Average ratings
+//       averageRating: customers.length > 0
+//         ? customers.reduce((sum, c) => sum + (c.averageRating || 0), 0) / customers.length
+//         : 0,
+
+//       // Categories
+//       categoryBreakdown: customers.reduce((acc, c) => {
+//         const category = c.category || 'uncategorized';
+//         acc[category] = (acc[category] || 0) + 1;
+//         return acc;
+//       }, {})
+//     };
+
+//     res.json({ stats });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // ==================== BULK OPERATIONS ROUTES ====================
+
+// // Bulk import customers from CSV
+// router.post("/:userId/customers/bulk-import", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const { customers: customersData } = req.body;
+
+//     if (!Array.isArray(customersData) || customersData.length === 0) {
+//       return res.status(400).json({ error: "Invalid customers data" });
+//     }
+
+//     const results = {
+//       success: 0,
+//       failed: 0,
+//       errors: []
+//     };
+
+//     for (let i = 0; i < customersData.length; i++) {
+//       try {
+//         const customerData = customersData[i];
+
+//         // Validate required fields
+//         if (!customerData.name || !customerData.surname || !customerData.email || !customerData.phone) {
+//           results.failed++;
+//           results.errors.push(`Row ${i + 1}: Missing required fields`);
+//           continue;
+//         }
+
+//         // Check if customer already exists
+//         const existingCustomer = user.customers?.find(c => c.email === customerData.email);
+//         if (existingCustomer) {
+//           results.failed++;
+//           results.errors.push(`Row ${i + 1}: Customer with email ${customerData.email} already exists`);
+//           continue;
+//         }
+
+//         const newCustomer = {
+//           id: uuidv4(),
+//           name: customerData.name,
+//           surname: customerData.surname,
+//           email: customerData.email,
+//           phone: customerData.phone,
+//           dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : undefined,
+//           gender: customerData.gender,
+//           occupation: customerData.occupation,
+//           company: customerData.company,
+//           status: customerData.status || 'active',
+//           category: customerData.category,
+//           source: customerData.source || 'bulk-import',
+//           referredBy: customerData.referredBy,
+//           preferences: {
+//             communicationMethod: customerData.communicationMethod || 'email',
+//             language: 'tr',
+//             timezone: 'Europe/Istanbul',
+//             reminderSettings: {
+//               enabled: true,
+//               beforeHours: 24
+//             }
+//           },
+//           appointments: [],
+//           totalAppointments: 0,
+//           completedAppointments: 0,
+//           cancelledAppointments: 0,
+//           noShowAppointments: 0,
+//           totalSpent: 0,
+//           outstandingBalance: 0,
+//           notes: [],
+//           averageRating: 0,
+//           totalRatings: 0,
+//           consentGiven: {
+//             dataProcessing: true,
+//             marketing: customerData.marketingConsent || false,
+//             dateGiven: new Date()
+//           },
+//           isArchived: false,
+//           createdAt: new Date(),
+//           updatedAt: new Date()
+//         };
+
+//         if (!user.customers) {
+//           user.customers = [];
+//         }
+//         user.customers.push(newCustomer);
+//         results.success++;
+
+//       } catch (error) {
+//         results.failed++;
+//         results.errors.push(`Row ${i + 1}: ${error.message}`);
+//       }
+//     }
+
+//     await user.save();
+
+//     res.json({
+//       message: `Bulk import completed. ${results.success} customers imported, ${results.failed} failed.`,
+//       results
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Export customers to CSV format
+// router.get("/:userId/customers/export", async (req, res) => {
+//   try {
+//     const user = await findUserById(req.params.userId);
+//     const customers = user.customers || [];
+
+//     const csvData = customers.map(customer => ({
+//       name: customer.name,
+//       surname: customer.surname,
+//       email: customer.email,
+//       phone: customer.phone,
+//       dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().split('T')[0] : '',
+//       gender: customer.gender || '',
+//       occupation: customer.occupation || '',
+//       company: customer.company || '',
+//       status: customer.status,
+//       category: customer.category || '',
+//       source: customer.source || '',
+//       referredBy: customer.referredBy || '',
+//       totalAppointments: customer.totalAppointments || 0,
+//       completedAppointments: customer.completedAppointments || 0,
+//       totalSpent: customer.totalSpent || 0,
+//       averageRating: customer.averageRating || 0,
+//       lastAppointment: customer.lastAppointment ? customer.lastAppointment.toISOString().split('T')[0] : '',
+//       createdAt: customer.createdAt.toISOString().split('T')[0]
+//     }));
+
+//     res.json({
+//       customers: csvData,
+//       message: "Customer data exported successfully"
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ==================== CUSTOMERS ROUTES ====================
+
 // Get all customers for a user
 router.get("/:userId/customers", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
+    const { userId } = req.params;
     const { status, category, search } = req.query;
 
-    let customers = user.customers || [];
+    // Find user and populate customer references inside 'customers.customerId'
+    const user = await User.findById(userId)
+      .populate({
+        path: "customers.customerId",
+        model: "Customer"
+      })
+      .lean();
 
-    // Filter by status
-    if (status && status !== 'all') {
-      customers = customers.filter(customer => customer.status === status);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Map to include full customer document + isArchived + addedAt
+    let customers = (user.customers || []).map(c => ({
+      ...c.customerId,            // full customer document
+      isArchived: c.isArchived,   // keep flag from user
+      addedAt: c.addedAt           // keep addedAt timestamp
+    }));
+
+    // Apply filters if provided
+    if (status && status !== "all") {
+      customers = customers.filter(c => c.status === status);
     }
 
-    // Filter by category
-    if (category && category !== 'all') {
-      customers = customers.filter(customer => customer.category === category);
+    if (category && category !== "all") {
+      customers = customers.filter(c => c.category === category);
     }
 
-    // Search functionality
     if (search) {
       const searchLower = search.toLowerCase();
-      customers = customers.filter(customer =>
-        customer.name.toLowerCase().includes(searchLower) ||
-        customer.surname.toLowerCase().includes(searchLower) ||
-        customer.email.toLowerCase().includes(searchLower) ||
-        customer.phone.includes(search)
+      customers = customers.filter(c =>
+        (c.name && c.name.toLowerCase().includes(searchLower)) ||
+        (c.surname && c.surname.toLowerCase().includes(searchLower)) ||
+        (c.email && c.email.toLowerCase().includes(searchLower)) ||
+        (c.phone && c.phone.includes(search))
       );
     }
 
-    // Sort by last contact date (most recent first)
-    customers.sort((a, b) => new Date(b.lastContact || b.updatedAt) - new Date(a.lastContact || a.updatedAt));
+    // Sort by lastContact or updatedAt
+    customers.sort(
+      (a, b) => new Date(b.lastContact || b.updatedAt) - new Date(a.lastContact || a.updatedAt)
+    );
 
-    res.json({ customers });
+    res.json({ customers }); // FULL customer objects returned here
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+
 // Get single customer by ID
 router.get("/:userId/customers/:customerId", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customer = user.customers?.find(customer => customer.id === req.params.customerId);
+    const { userId, customerId } = req.params;
+    const user = await findUserById(userId);
 
-    if (!customer) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
+    const ownsCustomer = user.customers.some(id => id.toString() === customerId);
+    if (!ownsCustomer) return res.status(404).json({ error: "Customer not found for this user" });
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     res.json({ customer });
   } catch (error) {
@@ -2140,74 +2845,75 @@ router.get("/:userId/customers/:customerId", async (req, res) => {
 // Create new customer
 router.post("/:userId/customers", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customerData = req.body;
+    const { userId } = req.params;
+    const data = req.body;
 
-    // Check if customer with same email already exists
-    const existingCustomer = user.customers?.find(c => c.email === customerData.email);
-    if (existingCustomer) {
-      return res.status(400).json({ error: "Bu e-posta adresi ile kayıtlı bir danışan zaten mevcut" });
-    }
+    const user = await findUserById(userId);
 
-    // Generate unique ID for the customer
-    const customerId = uuidv4();
+    const existingCustomer = await Customer.findOne({ email: data.email });
+    if (existingCustomer) return res.status(400).json({ error: "Bu e-posta ile bir danışan zaten kayıtlı" });
 
-    const newCustomer = {
-      id: customerId,
-      name: customerData.name,
-      surname: customerData.surname,
-      email: customerData.email,
-      phone: customerData.phone,
-      dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : undefined,
-      gender: customerData.gender,
-      address: customerData.address || {},
-      occupation: customerData.occupation,
-      company: customerData.company,
+    const newCustomer = await Customer.create({
+      name: data.name,
+      surname: data.surname,
+      email: data.email,
+      phone: data.phone,
+      dateOfBirth: data.dateOfBirth,
+      gender: data.gender,
+      address: {
+        street: data.address?.street,
+        city: data.address?.city,
+        state: data.address?.state,
+        postalCode: data.address?.postalCode,
+        country: data.address?.country,
+      },
+      occupation: data.occupation,
+      company: data.company,
       preferences: {
-        communicationMethod: customerData.preferences?.communicationMethod || 'email',
-        language: customerData.preferences?.language || 'tr',
-        timezone: customerData.preferences?.timezone || 'Europe/Istanbul',
+        communicationMethod: data.preferences?.communicationMethod || "email",
+        language: data.preferences?.language || "tr",
+        timezone: data.preferences?.timezone || "Europe/Istanbul",
         reminderSettings: {
-          enabled: customerData.preferences?.reminderSettings?.enabled !== false,
-          beforeHours: customerData.preferences?.reminderSettings?.beforeHours || 24
+          enabled: data.preferences?.reminderSettings?.enabled !== false,
+          beforeHours: data.preferences?.reminderSettings?.beforeHours || 24
         }
       },
-      status: customerData.status || 'active',
-      category: customerData.category,
-      tags: customerData.tags || [],
-      source: customerData.source || 'website',
-      referredBy: customerData.referredBy,
-      appointments: [],
-      totalAppointments: 0,
-      completedAppointments: 0,
-      cancelledAppointments: 0,
-      noShowAppointments: 0,
-      totalSpent: 0,
-      outstandingBalance: 0,
-      paymentMethod: customerData.paymentMethod,
-      notes: [],
-      averageRating: 0,
-      totalRatings: 0,
+      status: data.status || "active",
+      category: data.category,
+      tags: data.tags || [],
+      source: data.source || "website",
+      referredBy: data.referredBy,
+      appointments: data.appointments || [],
+      totalAppointments: data.totalAppointments || 0,
+      completedAppointments: data.completedAppointments || 0,
+      cancelledAppointments: data.cancelledAppointments || 0,
+      noShowAppointments: data.noShowAppointments || 0,
+      totalSpent: data.totalSpent || 0,
+      outstandingBalance: data.outstandingBalance || 0,
+      paymentMethod: data.paymentMethod,
+      notes: data.notes || [],
+      firstAppointment: data.firstAppointment,
+      lastAppointment: data.lastAppointment,
+      lastContact: data.lastContact,
+      averageRating: data.averageRating || 0,
+      totalRatings: data.totalRatings || 0,
       consentGiven: {
-        dataProcessing: customerData.consentGiven?.dataProcessing || false,
-        marketing: customerData.consentGiven?.marketing || false,
-        dateGiven: customerData.consentGiven?.dataProcessing ? new Date() : undefined
+        termsAcceptionStatus: data.consentGiven?.termsAcceptionStatus,
+        dataProcessingTerms: data.consentGiven?.dataProcessingTerms,
+        marketingTerms: data.consentGiven?.marketingTerms,
+        dateGiven: data.consentGiven?.dateGiven
       },
-      isArchived: false,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+      isArchived: data.isArchived || false
+    });
 
-    if (!user.customers) {
-      user.customers = [];
-    }
-    user.customers.push(newCustomer);
+    user.customers.push({
+      customerId: newCustomer._id,
+      isArchived: false,
+      addedAt: new Date()
+    });
     await user.save();
 
-    res.status(201).json({
-      customer: newCustomer,
-      message: "Danışan başarıyla eklendi"
-    });
+    res.status(201).json({ customer: newCustomer, message: "Danışan başarıyla eklendi" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2216,79 +2922,89 @@ router.post("/:userId/customers", async (req, res) => {
 // Update customer
 router.put("/:userId/customers/:customerId", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+    const { userId, customerId } = req.params;
+    const data = req.body || {};
 
-    if (customerIndex === -1) {
-      return res.status(404).json({ error: "Customer not found" });
+    const user = await findUserById(userId);
+    if (!user.customers.includes(customerId)) return res.status(404).json({ error: "Customer not found for this user" });
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    // Email uniqueness
+    if (data.email && data.email !== customer.email) {
+      const emailTaken = await Customer.findOne({ email: data.email, _id: { $ne: customerId } });
+      if (emailTaken) return res.status(400).json({ error: "Bu e-posta adresi başka bir danışanda kayıtlı" });
+      customer.email = data.email;
     }
 
-    const customerData = req.body;
-
-    // Check if email is being changed and if it conflicts with another customer
-    if (customerData.email !== user.customers[customerIndex].email) {
-      const existingCustomer = user.customers.find(c =>
-        c.email === customerData.email && c.id !== req.params.customerId
-      );
-      if (existingCustomer) {
-        return res.status(400).json({ error: "Bu e-posta adresi ile kayıtlı başka bir danışan mevcut" });
-      }
-    }
-
-    const updatedCustomer = {
-      ...user.customers[customerIndex],
-      name: customerData.name,
-      surname: customerData.surname,
-      email: customerData.email,
-      phone: customerData.phone,
-      dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : user.customers[customerIndex].dateOfBirth,
-      gender: customerData.gender,
-      address: { ...user.customers[customerIndex].address, ...customerData.address },
-      occupation: customerData.occupation,
-      company: customerData.company,
-      preferences: {
-        ...user.customers[customerIndex].preferences,
-        ...customerData.preferences
-      },
-      status: customerData.status,
-      category: customerData.category,
-      tags: customerData.tags || user.customers[customerIndex].tags,
-      source: customerData.source,
-      referredBy: customerData.referredBy,
-      paymentMethod: customerData.paymentMethod,
-      consentGiven: {
-        ...user.customers[customerIndex].consentGiven,
-        ...customerData.consentGiven
-      },
-      updatedAt: new Date()
-    };
-
-    user.customers[customerIndex] = updatedCustomer;
-    await user.save();
-
-    res.json({
-      customer: updatedCustomer,
-      message: "Danışan bilgileri başarıyla güncellendi"
+    // Shallow fields
+    ["name", "surname", "phone", "gender", "occupation", "company", "status", "category", "paymentMethod"].forEach(f => {
+      if (data[f] !== undefined) customer[f] = data[f];
     });
+    if (data.dateOfBirth !== undefined) customer.dateOfBirth = data.dateOfBirth ? new Date(data.dateOfBirth) : null;
+
+    // Address merge
+    if (data.address) customer.address = { ...(customer.address || {}), ...data.address };
+
+    // Preferences merge
+    if (data.preferences) {
+      customer.preferences = {
+        communicationMethod: data.preferences.communicationMethod ?? customer.preferences?.communicationMethod ?? "email",
+        language: data.preferences.language ?? customer.preferences?.language ?? "tr",
+        timezone: data.preferences.timezone ?? customer.preferences?.timezone ?? "Europe/Istanbul",
+        reminderSettings: { ...(customer.preferences?.reminderSettings || {}), ...(data.preferences.reminderSettings || {}) }
+      };
+    }
+
+    // Tags
+    if (Array.isArray(data.tags)) customer.tags = data.tags;
+
+    // Source / referredBy
+    ["source", "referredBy"].forEach(f => { if (data[f] !== undefined) customer[f] = data[f]; });
+
+    // Consent merge
+    if (data.consentGiven) {
+      const normalized = {
+        termsAcceptionStatus: data.consentGiven.termsAcceptionStatus ?? data.consentGiven.termsAcception ?? customer.consentGiven?.termsAcceptionStatus,
+        dataProcessingTerms: data.consentGiven.dataProcessingTerms ?? data.consentGiven.dataProcessing ?? customer.consentGiven?.dataProcessingTerms,
+        marketingTerms: data.consentGiven.marketingTerms ?? data.consentGiven.marketing ?? customer.consentGiven?.marketingTerms,
+        dateGiven: data.consentGiven.dateGiven ? new Date(data.consentGiven.dateGiven) : (data.consentGiven.dataProcessing || data.consentGiven.marketing) ? (customer.consentGiven?.dateGiven || new Date()) : customer.consentGiven?.dateGiven
+      };
+      customer.consentGiven = { ...customer.consentGiven, ...normalized };
+    }
+
+    // Appointments / stats
+    ["appointments", "totalAppointments", "completedAppointments", "cancelledAppointments", "noShowAppointments", "totalSpent", "outstandingBalance", "averageRating", "totalRatings", "notes"].forEach(f => {
+      if (data[f] !== undefined) customer[f] = data[f];
+    });
+
+    // Important dates
+    ["firstAppointment", "lastAppointment", "lastContact"].forEach(f => { if (data[f]) customer[f] = new Date(data[f]); });
+
+    if (data.isArchived !== undefined) customer.isArchived = !!data.isArchived;
+    customer.updatedAt = new Date();
+    await customer.save();
+
+    res.json({ customer, message: "Danışan başarıyla güncellendi" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Delete customer
+// Delete customer reference from user
 router.delete("/:userId/customers/:customerId", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+    const { userId, customerId } = req.params;
+    const user = await findUserById(userId);
 
-    if (customerIndex === -1) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
+    const index = user.customers.findIndex(id => id.toString() === customerId);
+    if (index === -1) return res.status(404).json({ error: "Customer not found for this user" });
 
-    user.customers.splice(customerIndex, 1);
+    user.customers.splice(index, 1);
     await user.save();
 
-    res.json({ message: "Danışan başarıyla silindi" });
+    res.json({ message: "Customer reference successfully removed from user" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2297,23 +3013,20 @@ router.delete("/:userId/customers/:customerId", async (req, res) => {
 // Archive/Unarchive customer
 router.patch("/:userId/customers/:customerId/archive", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-    if (customerIndex === -1) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
-
+    const { userId, customerId } = req.params;
     const { isArchived } = req.body;
-    user.customers[customerIndex].isArchived = isArchived;
-    user.customers[customerIndex].updatedAt = new Date();
 
-    await user.save();
+    const user = await findUserById(userId);
+    if (!user.customers.includes(customerId)) return res.status(404).json({ error: "Customer not found for this user" });
 
-    res.json({
-      customer: user.customers[customerIndex],
-      message: `Danışan ${isArchived ? 'arşivlendi' : 'arşivden çıkarıldı'}`
-    });
+    const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    customer.isArchived = !!isArchived;
+    customer.updatedAt = new Date();
+    await customer.save();
+
+    res.json({ customer, message: `Danışan ${customer.isArchived ? "arşivlendi" : "arşivden çıkarıldı"}` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2322,54 +3035,62 @@ router.patch("/:userId/customers/:customerId/archive", async (req, res) => {
 // Update customer status
 router.patch("/:userId/customers/:customerId/status", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-    if (customerIndex === -1) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
-
+    const { userId, customerId } = req.params;
     const { status } = req.body;
-    if (!['active', 'inactive', 'blocked', 'prospect'].includes(status)) {
+
+    if (!["active", "inactive", "blocked", "prospect"].includes(status))
       return res.status(400).json({ error: "Invalid status" });
-    }
 
-    user.customers[customerIndex].status = status;
-    user.customers[customerIndex].updatedAt = new Date();
+    const user = await findUserById(userId);
+    if (!user.customers.includes(customerId)) return res.status(404).json({ error: "Customer not found for this user" });
 
-    await user.save();
+    const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
 
-    res.json({
-      customer: user.customers[customerIndex],
-      message: `Danışan durumu ${status} olarak güncellendi`
-    });
+    customer.status = status;
+    customer.updatedAt = new Date();
+    await customer.save();
+
+    res.json({ customer, message: `Danışan durumu ${status} olarak güncellendi` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+
 
 // ==================== CUSTOMER NOTES ROUTES ====================
 
 // Get customer notes
 router.get("/:userId/customers/:customerId/notes", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customer = user.customers?.find(customer => customer.id === req.params.customerId);
+    const { userId, customerId } = req.params;
 
-    if (!customer) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
+    // Fetch user
+    const user = await findUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Sort notes by creation date (newest first)
+    // Check if this customer belongs to the user
+    const belongsToUser = user.customers.some(c => c.customerId.toString() === customerId);
+    if (!belongsToUser) return res.status(404).json({ error: "Customer not found for this user" });
+
+    // Fetch customer
+    const customer = await Customer.findById(customerId).lean();
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    // Sort notes by newest first
     const notes = (customer.notes || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
+    // Return full notes + minimal customer info
     res.json({
       notes,
       customer: {
-        id: customer.id,
+        id: customer._id,
         name: customer.name,
         surname: customer.surname,
-        email: customer.email
+        email: customer.email,
+        phone: customer.phone,
+        // include other fields if needed
       }
     });
   } catch (error) {
@@ -2377,19 +3098,23 @@ router.get("/:userId/customers/:customerId/notes", async (req, res) => {
   }
 });
 
+
 // Add customer note
 router.post("/:userId/customers/:customerId/notes", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-    if (customerIndex === -1) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
-
+    const { userId, customerId } = req.params;
     const noteData = req.body;
-    const noteId = uuidv4();
 
+    const user = await findUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const belongsToUser = user.customers.some(c => c.customerId.toString() === customerId);
+    if (!belongsToUser) return res.status(404).json({ error: "Customer not found for this user" });
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    const noteId = uuidv4();
     const newNote = {
       id: noteId,
       content: noteData.content,
@@ -2402,82 +3127,76 @@ router.post("/:userId/customers/:customerId/notes", async (req, res) => {
       updatedAt: new Date()
     };
 
-    if (!user.customers[customerIndex].notes) {
-      user.customers[customerIndex].notes = [];
-    }
-    user.customers[customerIndex].notes.push(newNote);
-    user.customers[customerIndex].lastContact = new Date();
-    user.customers[customerIndex].updatedAt = new Date();
+    customer.notes.push(newNote);
+    customer.lastContact = new Date();
+    customer.updatedAt = new Date();
+    await customer.save();
 
-    await user.save();
-
-    res.status(201).json({
-      note: newNote,
-      message: "Not başarıyla eklendi"
-    });
+    res.status(201).json({ note: newNote, message: "Not başarıyla eklendi" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Update customer note
 router.put("/:userId/customers/:customerId/notes/:noteId", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-    if (customerIndex === -1) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
-
-    const noteIndex = user.customers[customerIndex].notes.findIndex(note => note.id === req.params.noteId);
-    if (noteIndex === -1) {
-      return res.status(404).json({ error: "Note not found" });
-    }
-
+    const { userId, customerId, noteId } = req.params;
     const noteData = req.body;
+
+    const user = await findUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const belongsToUser = user.customers.some(c => c.customerId.toString() === customerId);
+    if (!belongsToUser) return res.status(404).json({ error: "Customer not found for this user" });
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    const noteIndex = customer.notes.findIndex(note => note.id === noteId);
+    if (noteIndex === -1) return res.status(404).json({ error: "Note not found" });
+
     const updatedNote = {
-      ...user.customers[customerIndex].notes[noteIndex],
+      ...customer.notes[noteIndex],
       content: noteData.content,
-      files: noteData.files || user.customers[customerIndex].notes[noteIndex].files,
-      isPrivate: noteData.isPrivate,
-      tags: noteData.tags || user.customers[customerIndex].notes[noteIndex].tags,
+      files: noteData.files || customer.notes[noteIndex].files,
+      isPrivate: noteData.isPrivate ?? customer.notes[noteIndex].isPrivate,
+      tags: noteData.tags || customer.notes[noteIndex].tags,
       updatedAt: new Date()
     };
 
-    user.customers[customerIndex].notes[noteIndex] = updatedNote;
-    user.customers[customerIndex].updatedAt = new Date();
+    customer.notes[noteIndex] = updatedNote;
+    customer.updatedAt = new Date();
+    await customer.save();
 
-    await user.save();
-
-    res.json({
-      note: updatedNote,
-      message: "Not başarıyla güncellendi"
-    });
+    res.json({ note: updatedNote, message: "Not başarıyla güncellendi" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+
 // Delete customer note
 router.delete("/:userId/customers/:customerId/notes/:noteId", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
+    const { userId, customerId, noteId } = req.params;
 
-    if (customerIndex === -1) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
+    const user = await findUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    const noteIndex = user.customers[customerIndex].notes.findIndex(note => note.id === req.params.noteId);
-    if (noteIndex === -1) {
-      return res.status(404).json({ error: "Note not found" });
-    }
+    const belongsToUser = user.customers.some(c => c.customerId.toString() === customerId);
+    if (!belongsToUser) return res.status(404).json({ error: "Customer not found for this user" });
 
-    user.customers[customerIndex].notes.splice(noteIndex, 1);
-    user.customers[customerIndex].updatedAt = new Date();
+    const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
 
-    await user.save();
+    const noteIndex = customer.notes.findIndex(note => note.id === noteId);
+    if (noteIndex === -1) return res.status(404).json({ error: "Note not found" });
+
+    customer.notes.splice(noteIndex, 1);
+    customer.updatedAt = new Date();
+    await customer.save();
 
     res.json({ message: "Not başarıyla silindi" });
   } catch (error) {
@@ -2485,15 +3204,16 @@ router.delete("/:userId/customers/:customerId/notes/:noteId", async (req, res) =
   }
 });
 
-// ==================== CUSTOMER STATISTICS ROUTES ====================
 
-// Get customer statistics
+// ==================== CUSTOMER STATISTICS ROUTES ====================
 router.get("/:userId/customersStats", async (req, res) => {
-  console.log("Route Hitted")
   try {
-    const user = await findUserById(req.params.userId);
-    console.log("USER ID from stats:", user)
-    const customers = user.customers || [];
+    const { userId } = req.params;
+    const user = await findUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const customerIds = user.customers.map(c => c.customerId);
+    const customers = await Customer.find({ _id: { $in: customerIds } });
 
     const stats = {
       total: customers.length,
@@ -2502,24 +3222,17 @@ router.get("/:userId/customersStats", async (req, res) => {
       blocked: customers.filter(c => c.status === 'blocked').length,
       prospects: customers.filter(c => c.status === 'prospect').length,
       archived: customers.filter(c => c.isArchived).length,
-
-      // Appointment statistics
       totalAppointments: customers.reduce((sum, c) => sum + (c.totalAppointments || 0), 0),
       completedAppointments: customers.reduce((sum, c) => sum + (c.completedAppointments || 0), 0),
       cancelledAppointments: customers.reduce((sum, c) => sum + (c.cancelledAppointments || 0), 0),
       noShowAppointments: customers.reduce((sum, c) => sum + (c.noShowAppointments || 0), 0),
-
-      // Financial statistics
       totalRevenue: customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0),
       outstandingBalance: customers.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0),
-
-      // Recent activity
       newCustomersThisMonth: customers.filter(c => {
-        const createdDate = new Date(c.createdAt);
+        const created = new Date(c.createdAt);
         const now = new Date();
-        return createdDate.getMonth() === now.getMonth() && createdDate.getFullYear() === now.getFullYear();
+        return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
       }).length,
-
       recentCustomers: customers
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 5)
@@ -2530,23 +3243,13 @@ router.get("/:userId/customersStats", async (req, res) => {
           createdAt: c.createdAt,
           totalSpent: c.totalSpent || 0
         })),
-
-      // Customer sources
       sourceBreakdown: customers.reduce((acc, c) => {
-        const source = c.source || 'unknown';
-        acc[source] = (acc[source] || 0) + 1;
+        acc[c.source || 'unknown'] = (acc[c.source || 'unknown'] || 0) + 1;
         return acc;
       }, {}),
-
-      // Average ratings
-      averageRating: customers.length > 0
-        ? customers.reduce((sum, c) => sum + (c.averageRating || 0), 0) / customers.length
-        : 0,
-
-      // Categories
+      averageRating: customers.length > 0 ? customers.reduce((sum, c) => sum + (c.averageRating || 0), 0) / customers.length : 0,
       categoryBreakdown: customers.reduce((acc, c) => {
-        const category = c.category || 'uncategorized';
-        acc[category] = (acc[category] || 0) + 1;
+        acc[c.category || 'uncategorized'] = (acc[c.category || 'uncategorized'] || 0) + 1;
         return acc;
       }, {})
     };
@@ -2557,65 +3260,57 @@ router.get("/:userId/customersStats", async (req, res) => {
   }
 });
 
+
 // ==================== BULK OPERATIONS ROUTES ====================
 
 // Bulk import customers from CSV
 router.post("/:userId/customers/bulk-import", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
+    const { userId } = req.params;
     const { customers: customersData } = req.body;
 
-    if (!Array.isArray(customersData) || customersData.length === 0) {
+    if (!Array.isArray(customersData) || customersData.length === 0) 
       return res.status(400).json({ error: "Invalid customers data" });
-    }
 
-    const results = {
-      success: 0,
-      failed: 0,
-      errors: []
-    };
+    const user = await findUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const results = { success: 0, failed: 0, errors: [] };
 
     for (let i = 0; i < customersData.length; i++) {
+      const cData = customersData[i];
       try {
-        const customerData = customersData[i];
-
-        // Validate required fields
-        if (!customerData.name || !customerData.surname || !customerData.email || !customerData.phone) {
+        if (!cData.name || !cData.surname || !cData.email || !cData.phone) {
           results.failed++;
           results.errors.push(`Row ${i + 1}: Missing required fields`);
           continue;
         }
 
-        // Check if customer already exists
-        const existingCustomer = user.customers?.find(c => c.email === customerData.email);
-        if (existingCustomer) {
+        const existing = await Customer.findOne({ email: cData.email });
+        if (existing) {
           results.failed++;
-          results.errors.push(`Row ${i + 1}: Customer with email ${customerData.email} already exists`);
+          results.errors.push(`Row ${i + 1}: Customer with email ${cData.email} already exists`);
           continue;
         }
 
-        const newCustomer = {
-          id: uuidv4(),
-          name: customerData.name,
-          surname: customerData.surname,
-          email: customerData.email,
-          phone: customerData.phone,
-          dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : undefined,
-          gender: customerData.gender,
-          occupation: customerData.occupation,
-          company: customerData.company,
-          status: customerData.status || 'active',
-          category: customerData.category,
-          source: customerData.source || 'bulk-import',
-          referredBy: customerData.referredBy,
+        const newCustomer = await Customer.create({
+          name: cData.name,
+          surname: cData.surname,
+          email: cData.email,
+          phone: cData.phone,
+          dateOfBirth: cData.dateOfBirth ? new Date(cData.dateOfBirth) : undefined,
+          gender: cData.gender,
+          occupation: cData.occupation,
+          company: cData.company,
+          status: cData.status || 'active',
+          category: cData.category,
+          source: cData.source || 'bulk-import',
+          referredBy: cData.referredBy,
           preferences: {
-            communicationMethod: customerData.communicationMethod || 'email',
+            communicationMethod: cData.communicationMethod || 'email',
             language: 'tr',
             timezone: 'Europe/Istanbul',
-            reminderSettings: {
-              enabled: true,
-              beforeHours: 24
-            }
+            reminderSettings: { enabled: true, beforeHours: 24 }
           },
           appointments: [],
           totalAppointments: 0,
@@ -2627,25 +3322,21 @@ router.post("/:userId/customers/bulk-import", async (req, res) => {
           notes: [],
           averageRating: 0,
           totalRatings: 0,
-          consentGiven: {
-            dataProcessing: true,
-            marketing: customerData.marketingConsent || false,
-            dateGiven: new Date()
-          },
+          consentGiven: { dataProcessingTerms: true, marketingTerms: cData.marketingConsent || false, dateGiven: new Date() },
+          isArchived: false
+        });
+
+        // Push properly structured object to User.customers
+        user.customers.push({
+          customerId: newCustomer._id,
           isArchived: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
+          addedAt: new Date()
+        });
 
-        if (!user.customers) {
-          user.customers = [];
-        }
-        user.customers.push(newCustomer);
         results.success++;
-
-      } catch (error) {
+      } catch (err) {
         results.failed++;
-        results.errors.push(`Row ${i + 1}: ${error.message}`);
+        results.errors.push(`Row ${i + 1}: ${err.message}`);
       }
     }
 
@@ -2660,40 +3351,59 @@ router.post("/:userId/customers/bulk-import", async (req, res) => {
   }
 });
 
+
 // Export customers to CSV format
 router.get("/:userId/customers/export", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const customers = user.customers || [];
+    const { userId } = req.params;
 
-    const csvData = customers.map(customer => ({
-      name: customer.name,
-      surname: customer.surname,
-      email: customer.email,
-      phone: customer.phone,
-      dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().split('T')[0] : '',
-      gender: customer.gender || '',
-      occupation: customer.occupation || '',
-      company: customer.company || '',
-      status: customer.status,
-      category: customer.category || '',
-      source: customer.source || '',
-      referredBy: customer.referredBy || '',
-      totalAppointments: customer.totalAppointments || 0,
-      completedAppointments: customer.completedAppointments || 0,
-      totalSpent: customer.totalSpent || 0,
-      averageRating: customer.averageRating || 0,
-      lastAppointment: customer.lastAppointment ? customer.lastAppointment.toISOString().split('T')[0] : '',
-      createdAt: customer.createdAt.toISOString().split('T')[0]
-    }));
+    // Fetch the user with populated customer references
+    const user = await User.findById(userId)
+      .populate({
+        path: "customers.customerId", // populate the referenced Customer
+        model: "Customer"
+      })
+      .lean();
 
-    res.json({
-      customers: csvData,
-      message: "Customer data exported successfully"
-    });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Map customers to include full data + isArchived/addedAt from user.customers
+    const csvData = (user.customers || []).map(c => {
+      const customer = c.customerId; // populated customer document
+      if (!customer) return null; // skip if somehow not found
+      return {
+        name: customer.name,
+        surname: customer.surname,
+        email: customer.email,
+        phone: customer.phone,
+        dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().split('T')[0] : '',
+        gender: customer.gender || '',
+        occupation: customer.occupation || '',
+        company: customer.company || '',
+        status: customer.status,
+        category: customer.category || '',
+        source: customer.source || '',
+        referredBy: customer.referredBy || '',
+        totalAppointments: customer.totalAppointments || 0,
+        completedAppointments: customer.completedAppointments || 0,
+        totalSpent: customer.totalSpent || 0,
+        averageRating: customer.averageRating || 0,
+        lastAppointment: customer.lastAppointment ? customer.lastAppointment.toISOString().split('T')[0] : '',
+        createdAt: customer.createdAt.toISOString().split('T')[0],
+        // Added fields from User model
+        isArchived: c.isArchived || false,
+        addedAt: c.addedAt ? new Date(c.addedAt).toISOString().split('T')[0] : ''
+      };
+    }).filter(Boolean); // remove any nulls
+
+    res.json({ customers: csvData, message: "Customer data exported successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
+
 
 export default router;

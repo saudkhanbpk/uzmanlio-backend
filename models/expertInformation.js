@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Mongoose } from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -31,16 +31,16 @@ const ExperienceSchema = new Schema({
   start: { type: Number },
   end: { type: Number, default: null },
   stillWork: { type: Boolean, default: false },
-  country: {type:String},
-  city: {type:String},
+  country: { type: String },
+  city: { type: String },
 });
 
 const CertificateSchema = new Schema({
   id: { type: String, default: uuidv4 },
   name: { type: String },
   company: { type: String },
-  country: {type:String},
-  city: {type:String},
+  country: { type: String },
+  city: { type: String },
   issueDate: { type: Date },
   expiryDate: { type: Date },
   credentialId: { type: String },
@@ -55,23 +55,27 @@ const SkillSchema = new Schema({
   description: { type: String },
 });
 
-const AppointmentSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  title: { type: String, required: true },
-  date: { type: String, required: true },
-  time: { type: String, required: true },
-  duration: { type: Number, required: true },
-  type: { type: String, enum: ["1-1", "group"], required: true },
-  status: {
-    type: String,
-    enum: ["confirmed", "pending", "cancelled"],
-    default: "pending",
-  },
-  clientName: { type: String },
-  clientEmail: { type: String },
-  notes: { type: String },
-  createdAt: { type: Date, default: Date.now },
-});
+// const AppointmentSchema = new Schema({
+//   id: { type: String, default: uuidv4 },
+//   title: { type: String, required: true },
+//   date: { type: String, required: true },
+//   time: { type: String, required: true },
+//   duration: { type: Number, required: true },
+//   type: { type: String, enum: ["1-1", "group"], required: true },
+//   status: {
+//     type: String,
+//     enum: ["confirmed", "pending", "cancelled"],
+//     default: "pending",
+//   },
+//   clientName: { type: String },
+//   clientEmail: { type: String },
+//   notes: { type: String },
+//   createdAt: { type: Date, default: Date.now },
+// });
+
+// const AppointmentSchema = [{ type: String, ref: "CustomerAppointment" }]
+
+
 
 const AvailabilitySchema = new Schema({
   alwaysAvailable: { type: Boolean, default: false },
@@ -454,40 +458,40 @@ const CustomerNoteSchema = new Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
-const CustomerAppointmentSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  appointmentId: { type: String }, // Reference to main appointment
-  serviceId: { type: String },
-  serviceName: { type: String },
-  packageId: { type: String },
-  packageName: { type: String },
-  date: { type: Date, required: true },
-  time: { type: String, required: true },
-  duration: { type: Number }, // in minutes
-  status: {
-    type: String,
-    enum: ["scheduled", "completed", "cancelled", "no-show", "rescheduled"],
-    default: "scheduled",
-  },
-  meetingType: {
-    type: String,
-    enum: ["online", "in-person", "phone", ""],
-    default: "online",
-  },
-  meetingLink: { type: String },
-  location: { type: String },
-  price: { type: Number },
-  paymentStatus: {
-    type: String,
-    enum: ["pending", "paid", "refunded", "cancelled"],
-    default: "pending",
-  },
-  notes: { type: String }, // Session notes
-  rating: { type: Number, min: 1, max: 5 }, // Customer rating
-  feedback: { type: String }, // Customer feedback
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
+// const CustomerAppointmentSchema = new Schema({
+//   id: { type: String, default: uuidv4 },
+//   appointmentId: { type: String }, // Reference to main appointment
+//   serviceId: { type: String },
+//   serviceName: { type: String },
+//   packageId: { type: String },
+//   packageName: { type: String },
+//   date: { type: Date, required: true },
+//   time: { type: String, required: true },
+//   duration: { type: Number }, // in minutes
+//   status: {
+//     type: String,
+//     enum: ["scheduled", "completed", "cancelled", "no-show", "rescheduled"],
+//     default: "scheduled",
+//   },
+//   meetingType: {
+//     type: String,
+//     enum: ["online", "in-person", "phone", ""],
+//     default: "online",
+//   },
+//   meetingLink: { type: String },
+//   location: { type: String },
+//   price: { type: Number },
+//   paymentStatus: {
+//     type: String,
+//     enum: ["pending", "paid", "refunded", "cancelled"],
+//     default: "pending",
+//   },
+//   notes: { type: String }, // Session notes
+//   rating: { type: Number, min: 1, max: 5 }, // Customer rating
+//   feedback: { type: String }, // Customer feedback
+//   createdAt: { type: Date, default: Date.now },
+//   updatedAt: { type: Date, default: Date.now },
+// });
 
 const cardSchema = new Schema({
   id: { type: String, default: uuidv4 },
@@ -497,98 +501,100 @@ const cardSchema = new Schema({
   cardCvv: { type: String, required: true },
 });
 
-const CustomerSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  name: { type: String, required: true },
-  surname: { type: String, required: true },
-  email: { type: String, required: true },
-  phone: { type: String, required: true },
+// const CustomerSchema = new Schema({
+//   id: { type: String, default: uuidv4 },
+//   name: { type: String, required: true },
+//   surname: { type: String, required: true },
+//   email: { type: String, required: true },
+//   phone: { type: String, required: true },
 
-  // Additional customer information
-  dateOfBirth: { type: Date },
-  gender: { type: String, enum: ["male", "female", "other", "prefer-not-to-say"] },
-  address: {
-    street: { type: String },
-    city: { type: String },
-    state: { type: String },
-    postalCode: { type: String },
-    country: { type: String },
-  },
+//   // Additional customer information
+//   dateOfBirth: { type: Date },
+//   gender: { type: String, enum: ["male", "female", "other", "prefer-not-to-say"] },
+//   address: {
+//     street: { type: String },
+//     city: { type: String },
+//     state: { type: String },
+//     postalCode: { type: String },
+//     country: { type: String },
+//   },
 
-  // Professional information
-  occupation: { type: String },
-  company: { type: String },
+//   // Professional information
+//   occupation: { type: String },
+//   company: { type: String },
 
-  // Customer preferences and settings
-  preferences: {
-    communicationMethod: {
-      type: String,
-      enum: ["email", "phone", "sms", "whatsapp"],
-      default: "email",
-    },
-    language: { type: String, default: "tr" },
-    timezone: { type: String, default: "Europe/Istanbul" },
-    reminderSettings: {
-      enabled: { type: Boolean, default: true },
-      beforeHours: { type: Number, default: 24 }, // Hours before appointment
-    },
-  },
+//   // Customer preferences and settings
+//   preferences: {
+//     communicationMethod: {
+//       type: String,
+//       enum: ["email", "phone", "sms", "whatsapp"],
+//       default: "email",
+//     },
+//     language: { type: String, default: "tr" },
+//     timezone: { type: String, default: "Europe/Istanbul" },
+//     reminderSettings: {
+//       enabled: { type: Boolean, default: true },
+//       beforeHours: { type: Number, default: 24 }, // Hours before appointment
+//     },
+//   },
 
-  // Customer status and categorization
-  status: {
-    type: String,
-    enum: ["active", "inactive", "blocked", "prospect"],
-    default: "active",
-  },
-  category: { type: String }, // Custom category for grouping customers
-  tags: [{ type: String }], // Custom tags for filtering
+//   // Customer status and categorization
+//   status: {
+//     type: String,
+//     enum: ["active", "inactive", "blocked", "prospect"],
+//     default: "active",
+//   },
+//   category: { type: String }, // Custom category for grouping customers
+//   tags: [{ type: String }], // Custom tags for filtering
 
-  // Relationship and interaction tracking
-  source: {
-    type: String,
-    enum: ["website", "referral", "social-media", "advertisement", "walk-in", "other"],
-    default: "website",
-  },
-  referredBy: { type: String }, // Name of person who referred
+//   // Relationship and interaction tracking
+//   source: {
+//     type: String,
+//     enum: ["website", "referral", "social-media", "advertisement", "walk-in", "other"],
+//     default: "website",
+//   },
+//   referredBy: { type: String }, // Name of person who referred
 
-  // Appointment and service history
-  appointments: [CustomerAppointmentSchema],
-  totalAppointments: { type: Number, default: 0 },
-  completedAppointments: { type: Number, default: 0 },
-  cancelledAppointments: { type: Number, default: 0 },
-  noShowAppointments: { type: Number, default: 0 },
+//   // Appointment and service history
+//   appointments: [CustomerAppointmentSchema],
+//   totalAppointments: { type: Number, default: 0 },
+//   completedAppointments: { type: Number, default: 0 },
+//   cancelledAppointments: { type: Number, default: 0 },
+//   noShowAppointments: { type: Number, default: 0 },
 
-  // Financial information
-  totalSpent: { type: Number, default: 0 },
-  outstandingBalance: { type: Number, default: 0 },
-  paymentMethod: { type: String },
+//   // Financial information
+//   totalSpent: { type: Number, default: 0 },
+//   outstandingBalance: { type: Number, default: 0 },
+//   paymentMethod: { type: String },
 
-  // Communication and notes
-  notes: [CustomerNoteSchema],
+//   // Communication and notes
+//   notes: [CustomerNoteSchema],
 
-  // Important dates
-  firstAppointment: { type: Date },
-  lastAppointment: { type: Date },
-  lastContact: { type: Date },
+//   // Important dates
+//   firstAppointment: { type: Date },
+//   lastAppointment: { type: Date },
+//   lastContact: { type: Date },
 
-  // Customer satisfaction and feedback
-  averageRating: { type: Number, min: 0, max: 5, default: 0 },
-  totalRatings: { type: Number, default: 0 },
+//   // Customer satisfaction and feedback
+//   averageRating: { type: Number, min: 0, max: 5, default: 0 },
+//   totalRatings: { type: Number, default: 0 },
 
-  // Privacy and consent
-  consentGiven: {
-    dataProcessing: { type: Boolean, default: false },
-    marketing: { type: Boolean, default: false },
-    dateGiven: { type: Date },
-  },
+//   // Privacy and consent
+//   consentGiven: {
+//     dataProcessing: { type: Boolean, default: false },
+//     marketing: { type: Boolean, default: false },
+//     dateGiven: { type: Date },
+//   },
 
-  // System fields
-  isArchived: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
+//   // System fields
+//   isArchived: { type: Boolean, default: false },
+//   createdAt: { type: Date, default: Date.now },
+//   updatedAt: { type: Date, default: Date.now },
+// });
 
 // ---------------- User Schema ----------------
+
+
 const UserSchema = new Schema(
   {
     pp: { type: String },
@@ -597,9 +603,9 @@ const UserSchema = new Schema(
       name: { type: String, required: true },
       surname: { type: String, required: true },
       birthday: { type: String },
-      country: {type:String},
-      city: {type:String}, // Added
-      district: {type:String}, // Added
+      country: { type: String },
+      city: { type: String }, // Added
+      district: { type: String }, // Added
       address: { type: String },
       email: { type: String, required: true, unique: true },
       password: { type: String, required: true },
@@ -612,7 +618,7 @@ const UserSchema = new Schema(
     },
     subscription: {
       id: { type: String, default: uuidv4 },
-      institutionId: { type: Schema.Types.ObjectId, ref: "Institution" || null},
+      institutionId: { type: Schema.Types.ObjectId, ref: "Institution" || null },
       seats: { type: Number, default: 0 },
       isAdmin: { type: Boolean, default: false },
       plantype: { type: String, enum: ["individual", "institutional"], required: true },
@@ -653,11 +659,21 @@ const UserSchema = new Schema(
     packages: [PackageSchema],
     galleryFiles: [GalleryFileSchema],
     emails: [EmailSchema],
-    customers: [CustomerSchema],
+    // customers: [CustomerSchema],
+    customers: [{
+      customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
+      isArchived: { type: Boolean, default: false },
+      addedAt: { type: Date, default: Date.now }
+    }],
+
+    //Orders 
+    orders: [{ type: String, ref: "Order" }],
+
+
 
     // Calendar and availability data
     availability: { type: AvailabilitySchema, default: () => ({}) },
-    appointments: [AppointmentSchema],
+    appointments: [{ type: String, ref: "CustomerAppointment" }],
     calendarProviders: [CalendarProviderSchema],
     appointmentMappings: [AppointmentMappingSchema],
 
@@ -714,14 +730,14 @@ const UserSchema = new Schema(
 );
 
 // Hash password before save
-UserSchema.pre("save", async function(next) {
+UserSchema.pre("save", async function (next) {
   if (!this.isModified("information.password")) return next();
   this.information.password = await bcrypt.hash(this.information.password, 10);
   next();
 });
 
 // Compare password method
-UserSchema.methods.ComparePassword = async function(candidatePassword) {
+UserSchema.methods.ComparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.information.password);
 };
 
@@ -729,12 +745,12 @@ const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "access-secret";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret";
 
 //Generate Access token
-UserSchema.methods.generateAccessToken = function() {
+UserSchema.methods.generateAccessToken = function () {
   return jwt.sign({ id: this._id }, ACCESS_TOKEN_SECRET, { expiresIn: "45m" });
 };
 
 //Generate Refresh tokens
-UserSchema.methods.generateRefreshToken = function() {
+UserSchema.methods.generateRefreshToken = function () {
   return jwt.sign({ id: this._id }, REFRESH_TOKEN_SECRET, { expiresIn: "30d" });
 };
 
@@ -760,7 +776,7 @@ export {
   ExperienceSchema,
   CertificateSchema,
   SkillSchema,
-  AppointmentSchema,
+  // AppointmentSchema,
   AvailabilitySchema,
   CalendarProviderSchema,
   AppointmentMappingSchema,
@@ -777,9 +793,9 @@ export {
   ServiceSchema,
   PackageSchema,
   GalleryFileSchema,
-  CustomerSchema,
+  // CustomerSchema,
   SocialMediaSchema,
   CustomerNoteSchema,
-  CustomerAppointmentSchema,
+  // CustomerAppointmentSchema,
   // CustomerSchema,
 };

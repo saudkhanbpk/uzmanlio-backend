@@ -10,13 +10,16 @@ const eventSchema = new Schema({
         description: { type: String },
         price: { type: Number },
         duration: { type: Number },
-        sessions: { type: Number, default: 1 }
+        sessions: { type: Number },
+        meetingType: { type: String } // bireysel, grup, etc.
     },
     package: {
         name: { type: String },
         details: { type: String },
         price: { type: Number },
-        // REMOVED the stray "text" keyword from here
+        sessions: { type: Number },
+        duration: { type: Number },
+        meetingType: { type: String } // bireysel, grup, etc.
     },
     quantity: { type: Number, default: 1 }
 }, { _id: false });
@@ -55,7 +58,7 @@ const orderSchema = new Schema({
     status: { type: String, default: 'pending' },
     couponUsage: { type: Boolean, default: false }
 }, {
-    timestamps: true // Good practice to add this here as well
+    timestamps: true
 });
 
 const Order = mongoose.model('Order', orderSchema);

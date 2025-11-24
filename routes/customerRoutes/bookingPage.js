@@ -49,7 +49,7 @@ router.get("/:institutionID/blogs-forms", async (req, res) => {
     // Map over users to structure the data
     const usersWithBlogsAndForms = institution.users.map(user => ({
       userId: user._id,
-      name: user.information?.name ,
+      name: user.information?.name,
       blogs: user.blogs || [],
       forms: user.forms || [],
     }));
@@ -190,6 +190,8 @@ router.post(
       const {
         clientInfo,
         selectedOffering,
+        selectedPackage,
+        selectedService,
         serviceType,
         packageType,
         providerId,
@@ -229,11 +231,12 @@ router.post(
 
       console.log("🔄 Mapping serviceType/packageType to eventType...", serviceType);
       // ✅ Determine event type based on whichever field is active
-      const mappedEventType = packageType
-        ? "package"
-        : serviceType
-          ? "service"
-          : "service"; // fallback (defaults to 'service')
+      // const mappedEventType = packageType
+      //   ? "package"
+      //   : serviceType
+      //     ? "service"
+      //     : "service"; // fallback (defaults to 'service')
+      const mappedEventType = selectedPackage.packageId !== "" ? "package" : "service";
 
 
       // --- Step 5: Find or create customer (upsert by email) ---
@@ -301,6 +304,8 @@ router.post(
       customer.totalSpent = (customer.totalSpent || 0) + total;
       await customer.save();
 
+      console.log("Selected Offerings:", selectedOffering)
+
       // --- Step 9: Create order record ---
       const order = await Order.create({
         orderDetails: {
@@ -325,6 +330,8 @@ router.post(
                     details: selectedOffering.details,
                     price: subtotal,
                     meetingType: selectedOffering.meetingType,
+                    duration: selectedOffering.duration,
+                    sessions: selectedOffering.sessions || 1,
                   }
                   : undefined,
             },
