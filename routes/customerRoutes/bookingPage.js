@@ -296,6 +296,7 @@ router.post(
         time: selectedOffering.time || null,
         duration: selectedOffering.duration || 60,
         eventType: selectedOffering.eventType || "online",
+        customers: customer._id,
         meetingType: selectedOffering.meetingType || "",
         price: total,
         status: "pending",
