@@ -8,6 +8,7 @@ import { createMulterUpload, handleMulterError } from "../../middlewares/upload.
 import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
 import Customer from "../../models/customer.js";
+import CustomerAppointments from "../../models/customerAppointment.js";
 
 const router = express.Router();
 
@@ -292,7 +293,7 @@ router.get("/:userId", async (req, res) => {
     // Map customers to include full customer data + isArchived/addedAt
     const customers = (user.customers || []).map(c => ({
       ...(c.customerId || {}),      // full Customer document, fallback to empty object
-      isArchived: c.isArchived || false, 
+      isArchived: c.isArchived || false,
       addedAt: c.addedAt || null
     }));
 
@@ -1166,11 +1167,22 @@ router.put("/:userId/profile", async (req, res) => {
 router.get("/:userId/events", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
-    res.json({ events: user.events || [] });
+    res.json({ events: user.events });
+
+    // const events = user.events || [];
+    // const customerAppointments = user.appointments || [];
+
+    // // Fetch all appointment documents
+    // const customerEvents = await Promise.all(
+    //   customerAppointments.map(id => CustomerAppointments.findById(id))
+    // );
+
+    // res.json({ events: [...events, ...customerEvents] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Get events by status
 router.get("/:userId/events/status/:status", async (req, res) => {
@@ -3269,7 +3281,7 @@ router.post("/:userId/customers/bulk-import", async (req, res) => {
     const { userId } = req.params;
     const { customers: customersData } = req.body;
 
-    if (!Array.isArray(customersData) || customersData.length === 0) 
+    if (!Array.isArray(customersData) || customersData.length === 0)
       return res.status(400).json({ error: "Invalid customers data" });
 
     const user = await findUserById(userId);

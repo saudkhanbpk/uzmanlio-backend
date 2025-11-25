@@ -207,10 +207,12 @@ const EventSchema = new Schema({
   title: { type: String, required: true },
   description: { type: String },
   serviceId: { type: String },
-  serviceName: { type: String, required: true },
+  serviceName: { type: String, },
+  packageId: { type: String },
+  packageName: { type: String, },
   serviceType: { type: String, enum: ["service", "package"], required: true },
-  date: { type: String, required: true },
-  time: { type: String, required: true },
+  date: { type: String, },
+  time: { type: String, },
   duration: { type: Number, required: true },
   location: { type: String },
   platform: { type: String },
@@ -218,11 +220,12 @@ const EventSchema = new Schema({
   meetingType: { type: String, enum: ["1-1", "grup", ""] },
   price: { type: Number, required: true },
   maxAttendees: { type: Number },
+  Client: { type: Schema.Types.ObjectId, ref: "Customer" },
   attendees: { type: Number, default: 0 },
   category: { type: String, required: true },
   status: {
     type: String,
-    enum: ["pending", "approved", "completed", "cancelled"],
+    enum: ["pending", "approved", "completed", "cancelled", "scheduled"],
     default: "pending",
   },
   paymentType: {
@@ -667,13 +670,13 @@ const UserSchema = new Schema(
     }],
 
     //Orders 
-    orders: [{ type: String, ref: "Order" }],
+    orders: [{ type: mongoose.Schema.Types.ObjectId, ref: "Order" }],
 
 
 
     // Calendar and availability data
     availability: { type: AvailabilitySchema, default: () => ({}) },
-    appointments: [{ type: String, ref: "CustomerAppointment" }],
+    appointments: [{ type: mongoose.Schema.Types.ObjectId, ref: "CustomerAppointments" }],
     calendarProviders: [CalendarProviderSchema],
     appointmentMappings: [AppointmentMappingSchema],
 
