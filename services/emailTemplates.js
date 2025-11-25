@@ -7,12 +7,12 @@
  * @returns {object} Email subject and HTML body
  */
 export function getCustomerEmailTemplate(bookingType, data) {
-    const { customerName, serviceName, price, date, time, expertName } = data;
+  const { customerName, serviceName, price, date, time, expertName } = data;
 
-    const templates = {
-        bireysel: {
-            subject: "Sipariş Özeti - Bireysel",
-            html: `
+  const templates = {
+    bireysel: {
+      subject: "Sipariş Özeti - Bireysel",
+      html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -53,11 +53,11 @@ export function getCustomerEmailTemplate(bookingType, data) {
         </body>
         </html>
       `
-        },
+    },
 
-        grup: {
-            subject: "Sipariş Özeti - Grup",
-            html: `
+    grup: {
+      subject: "Sipariş Özeti - Grup",
+      html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -98,11 +98,11 @@ export function getCustomerEmailTemplate(bookingType, data) {
         </body>
         </html>
       `
-        },
+    },
 
-        paket: {
-            subject: "Paket Satın Alındı",
-            html: `
+    paket: {
+      subject: "Paket Satın Alındı",
+      html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -141,10 +141,10 @@ export function getCustomerEmailTemplate(bookingType, data) {
         </body>
         </html>
       `
-        }
-    };
+    }
+  };
 
-    return templates[bookingType] || templates.bireysel;
+  return templates[bookingType] || templates.bireysel;
 }
 
 /**
@@ -154,12 +154,12 @@ export function getCustomerEmailTemplate(bookingType, data) {
  * @returns {object} Email subject and HTML body
  */
 export function getExpertEmailTemplate(bookingType, data) {
-    const { customerName, customerEmail, customerPhone, serviceName, price, date, time } = data;
+  const { customerName, customerEmail, customerPhone, serviceName, price, date, time } = data;
 
-    const templates = {
-        bireysel: {
-            subject: "Uzman Bildirimi - Bireysel",
-            html: `
+  const templates = {
+    bireysel: {
+      subject: "Uzman Bildirimi - Bireysel",
+      html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -203,11 +203,11 @@ export function getExpertEmailTemplate(bookingType, data) {
         </body>
         </html>
       `
-        },
+    },
 
-        grup: {
-            subject: "Uzman Bildirimi - Grup",
-            html: `
+    grup: {
+      subject: "Uzman Bildirimi - Grup",
+      html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -249,11 +249,11 @@ export function getExpertEmailTemplate(bookingType, data) {
         </body>
         </html>
       `
-        },
+    },
 
-        paket: {
-            subject: "Uzman Bildirimi - Paket",
-            html: `
+    paket: {
+      subject: "Uzman Bildirimi - Paket",
+      html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -295,8 +295,249 @@ export function getExpertEmailTemplate(bookingType, data) {
         </body>
         </html>
       `
-        }
-    };
+    }
+  };
 
-    return templates[bookingType] || templates.bireysel;
+  return templates[bookingType] || templates.bireysel;
+}
+
+/**
+ * Get welcome email template for new user registration
+ * @param {object} data - User data
+ * @returns {object} Email subject and HTML body
+ */
+export function getWelcomeEmailTemplate(data) {
+  const { name, email } = data;
+
+  return {
+    subject: "Uzmanlio'ya Hoş Geldiniz! 🎉",
+    html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #009743 0%, #0e6836 100%); color: white; padding: 40px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px 20px; background-color: #f9f9f9; }
+            .welcome-box { background-color: white; padding: 25px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .button { display: inline-block; padding: 12px 30px; background-color: #009743; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; background-color: #f0f0f0; border-radius: 0 0 10px 10px; }
+            .feature { padding: 15px 0; border-bottom: 1px solid #eee; }
+            .feature:last-child { border-bottom: none; }
+            .icon { font-size: 24px; margin-right: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0; font-size: 32px;">🎉 Hoş Geldiniz!</h1>
+              <p style="margin: 10px 0 0 0; font-size: 16px;">Uzmanlio ailesine katıldığınız için teşekkür ederiz</p>
+            </div>
+            <div class="content">
+              <div class="welcome-box">
+                <p style="font-size: 18px; margin-top: 0;"><strong>Merhaba ${name},</strong></p>
+                <p>Uzmanlio platformuna başarıyla kaydoldunuz! Artık uzmanlık alanınızda hizmet vermeye ve müşterilerinizle bağlantı kurmaya hazırsınız.</p>
+                
+                <div style="margin: 25px 0;">
+                  <h3 style="color: #009743; margin-bottom: 15px;">Platformumuzda Neler Yapabilirsiniz?</h3>
+                  
+                  <div class="feature">
+                    <span class="icon">📅</span>
+                    <strong>Randevu Yönetimi:</strong> Müşterilerinizle kolayca randevu planlayın
+                  </div>
+                  
+                  <div class="feature">
+                    <span class="icon">💼</span>
+                    <strong>Hizmet Paketleri:</strong> Özel hizmet paketleri oluşturun
+                  </div>
+                  
+                  <div class="feature">
+                    <span class="icon">👥</span>
+                    <strong>Müşteri Takibi:</strong> Müşterilerinizi yönetin ve notlar ekleyin
+                  </div>
+                  
+                  <div class="feature">
+                    <span class="icon">📊</span>
+                    <strong>Raporlama:</strong> Gelir ve performans raporlarınızı görüntüleyin
+                  </div>
+                  
+                  <div class="feature">
+                    <span class="icon">✉️</span>
+                    <strong>E-posta Kampanyaları:</strong> Müşterilerinize toplu e-posta gönderin
+                  </div>
+                </div>
+
+                <div style="text-align: center; margin: 30px 0;">
+                  <a style="color: white;" href="${process.env.BASE_URL || 'https://uzmanlio-v2-frontend.vercel.app'}/login" class="button">
+                    Hemen Başlayın
+                  </a>
+                </div>
+
+                <p style="color: #666; font-size: 14px; margin-top: 25px;">
+                  <strong>Hesap Bilgileriniz:</strong><br>
+                  E-posta: ${email}<br>
+                  Kayıt Tarihi: ${new Date().toLocaleDateString('tr-TR')}
+                </p>
+              </div>
+
+              <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px;">
+                <p style="margin: 0; color: #856404;">
+                  <strong>💡 İpucu:</strong> Profilinizi tamamlayarak daha fazla müşteriye ulaşabilirsiniz!
+                </p>
+              </div>
+
+              <p style="margin-top: 25px;">Herhangi bir sorunuz olursa, destek ekibimiz size yardımcı olmaktan mutluluk duyacaktır.</p>
+              <p>İyi çalışmalar dileriz! 🚀</p>
+            </div>
+            <div class="footer">
+              <p style="margin: 5px 0;"><strong>Uzmanlio</strong></p>
+              <p style="margin: 5px 0;">Uzmanlık Alanınızda Profesyonel Hizmet Platformu</p>
+              <p style="margin: 15px 0 5px 0;">Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+  };
+}
+
+/**
+ * Get forgot password OTP email template
+ * @param {object} data - OTP data
+ * @returns {object} Email subject and HTML body
+ */
+export function getForgotPasswordOTPTemplate(data) {
+  const { name, otp, expiryMinutes = 15 } = data;
+
+  return {
+    subject: "Şifre Sıfırlama Kodu - Uzmanlio",
+    html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #dc3545; color: white; padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px 20px; background-color: #f9f9f9; }
+            .otp-box { background-color: white; padding: 30px; margin: 20px 0; border-radius: 8px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+            .otp-code { font-size: 36px; font-weight: bold; color: #dc3545; letter-spacing: 8px; margin: 20px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 2px dashed #dc3545; }
+            .warning-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px; }
+            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; background-color: #f0f0f0; border-radius: 0 0 10px 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0; font-size: 28px;">🔐 Şifre Sıfırlama</h1>
+            </div>
+            <div class="content">
+              <div class="otp-box">
+                <p style="font-size: 18px; margin-top: 0;"><strong>Merhaba ${name || 'Değerli Kullanıcı'},</strong></p>
+                <p>Şifrenizi sıfırlamak için aşağıdaki doğrulama kodunu kullanın:</p>
+                
+                <div class="otp-code">
+                  ${otp}
+                </div>
+
+                <p style="color: #666; font-size: 14px; margin-top: 20px;">
+                  Bu kod <strong>${expiryMinutes} dakika</strong> süreyle geçerlidir.
+                </p>
+              </div>
+
+              <div class="warning-box">
+                <p style="margin: 0; color: #856404;">
+                  <strong>⚠️ Güvenlik Uyarısı:</strong> Bu kodu kimseyle paylaşmayın. Uzmanlio ekibi asla bu kodu sizden istemez.
+                </p>
+              </div>
+
+              <p style="margin-top: 25px;">Eğer şifre sıfırlama talebinde bulunmadıysanız, bu e-postayı görmezden gelebilirsiniz. Hesabınız güvende.</p>
+            </div>
+            <div class="footer">
+              <p style="margin: 5px 0;"><strong>Uzmanlio</strong></p>
+              <p style="margin: 15px 0 5px 0;">Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+  };
+}
+
+/**
+ * Get password reset success email template
+ * @param {object} data - User data
+ * @returns {object} Email subject and HTML body
+ */
+export function getPasswordResetSuccessTemplate(data) {
+  const { name, email, resetTime } = data;
+
+  return {
+    subject: "Şifreniz Başarıyla Değiştirildi - Uzmanlio",
+    html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #28a745; color: white; padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px 20px; background-color: #f9f9f9; }
+            .success-box { background-color: white; padding: 25px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .info-box { background-color: #d1ecf1; border-left: 4px solid #0c5460; padding: 15px; margin: 20px 0; border-radius: 5px; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; background-color: #f0f0f0; border-radius: 0 0 10px 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0; font-size: 28px;">✅ Şifre Değişikliği Başarılı</h1>
+            </div>
+            <div class="content">
+              <div class="success-box">
+                <p style="font-size: 18px; margin-top: 0;"><strong>Merhaba ${name || 'Değerli Kullanıcı'},</strong></p>
+                <p>Şifreniz başarıyla değiştirildi. Artık yeni şifrenizle giriş yapabilirsiniz.</p>
+                
+                <div class="info-box">
+                  <p style="margin: 0; color: #0c5460;">
+                    <strong>📋 Değişiklik Detayları:</strong><br>
+                    Hesap: ${email}<br>
+                    Değişiklik Zamanı: ${resetTime || new Date().toLocaleString('tr-TR')}<br>
+                    IP Adresi: Güvenlik nedeniyle kaydedildi
+                  </p>
+                </div>
+
+                <div style="text-align: center; margin: 30px 0;">
+                  <a style="text-decoration: none; color: white;" href="${process.env.BASE_URL || 'https://uzmanlio-v2-frontend.vercel.app'}/login" class="button">
+                    Giriş Yap
+                  </a>
+                </div>
+
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px;">
+                  <p style="margin: 0; color: #856404;">
+                    <strong>⚠️ Önemli:</strong> Bu değişikliği siz yapmadıysanız, lütfen derhal bizimle iletişime geçin. Hesabınız risk altında olabilir.
+                  </p>
+                </div>
+
+                <p style="margin-top: 25px; font-size: 14px; color: #666;">
+                  <strong>Güvenlik İpuçları:</strong><br>
+                  • Şifrenizi düzenli olarak değiştirin<br>
+                  • Güçlü ve benzersiz şifreler kullanın<br>
+                  • Şifrenizi kimseyle paylaşmayın<br>
+                  • İki faktörlü kimlik doğrulamayı etkinleştirin
+                </p>
+              </div>
+            </div>
+            <div class="footer">
+              <p style="margin: 5px 0;"><strong>Uzmanlio</strong></p>
+              <p style="margin: 5px 0;">Destek: support@uzmanlio.com</p>
+              <p style="margin: 15px 0 5px 0;">Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+  };
 }
