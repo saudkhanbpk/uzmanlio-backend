@@ -1,12 +1,10 @@
 import nodemailer from "nodemailer";
 import { getCustomerEmailTemplate, getExpertEmailTemplate } from "./emailTemplates.js";
-import sgMail from "@sendgrid/mail";
 import dotenv from "dotenv";
 dotenv.config();
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 /**
- * Send email using nodemailer
+ * Send email using nodemailer (SMTP)
  * @param {string} receiver - Email address of the receiver
  * @param {object} emailData - Email data containing subject and body
  */
@@ -14,12 +12,12 @@ async function sendEmail(receiver, emailData) {
     try {
         // Configure SMTP transporter
         const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST || "smtp.gmail.com", // SMTP server host
-            port: process.env.SMTP_PORT || 587, // SMTP port (587 for TLS, 465 for SSL)
-            secure: process.env.SMTP_SECURE === "true" || false, // true for 465, false for other ports
+            host: process.env.SMTP_HOST || "smtp.gmail.com",
+            port: process.env.SMTP_PORT || 587,
+            secure: process.env.SMTP_SECURE === "true" || false,
             auth: {
-                user: process.env.EMAIL_USER, // Your email address
-                pass: process.env.EMAIL_APP_PASSWORD, // Your email password or app password
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_APP_PASSWORD,
             },
         });
 
@@ -41,39 +39,46 @@ async function sendEmail(receiver, emailData) {
     }
 }
 
-
-
-
 /**
- * Send bulk email using SendGrid
+ * Send bulk email using SMTP (nodemailer)
  * @param {string[]} emails - array of recipient emails
  * @param {string} subject - email subject
  * @param {string} text - plain text body
  * @param {string} html - html body (optional)
  */
-
 async function sendBulkEmail(emails, subject, text, html = null) {
     if (!emails || emails.length === 0) {
         throw new Error("Email array is empty.");
     }
 
-    const msg = {
-        from: "your@email.com",
-        bcc: emails,       // <-- SendGrid allows BCC for bulk sending
-        subject,
-        text,
-        html: html || `<p>${text}</p>`,
-    };
-
     try {
-        await sgMail.send(msg);
-        console.log("Bulk email sent successfully");
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST || "smtp.gmail.com",
+            port: process.env.SMTP_PORT || 587,
+            secure: process.env.SMTP_SECURE === "true" || false,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_APP_PASSWORD,
+            },
+        });
+
+        const fromEmail = process.env.SMTP_FROM || process.env.EMAIL_USER;
+
+        const info = await transporter.sendMail({
+            from: `"${process.env.SMTP_FROM_NAME || 'Uzmanlio'}" <${fromEmail}>`,
+            bcc: emails, // Send to all recipients via BCC
+            subject,
+            text,
+            html: html || `<p>${text}</p>`,
+        });
+
+        console.log("✅ Bulk email sent successfully:", info.messageId);
+        return { success: true, messageId: info.messageId };
     } catch (err) {
-        console.error("SendGrid error:", err);
+        console.error("❌ Error sending bulk email:", err);
         throw err;
     }
 }
-
 
 /**
  * Send booking confirmation emails to customer and expert
@@ -84,7 +89,6 @@ async function sendBulkEmail(emails, subject, text, html = null) {
  */
 async function sendBookingEmails(bookingType, customerData, expertData, bookingDetails) {
     try {
-        // Prepare data for templates
         const templateData = {
             customerName: customerData.name,
             customerEmail: customerData.email,
@@ -96,11 +100,9 @@ async function sendBookingEmails(bookingType, customerData, expertData, bookingD
             time: bookingDetails.time,
         };
 
-        // Get email templates
         const customerTemplate = getCustomerEmailTemplate(bookingType, templateData);
         const expertTemplate = getExpertEmailTemplate(bookingType, templateData);
 
-        // Send emails
         const customerEmailResult = await sendEmail(customerData.email, {
             subject: customerTemplate.subject,
             html: customerTemplate.html,

@@ -1450,16 +1450,20 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
     }
 
     //Send Email to the customer
-    const expert = await User.findById(userId)
+    const expert = await User.findById(req.params.userId)
       .populate("events.customers");
 
     const customers = expert.events[eventIndex].customers;
     const meetingType = expert.events[eventIndex].meetingType;
 
-    if (meetingType === '1-1' && status === ('approved' || "completed" || "pending")) {
-      sendBulkEmail(customers, "Event Status Updated", "Your event status has been updated to " + status);
-    } else if (meetingType === 'grup' && status === ('approved' || "completed" || "pending")) {
-      sendBulkEmail(customers, "Event Status Updated", "Your group event status has been updated to " + status);
+    if (customers.length > 0) {
+      if (meetingType === '1-1' && status === ('approved' || "completed" || "pending")) {
+        sendBulkEmail(customers, "Event Status Updated", "Your event status has been updated to " + status);
+      } else if (meetingType === 'grup' && status === ('approved' || "completed" || "pending")) {
+        sendBulkEmail(customers, "Event Status Updated", "Your group event status has been updated to " + status);
+      } else if (status === "cancelled") {
+        sendBulkEmail(customers, "Event Canceled", "Your event has been canceled");
+      }
     }
 
 
