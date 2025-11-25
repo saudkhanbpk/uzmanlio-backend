@@ -220,7 +220,7 @@ const EventSchema = new Schema({
   meetingType: { type: String, enum: ["1-1", "grup", ""] },
   price: { type: Number, required: true },
   maxAttendees: { type: Number },
-  Client: { type: Schema.Types.ObjectId, ref: "Customer" },
+  customers: [{ type: Schema.Types.ObjectId, ref: "Customer" }],
   attendees: { type: Number, default: 0 },
   category: { type: String, required: true },
   status: {
@@ -237,7 +237,7 @@ const EventSchema = new Schema({
   recurringType: { type: String, enum: ["haftalık", "aylık"] },
   selectedClients: [
     {
-      id: { type: String, required: true },
+      id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", required: true },
       name: { type: String, required: true },
       email: { type: String, required: true },
       packages: [{ type: String }],

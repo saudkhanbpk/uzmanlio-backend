@@ -9,6 +9,7 @@ import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
 import Customer from "../../models/customer.js";
 import CustomerAppointments from "../../models/customerAppointment.js";
+import { sendBulkEmail, sendEmail } from "../../services/email.js";
 
 const router = express.Router();
 
@@ -278,33 +279,56 @@ router.get("/:userId", async (req, res) => {
   try {
     console.log("Fetching profile for userId:", req.params.userId);
 
-    // Find user and populate customers
     const user = await User.findById(req.params.userId)
       .populate({
-        path: "customers.customerId",  // populate the customer reference
+        path: "customers.customerId",
         model: "Customer"
-      })
-      .lean();
+      });
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Map customers to include full customer data + isArchived/addedAt
-    const customers = (user.customers || []).map(c => ({
-      ...(c.customerId || {}),      // full Customer document, fallback to empty object
-      isArchived: c.isArchived || false,
-      addedAt: c.addedAt || null
-    }));
-
-    // Return user with populated customers
-    res.json({ ...user, customers });
+    // Return full user object with populated customers
+    res.json(user);
 
   } catch (err) {
-    console.error("Fetch error:", { message: err.message, stack: err.stack });
-    res.status(err.message === 'Invalid user ID' ? 400 : 404).json({ error: err.message });
+    console.error("Fetch error:", err);
+    res.status(400).json({ error: err.message });
   }
 });
+
+// router.get("/:userId", async (req, res) => {
+//   try {
+//     console.log("Fetching profile for userId:", req.params.userId);
+
+//     // Find user and populate customers
+//     const user = await User.findById(req.params.userId)
+//       .populate({
+//         path: "customers.customerId",  // populate the customer reference
+//         model: "Customer"
+//       })
+//       .lean();
+
+//     if (!user) {
+//       return res.status(404).json({ error: "User not found" });
+//     }
+
+//     // Map customers to include full customer data + isArchived/addedAt
+//     const customers = (user.customers || []).map(c => ({
+//       ...(c.customerId || {}),      // full Customer document, fallback to empty object
+//       isArchived: c.isArchived || false,
+//       addedAt: c.addedAt || null
+//     }));
+
+//     // Return user with populated customers
+//     res.json({ ...user, customers });
+
+//   } catch (err) {
+//     console.error("Fetch error:", { message: err.message, stack: err.stack });
+//     res.status(err.message === 'Invalid user ID' ? 400 : 404).json({ error: err.message });
+//   }
+// });
 
 
 
@@ -1207,6 +1231,15 @@ router.post("/:userId/events", async (req, res) => {
     // Generate unique ID for the event
     const eventId = uuidv4();
 
+    // Convert selectedClients to the correct format
+    const formattedClients = (eventData.selectedClients || []).map(c => ({
+      id: c._id,              // use Mongo objectId
+      name: c.name,
+      email: c.email,
+      packages: c.packages || []
+    }));
+
+
     const newEvent = {
       id: eventId,
       title: eventData.title || eventData.serviceName,
@@ -1229,7 +1262,7 @@ router.post("/:userId/events", async (req, res) => {
       paymentType: eventData.paymentType || 'online',
       isRecurring: eventData.isRecurring || false,
       recurringType: eventData.recurringType,
-      selectedClients: eventData.selectedClients || [],
+      selectedClients: formattedClients || [],
       appointmentNotes: eventData.appointmentNotes,
       files: eventData.files || [],
       createdAt: new Date(),
@@ -1241,6 +1274,42 @@ router.post("/:userId/events", async (req, res) => {
     }
     user.events.push(newEvent);
     await user.save();
+
+    // Extract emails from selectedClients
+    const clientEmails = (formattedClients || []).map(c => c.email);
+    console.log("Client Emails:", clientEmails);
+
+
+    //if the Event is Service Event , then Send the Service Email to Expert and Customers Both
+    if (eventData.serviceType === 'service') {
+      console.log("Event is service")
+
+      if (eventData.meetingType === '1-1') {
+        sendBulkEmail(clientEmails, "Danışan Randevu Oluşturdu", "Danışan Randevu Oluşturdu")
+        sendEmail(user.information.email, {
+          subject: "Danışan Randevu Oluşturdu",
+          body: "Danışan için yeni bir randevu oluşturuldu.",
+          html: "<p>Danışan için yeni bir randevu oluşturuldu.</p>"
+        });
+      } else {
+        sendBulkEmail(clientEmails, "Group event created", "Grup Seansı Oluşturuldu & Grup Seansına Katılım")
+        sendEmail(user.information.email, {
+          subject: "Group event created",
+          body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
+          html: "<p>Grup Seansı Oluşturuldu & Grup Seansına Katılım</p>"
+        });
+      }
+
+      //Else Send the package emails
+    } else {
+      console.log("Event is not service , sending package email to customers and user")
+      sendBulkEmail(clientEmails, "Package Event Created", "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu")
+      sendEmail(user.information.email, {
+        subject: "Package Event Created",
+        body: "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu",
+        html: "<p>Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu</p>"
+      });
+    }
 
     if (user.calendarProviders && user.calendarProviders.length > 0) {
       const activeProviders = user.calendarProviders.filter(cp => cp.isActive);
@@ -1263,9 +1332,6 @@ router.post("/:userId/events", async (req, res) => {
         // });
       }
     }
-
-
-
 
     res.status(201).json({
       event: newEvent,
@@ -1383,6 +1449,42 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
       console.log("No active calendar providers found for user", req.params.userId);
     }
 
+    // Send Email to the customers
+    // Get the event's customer IDs
+    const customerIds = user.events[eventIndex].customers || [];
+
+    if (customerIds.length > 0) {
+      try {
+        // Fetch customer documents to get their emails
+        const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
+        const customerEmails = customers.map(c => c.email).filter(Boolean);
+
+        console.log("Sending emails to customers:", customerEmails);
+
+        const meetingType = user.events[eventIndex].meetingType;
+        console.log("Meeting Type is :", meetingType)
+
+        if (customerEmails.length > 0) {
+          // Use proper OR condition with includes()
+          if (meetingType === '1-1' && ['approved', 'completed', 'pending'].includes(status)) {
+            console.log("meeting type is", meetingType)
+            await sendBulkEmail(customerEmails, "Event Status Updated", "Your event status has been updated to " + status);
+          } else if (meetingType === 'grup' && ['approved', 'completed', 'pending'].includes(status)) {
+            console.log("meeting type is", meetingType)
+            await sendBulkEmail(customerEmails, "Event Status Updated", "Your group event status has been updated to " + status);
+          } else if (status === "cancelled") {
+            console.log("meeting type is", meetingType)
+            await sendBulkEmail(customerEmails, "Event Canceled", "Your event has been canceled");
+          }
+        }
+      } catch (emailError) {
+        console.error("Error sending customer emails:", emailError);
+        // Don't fail the request if email fails
+      }
+    }
+
+
+
     res.json({
       event: user.events[eventIndex],
       message: `Event status updated to ${status}`
@@ -1396,7 +1498,9 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
 router.delete("/:userId/events/:eventId", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
+    console.log("user is found")
     const eventIndex = user.events.findIndex(event => event.id === req.params.eventId);
+    console.log("eventIndex is found:", eventIndex)
 
     if (eventIndex === -1) {
       return res.status(404).json({ error: "Event not found" });
@@ -1404,6 +1508,7 @@ router.delete("/:userId/events/:eventId", async (req, res) => {
 
     user.events.splice(eventIndex, 1);
     await user.save();
+    console.log("event is deleted")
 
     // Sync to connected calendars in background
     const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
@@ -1422,7 +1527,7 @@ router.delete("/:userId/events/:eventId", async (req, res) => {
     } else {
       console.log("No active calendar providers found for user", req.params.userId);
     }
-
+    console.log("event is deleted SUCCESSFULLY")
     res.json({ message: "Event deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });

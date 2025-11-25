@@ -189,6 +189,7 @@ router.post(
       console.log("📦 Parsed bookingData:", JSON.stringify(bookingData, null, 2));
       console.log("📎 Uploaded files:", req.files?.length || 0);
 
+
       const {
         clientInfo,
         selectedOffering,
@@ -206,6 +207,8 @@ router.post(
         orderNotes,
         termsAccepted,
       } = bookingData;
+      console.log("Selected Offering:", selectedOffering)
+
 
       // --- Step 2: Validate required fields ---
       if (!clientInfo?.email || !selectedOffering?.id) {
@@ -296,6 +299,7 @@ router.post(
         time: selectedOffering.time || null,
         duration: selectedOffering.duration || 60,
         eventType: selectedOffering.eventType || "online",
+        customers: customer._id,
         meetingType: selectedOffering.meetingType || "",
         price: total,
         status: "pending",
