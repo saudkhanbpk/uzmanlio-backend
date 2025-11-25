@@ -15,8 +15,22 @@ const institutionSchema = new Schema({
     invitedUsers: [{
         name: { type: String },
         email: { type: String },
-        status: { type: String, enum: ['Invitations Sent', 'On Hold'], default: 'pending' },
+        teamName: { type: String },
+        permissions: [{
+            type: String,
+            enum: ['appointments', 'customers', 'reports', 'services', 'packages', 'calendar', 'emails']
+        }],
+        invitationToken: { type: String },
+        status: {
+            type: String,
+            enum: ['pending', 'accepted', 'declined', 'expired', 'Invitations Sent', 'On Hold'],
+            default: 'pending'
+        },
+        expiresAt: { type: Date },
         invitedAt: { type: Date, default: Date.now },
+        acceptedAt: { type: Date },
+        declinedAt: { type: Date },
+        acceptedByUserId: { type: Schema.Types.ObjectId, ref: "User" }
     }],
 })
 const Institution = mongoose.model("Institution", institutionSchema);
