@@ -17,8 +17,8 @@ export const CustomerAppointmentSchema = new Schema({
     duration: { type: Number },
     status: {
         type: String,
-        enum: ["scheduled", "completed", "cancelled", "no-show", "rescheduled"],
-        default: "scheduled",
+        enum: ["scheduled", "pending", "approved", "completed", "cancelled", "no-show", "rescheduled"],
+        default: "pending",
     },
     meetingType: {
         type: String,

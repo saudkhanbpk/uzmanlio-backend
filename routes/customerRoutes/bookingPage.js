@@ -5,6 +5,7 @@ import User from "../../models/expertInformation.js";
 import { createMulterUpload, handleMulterError } from '../../middlewares/upload.js';
 import Coupon from "../../models/Coupon.js";
 import Institution from "../../models/institution.js";
+import { sendBookingEmails } from '../../services/email.js';
 
 // ================== NEW IMPORTS ==================
 // Import the models you'll be writing data to.
@@ -12,6 +13,7 @@ import Customer from '../../models/customer.js';
 import Order from '../../models/orders.js';
 import CustomerAppointments from '../../models/customerAppointment.js';
 import CustomerNote from '../../models/customerNotes.js';
+// import Client from "../../../../../../AppData/Local/Microsoft/TypeScript/5.9/node_modules/undici-types/client.js";
 
 const router = express.Router({ mergeParams: true });
 
@@ -279,6 +281,47 @@ router.post(
         eventType: selectedOffering.eventType || "online",
       });
 
+      //Create the Event in Expert 
+      const Expert = await User.findById(providerId);
+      const newEvent = {
+        id: appointment._id,
+        title: selectedOffering.title,
+        description: "",
+        serviceId: mappedEventType === "service" ? selectedOffering.id : undefined,
+        serviceName: mappedEventType === "service" ? selectedOffering.title : undefined,
+        packageId: mappedEventType === "package" ? selectedOffering.id : undefined,
+        packageName: mappedEventType === "package" ? selectedOffering.title : undefined,
+        serviceType: mappedEventType === "service" ? "service" : "package",
+        date: selectedOffering.date || null,
+        time: selectedOffering.time || null,
+        duration: selectedOffering.duration || 60,
+        eventType: selectedOffering.eventType || "online",
+        meetingType: selectedOffering.meetingType || "",
+        price: total,
+        status: "pending",
+        paymentType: 'online',
+        isRecurring: false,
+        appointmentNotes: orderNotes,
+        files: req.files?.map((f) => ({
+          name: f.originalname,
+          type: f.mimetype,
+          size: f.size,
+          url: f.path,
+        })) || [],
+        Client: customer._id,
+        category: selectedOffering.category,
+        subCategory: selectedOffering.subCategory,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      Expert.events.push(newEvent);
+      Expert.save();
+
+
+
+
+
       // --- Step 7: Create note if notes/files exist ---
       let note = null;
       if (orderNotes || (req.files && req.files.length > 0)) {
@@ -303,6 +346,8 @@ router.post(
       customer.lastAppointment = safeDate(date);
       customer.totalSpent = (customer.totalSpent || 0) + total;
       await customer.save();
+
+
 
       console.log("Selected Offerings:", selectedOffering)
 
@@ -365,7 +410,58 @@ router.post(
         status: "pending",
       });
 
+      await Expert.orders.push(order._id);
+      await Expert.appointments.push(appointment._id);
+      await Expert.save();
+
       console.log("✅ Booking successfully created:", order._id);
+
+
+      try {
+        // Determine email type based on mappedEventType and meetingType
+        let emailType;
+        const expert = await findUserById(providerId);
+
+        if (mappedEventType === "package") {
+          emailType = "paket";
+        } else if (mappedEventType === "service") {
+          // Check meetingType to differentiate between individual and group
+          if (selectedOffering.meetingType === "1-1" || selectedOffering.meetingType === "bireysel") {
+            emailType = "bireysel";
+          } else if (selectedOffering.meetingType === "grup") {
+            emailType = "grup";
+          } else {
+            // Fallback: if meetingType is not set, default to bireysel
+            emailType = "bireysel";
+          }
+        }
+
+        console.log("📧 Sending emails with type:", emailType);
+
+        await sendBookingEmails(
+          emailType,
+          {
+            name: `${customer.name} ${customer.surname}`,
+            email: customer.email,
+            phone: customer.phone,
+          },
+          {
+            name: providerName,
+            email: expert.information?.email,
+          },
+          {
+            serviceName: selectedOffering.title,
+            price: total,
+            date: normalizedDate,
+            time: normalizedTime,
+          }
+        );
+
+        console.log("✅ Email notifications sent successfully");
+      } catch (emailError) {
+        console.error("⚠️ Failed to send email notifications:", emailError.message);
+        // Don't fail the booking if email fails
+      }
 
       // --- Step 10: Send response ---
       return res.status(201).json({
