@@ -1449,20 +1449,37 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
       console.log("No active calendar providers found for user", req.params.userId);
     }
 
-    //Send Email to the customer
-    const expert = await User.findById(req.params.userId)
-      .populate("events.customers");
+    // Send Email to the customers
+    // Get the event's customer IDs
+    const customerIds = user.events[eventIndex].customers || [];
 
-    const customers = expert.events[eventIndex].customers;
-    const meetingType = expert.events[eventIndex].meetingType;
+    if (customerIds.length > 0) {
+      try {
+        // Fetch customer documents to get their emails
+        const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
+        const customerEmails = customers.map(c => c.email).filter(Boolean);
 
-    if (customers.length > 0) {
-      if (meetingType === '1-1' && status === ('approved' || "completed" || "pending")) {
-        sendBulkEmail(customers, "Event Status Updated", "Your event status has been updated to " + status);
-      } else if (meetingType === 'grup' && status === ('approved' || "completed" || "pending")) {
-        sendBulkEmail(customers, "Event Status Updated", "Your group event status has been updated to " + status);
-      } else if (status === "cancelled") {
-        sendBulkEmail(customers, "Event Canceled", "Your event has been canceled");
+        console.log("Sending emails to customers:", customerEmails);
+
+        const meetingType = user.events[eventIndex].meetingType;
+        console.log("Meeting Type is :", meetingType)
+
+        if (customerEmails.length > 0) {
+          // Use proper OR condition with includes()
+          if (meetingType === '1-1' && ['approved', 'completed', 'pending'].includes(status)) {
+            console.log("meeting type is", meetingType)
+            await sendBulkEmail(customerEmails, "Event Status Updated", "Your event status has been updated to " + status);
+          } else if (meetingType === 'grup' && ['approved', 'completed', 'pending'].includes(status)) {
+            console.log("meeting type is", meetingType)
+            await sendBulkEmail(customerEmails, "Event Status Updated", "Your group event status has been updated to " + status);
+          } else if (status === "cancelled") {
+            console.log("meeting type is", meetingType)
+            await sendBulkEmail(customerEmails, "Event Canceled", "Your event has been canceled");
+          }
+        }
+      } catch (emailError) {
+        console.error("Error sending customer emails:", emailError);
+        // Don't fail the request if email fails
       }
     }
 
