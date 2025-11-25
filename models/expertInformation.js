@@ -725,6 +725,10 @@ const UserSchema = new Schema(
     },
     hourlyPrice: { type: Number, default: 0 },
     refCode: { type: String },
+
+    // Password reset fields
+    resetPasswordOTP: { type: String },
+    resetPasswordExpiry: { type: Date },
   },
   { timestamps: true }
 );

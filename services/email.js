@@ -8,16 +8,21 @@ import { getCustomerEmailTemplate, getExpertEmailTemplate } from "./emailTemplat
  */
 async function sendEmail(receiver, emailData) {
     try {
+        // Configure SMTP transporter
         const transporter = nodemailer.createTransport({
-            service: "SendGrid",
+            host: process.env.SMTP_HOST || "smtp.gmail.com", // SMTP server host
+            port: process.env.SMTP_PORT || 587, // SMTP port (587 for TLS, 465 for SSL)
+            secure: process.env.SMTP_SECURE === "true" || false, // true for 465, false for other ports
             auth: {
-                user: process.env.FROM_EMAIL,
-                pass: process.env.SENDGRID_API_KEY,
+                user: process.env.EMAIL_USER, // Your email address
+                pass: process.env.EMAIL_APP_PASSWORD, // Your email password or app password
             },
         });
 
+        const fromEmail = process.env.SMTP_FROM || process.env.EMAIL_USER;
+
         const info = await transporter.sendMail({
-            from: process.env.FROM_EMAIL,
+            from: `"${process.env.SMTP_FROM_NAME || 'Uzmanlio'}" <${fromEmail}>`,
             to: receiver,
             subject: emailData.subject,
             text: emailData.body || emailData.text,
