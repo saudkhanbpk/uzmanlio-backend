@@ -615,10 +615,10 @@ export function getSubUserInvitationTemplate(data) {
                 </div>
 
                 <div style="text-align: center; margin: 30px 0;">
-                  <a style="text-decoration: none;" href="${data.acceptUrl}" class="button button-accept">
+                  <a style="text-decoration: none; color: #fff;" href="${data.acceptUrl}" class="button button-accept">
                     ✓ Daveti Kabul Et
                   </a>
-                  <a style="text-decoration: none;" href="${data.declineUrl}" class="button button-decline">
+                  <a style="text-decoration: none; color: #fff;" href="${data.declineUrl}" class="button button-decline">
                     ✗ Daveti Reddet
                   </a>
                 </div>
