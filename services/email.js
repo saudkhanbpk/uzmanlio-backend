@@ -10,15 +10,29 @@ dotenv.config();
  */
 async function sendEmail(receiver, emailData) {
     try {
-        // Configure SMTP transporter
+        // Configure SMTP transporter with better settings for deployed environments
         const transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST || "smtp.gmail.com",
-            port: process.env.SMTP_PORT || 587,
-            secure: process.env.SMTP_SECURE === "true" || false,
+            port: parseInt(process.env.SMTP_PORT) || 587, // Use 587 for TLS (more reliable on cloud platforms)
+            secure: process.env.SMTP_SECURE === "true" ? true : false, // false for port 587, true for 465
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_APP_PASSWORD,
             },
+            // Add connection timeout and pool settings for better reliability
+            connectionTimeout: 60000, // 60 seconds
+            greetingTimeout: 30000, // 30 seconds
+            socketTimeout: 60000, // 60 seconds
+            pool: true, // Use connection pooling
+            maxConnections: 5,
+            maxMessages: 100,
+            // Additional options for better compatibility
+            tls: {
+                rejectUnauthorized: process.env.NODE_ENV === 'production' ? true : false,
+                minVersion: 'TLSv1.2'
+            },
+            debug: process.env.NODE_ENV !== 'production', // Enable debug in development
+            logger: process.env.NODE_ENV !== 'production', // Enable logging in development
         });
 
         const fromEmail = process.env.SMTP_FROM || process.env.EMAIL_USER;
@@ -54,12 +68,25 @@ async function sendBulkEmail(emails, subject, text, html = null) {
     try {
         const transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST || "smtp.gmail.com",
-            port: process.env.SMTP_PORT || 587,
-            secure: process.env.SMTP_SECURE === "true" || false,
+            port: parseInt(process.env.SMTP_PORT) || 587,
+            secure: process.env.SMTP_SECURE === "true" ? true : false,
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_APP_PASSWORD,
             },
+            // Add connection timeout and pool settings for better reliability
+            connectionTimeout: 60000,
+            greetingTimeout: 30000,
+            socketTimeout: 60000,
+            pool: true,
+            maxConnections: 5,
+            maxMessages: 100,
+            tls: {
+                rejectUnauthorized: process.env.NODE_ENV === 'production' ? true : false,
+                minVersion: 'TLSv1.2'
+            },
+            debug: process.env.NODE_ENV !== 'production',
+            logger: process.env.NODE_ENV !== 'production',
         });
 
         const fromEmail = process.env.SMTP_FROM || process.env.EMAIL_USER;
