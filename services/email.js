@@ -1,67 +1,61 @@
 import { getCustomerEmailTemplate, getExpertEmailTemplate } from "./emailTemplates.js";
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
-// Resend SMTP Configuration
-// SMTP works for both local development and production
+// Resend API Configuration
+// Get your API key from: https://resend.com/api-keys
 const RESEND_API_KEY = process.env.RESEND_API_KEY || "re_bF3Xmwbo_CWB7TFiKLj7CSfEKY9to31qd";
-const SENDER_EMAIL = process.env.SENDER_EMAIL || "Uzmanlio@resend.dev";
+const SENDER_EMAIL = process.env.SENDER_EMAIL || "Uzmanlio@resend.dev"; // Default Resend testing email
 const SENDER_NAME = process.env.SENDER_NAME || "Uzmanlio";
 
-// Create SMTP transporter using Resend
-const transporter = nodemailer.createTransport({
-    host: "smtp.resend.com",
-    port: 465,
-    secure: true, // Use SSL/TLS
-    auth: {
-        user: "resend",
-        pass: RESEND_API_KEY,
-    },
-});
-
-// Validate configuration
+// Validate API key
 if (!RESEND_API_KEY) {
     console.error("❌ RESEND_API_KEY is not set in environment variables!");
     console.error("⚠️  Get your API key from: https://resend.com/api-keys");
     console.error("⚠️  Sign up at: https://resend.com/signup");
-} else {
-    console.log("✅ Email service configured with Resend SMTP");
-    console.log("📧 Sender:", `${SENDER_NAME} <${SENDER_EMAIL}>`);
 }
 
 /**
- * Send email using Resend SMTP
+ * Send email using Resend API
  * @param {string} receiver - Email address of the receiver
  * @param {object} emailData - Email data containing subject and body
  */
 async function sendEmail(receiver, emailData) {
     try {
-        console.log("📧 Sending email via Resend SMTP to:", receiver);
+        console.log("📧 Sending email via Resend to:", receiver);
+        console.log("🔑 Using API key:", RESEND_API_KEY ? RESEND_API_KEY.substring(0, 10) + "..." : "NOT SET");
 
         if (!RESEND_API_KEY) {
             throw new Error("RESEND_API_KEY is not configured");
         }
 
-        const mailOptions = {
-            from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
-            to: receiver,
-            subject: emailData.subject,
-            text: emailData.text || emailData.body || '',
-            html: emailData.html || `<p>${emailData.body || emailData.text || ''}</p>`,
-        };
+        const response = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${RESEND_API_KEY}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+                to: [receiver],
+                subject: emailData.subject,
+                html: emailData.html || `<p>${emailData.body || emailData.text || ''}</p>`,
+                text: emailData.text || emailData.body || '',
+            }),
+        });
 
-        const info = await transporter.sendMail(mailOptions);
+        const data = await response.json();
 
-        console.log("✅ Email sent via Resend SMTP:", info.messageId);
-        return {
-            success: true,
-            messageId: info.messageId,
-            provider: "resend-smtp",
-            response: info.response
-        };
+        if (!response.ok) {
+            console.error("❌ Resend API Response Status:", response.status);
+            console.error("❌ Resend API Response:", JSON.stringify(data, null, 2));
+            throw new Error(`Resend API error (${response.status}): ${data.message || response.statusText}`);
+        }
+
+        console.log("✅ Email sent via Resend:", data.id);
+        return { success: true, messageId: data.id, provider: "resend" };
     } catch (error) {
-        console.error("❌ Resend SMTP email error:", error.message);
+        console.error("❌ Resend email error:", error.message);
         return {
             success: false,
             error: `Email sending failed: ${error.message}`
