@@ -733,6 +733,10 @@ const UserSchema = new Schema(
     resetPasswordOTP: { type: String },
     resetPasswordExpiry: { type: Date },
 
+    // Email verification fields
+    emailVerificationToken: { type: String },
+    emailVerificationExpiry: { type: Date },
+
     // Sub-user system fields
     parentUserId: { type: Schema.Types.ObjectId, ref: 'User' },
     isSubUser: { type: Boolean, default: false },
