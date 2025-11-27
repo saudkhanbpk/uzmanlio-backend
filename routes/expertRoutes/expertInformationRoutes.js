@@ -10,6 +10,10 @@ import calendarSyncService from "../../services/calendarSyncService.js";
 import Customer from "../../models/customer.js";
 import CustomerAppointments from "../../models/customerAppointment.js";
 import { sendBulkEmail, sendEmail } from "../../services/email.js";
+import {
+  getExpertEventCreatedTemplate, getClient11SessionTemplate,
+  getClientGroupSessionTemplate, getClientPackageSessionTemplate
+} from "../../services/eventEmailTemplates.js";
 
 const router = express.Router();
 
@@ -1285,29 +1289,95 @@ router.post("/:userId/events", async (req, res) => {
       console.log("Event is service")
 
       if (eventData.meetingType === '1-1') {
+        //sending email to the customer
+        const singleusertemplate = getClient11SessionTemplate({
+          participantName: formattedClients[0].name,
+          expertName: user.information.name,
+          sessionName: eventData.serviceName,
+          sessionDate: eventData.date,
+          sessionTime: eventData.time,
+          sessionDuration: eventData.duration,
+        })
         sendBulkEmail(clientEmails, "Danışan Randevu Oluşturdu", "Danışan Randevu Oluşturdu")
+
+        //sending email to the Expert
+        const template = getExpertEventCreatedTemplate({
+          expertName: user.information.name,
+          clientName: formattedClients[0].name,
+          eventDate: eventData.date,
+          eventTime: eventData.time,
+          eventLocation: eventData.location,
+          serviceName: eventData.serviceName
+        })
         sendEmail(user.information.email, {
           subject: "Danışan Randevu Oluşturdu",
           body: "Danışan için yeni bir randevu oluşturuldu.",
-          html: "<p>Danışan için yeni bir randevu oluşturuldu.</p>"
-        });
-      } else {
-        sendBulkEmail(clientEmails, "Group event created", "Grup Seansı Oluşturuldu & Grup Seansına Katılım")
+          html: template
+        })
+      }
+
+      else {
+        //sending email to the customers one by one
+        formattedClients.forEach(client => {
+          const groupusertemplate = getClientGroupSessionTemplate({
+            participantName: client.name,
+            expertName: user.information.name,
+            sessionName: eventData.serviceName,
+            sessionDate: eventData.date,
+            sessionTime: eventData.time,
+            sessionDuration: eventData.duration,
+          })
+          sendEmail(client.email, {
+            subject: "Group event created",
+            body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
+            html: groupusertemplate.html
+          })
+        })
+
+        //sending email to the Expert
+        const template = getExpertEventCreatedTemplate({
+          expertName: user.information.name,
+          clientName: formattedClients[0].name,
+          eventDate: eventData.date,
+          eventTime: eventData.time,
+          eventLocation: eventData.location,
+          serviceName: eventData.serviceName
+        })
         sendEmail(user.information.email, {
           subject: "Group event created",
           body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
-          html: "<p>Grup Seansı Oluşturuldu & Grup Seansına Katılım</p>"
+          html: template.html
         });
       }
 
       //Else Send the package emails
     } else {
-      console.log("Event is not service , sending package email to customers and user")
-      sendBulkEmail(clientEmails, "Package Event Created", "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu")
+      //sending email to the customer
+      const packageTemplate = formattedClients.forEach(client => {
+        const packagetemplate = getClientPackageSessionTemplate({
+          participantName: client.name,
+          expertName: user.information.name,
+          sessionName: eventData.serviceName,
+          sessionDate: eventData.date,
+          sessionTime: eventData.time,
+          sessionDuration: eventData.duration,
+        })
+        console.log("Event is not service , sending package email to customers and user")
+        sendEmail(client.email, "Package Event Created", "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu", packageTemplate.html)
+      })
+      //sending email to the Expert
+      const template = getExpertEventCreatedTemplate({
+        expertName: user.information.name,
+        clientName: formattedClients[0].name,
+        eventDate: eventData.date,
+        eventTime: eventData.time,
+        eventLocation: eventData.location,
+        serviceName: eventData.serviceName
+      })
       sendEmail(user.information.email, {
         subject: "Package Event Created",
         body: "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu",
-        html: "<p>Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu</p>"
+        html: template
       });
     }
 
@@ -2232,656 +2302,6 @@ router.get("/:userId/forms/stats", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// ==================== CUSTOMERS ROUTES ====================
-
-// // Get all customers for a user
-// router.get("/:userId/customers", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const { status, category, search } = req.query;
-
-//     let customers = user.customers || [];
-
-//     // Filter by status
-//     if (status && status !== 'all') {
-//       customers = customers.filter(customer => customer.status === status);
-//     }
-
-//     // Filter by category
-//     if (category && category !== 'all') {
-//       customers = customers.filter(customer => customer.category === category);
-//     }
-
-//     // Search functionality
-//     if (search) {
-//       const searchLower = search.toLowerCase();
-//       customers = customers.filter(customer =>
-//         customer.name.toLowerCase().includes(searchLower) ||
-//         customer.surname.toLowerCase().includes(searchLower) ||
-//         customer.email.toLowerCase().includes(searchLower) ||
-//         customer.phone.includes(search)
-//       );
-//     }
-
-//     // Sort by last contact date (most recent first)
-//     customers.sort((a, b) => new Date(b.lastContact || b.updatedAt) - new Date(a.lastContact || a.updatedAt));
-
-//     res.json({ customers });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Get single customer by ID
-// router.get("/:userId/customers/:customerId", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customer = user.customers?.find(customer => customer.id === req.params.customerId);
-
-//     if (!customer) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     res.json({ customer });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Create new customer
-// router.post("/:userId/customers", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customerData = req.body;
-
-//     // Check if customer with same email already exists
-//     const existingCustomer = user.customers?.find(c => c.email === customerData.email);
-//     if (existingCustomer) {
-//       return res.status(400).json({ error: "Bu e-posta adresi ile kayıtlı bir danışan zaten mevcut" });
-//     }
-
-//     // Generate unique ID for the customer
-//     const customerId = uuidv4();
-
-//     const newCustomer = {
-//       id: customerId,
-//       name: customerData.name,
-//       surname: customerData.surname,
-//       email: customerData.email,
-//       phone: customerData.phone,
-//       dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : undefined,
-//       gender: customerData.gender,
-//       address: customerData.address || {},
-//       occupation: customerData.occupation,
-//       company: customerData.company,
-//       preferences: {
-//         communicationMethod: customerData.preferences?.communicationMethod || 'email',
-//         language: customerData.preferences?.language || 'tr',
-//         timezone: customerData.preferences?.timezone || 'Europe/Istanbul',
-//         reminderSettings: {
-//           enabled: customerData.preferences?.reminderSettings?.enabled !== false,
-//           beforeHours: customerData.preferences?.reminderSettings?.beforeHours || 24
-//         }
-//       },
-//       status: customerData.status || 'active',
-//       category: customerData.category,
-//       tags: customerData.tags || [],
-//       source: customerData.source || 'website',
-//       referredBy: customerData.referredBy,
-//       appointments: [],
-//       totalAppointments: 0,
-//       completedAppointments: 0,
-//       cancelledAppointments: 0,
-//       noShowAppointments: 0,
-//       totalSpent: 0,
-//       outstandingBalance: 0,
-//       paymentMethod: customerData.paymentMethod,
-//       notes: [],
-//       averageRating: 0,
-//       totalRatings: 0,
-//       consentGiven: {
-//         dataProcessing: customerData.consentGiven?.dataProcessing || false,
-//         marketing: customerData.consentGiven?.marketing || false,
-//         dateGiven: customerData.consentGiven?.dataProcessing ? new Date() : undefined
-//       },
-//       isArchived: false,
-//       createdAt: new Date(),
-//       updatedAt: new Date()
-//     };
-
-//     if (!user.customers) {
-//       user.customers = [];
-//     }
-//     user.customers.push(newCustomer);
-//     await user.save();
-
-//     res.status(201).json({
-//       customer: newCustomer,
-//       message: "Danışan başarıyla eklendi"
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Update customer
-// router.put("/:userId/customers/:customerId", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-//     if (customerIndex === -1) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     const customerData = req.body;
-
-//     // Check if email is being changed and if it conflicts with another customer
-//     if (customerData.email !== user.customers[customerIndex].email) {
-//       const existingCustomer = user.customers.find(c =>
-//         c.email === customerData.email && c.id !== req.params.customerId
-//       );
-//       if (existingCustomer) {
-//         return res.status(400).json({ error: "Bu e-posta adresi ile kayıtlı başka bir danışan mevcut" });
-//       }
-//     }
-
-//     const updatedCustomer = {
-//       ...user.customers[customerIndex],
-//       name: customerData.name,
-//       surname: customerData.surname,
-//       email: customerData.email,
-//       phone: customerData.phone,
-//       dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : user.customers[customerIndex].dateOfBirth,
-//       gender: customerData.gender,
-//       address: { ...user.customers[customerIndex].address, ...customerData.address },
-//       occupation: customerData.occupation,
-//       company: customerData.company,
-//       preferences: {
-//         ...user.customers[customerIndex].preferences,
-//         ...customerData.preferences
-//       },
-//       status: customerData.status,
-//       category: customerData.category,
-//       tags: customerData.tags || user.customers[customerIndex].tags,
-//       source: customerData.source,
-//       referredBy: customerData.referredBy,
-//       paymentMethod: customerData.paymentMethod,
-//       consentGiven: {
-//         ...user.customers[customerIndex].consentGiven,
-//         ...customerData.consentGiven
-//       },
-//       updatedAt: new Date()
-//     };
-
-//     user.customers[customerIndex] = updatedCustomer;
-//     await user.save();
-
-//     res.json({
-//       customer: updatedCustomer,
-//       message: "Danışan bilgileri başarıyla güncellendi"
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Delete customer
-// router.delete("/:userId/customers/:customerId", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-//     if (customerIndex === -1) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     user.customers.splice(customerIndex, 1);
-//     await user.save();
-
-//     res.json({ message: "Danışan başarıyla silindi" });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Archive/Unarchive customer
-// router.patch("/:userId/customers/:customerId/archive", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-//     if (customerIndex === -1) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     const { isArchived } = req.body;
-//     user.customers[customerIndex].isArchived = isArchived;
-//     user.customers[customerIndex].updatedAt = new Date();
-
-//     await user.save();
-
-//     res.json({
-//       customer: user.customers[customerIndex],
-//       message: `Danışan ${isArchived ? 'arşivlendi' : 'arşivden çıkarıldı'}`
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Update customer status
-// router.patch("/:userId/customers/:customerId/status", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-//     if (customerIndex === -1) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     const { status } = req.body;
-//     if (!['active', 'inactive', 'blocked', 'prospect'].includes(status)) {
-//       return res.status(400).json({ error: "Invalid status" });
-//     }
-
-//     user.customers[customerIndex].status = status;
-//     user.customers[customerIndex].updatedAt = new Date();
-
-//     await user.save();
-
-//     res.json({
-//       customer: user.customers[customerIndex],
-//       message: `Danışan durumu ${status} olarak güncellendi`
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // ==================== CUSTOMER NOTES ROUTES ====================
-
-// // Get customer notes
-// router.get("/:userId/customers/:customerId/notes", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customer = user.customers?.find(customer => customer.id === req.params.customerId);
-
-//     if (!customer) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     // Sort notes by creation date (newest first)
-//     const notes = (customer.notes || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-//     res.json({
-//       notes,
-//       customer: {
-//         id: customer.id,
-//         name: customer.name,
-//         surname: customer.surname,
-//         email: customer.email
-//       }
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Add customer note
-// router.post("/:userId/customers/:customerId/notes", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-//     if (customerIndex === -1) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     const noteData = req.body;
-//     const noteId = uuidv4();
-
-//     const newNote = {
-//       id: noteId,
-//       content: noteData.content,
-//       author: noteData.author || 'expert',
-//       authorName: noteData.authorName || user.information?.name || 'Expert',
-//       files: noteData.files || [],
-//       isPrivate: noteData.isPrivate || false,
-//       tags: noteData.tags || [],
-//       createdAt: new Date(),
-//       updatedAt: new Date()
-//     };
-
-//     if (!user.customers[customerIndex].notes) {
-//       user.customers[customerIndex].notes = [];
-//     }
-//     user.customers[customerIndex].notes.push(newNote);
-//     user.customers[customerIndex].lastContact = new Date();
-//     user.customers[customerIndex].updatedAt = new Date();
-
-//     await user.save();
-
-//     res.status(201).json({
-//       note: newNote,
-//       message: "Not başarıyla eklendi"
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Update customer note
-// router.put("/:userId/customers/:customerId/notes/:noteId", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-//     if (customerIndex === -1) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     const noteIndex = user.customers[customerIndex].notes.findIndex(note => note.id === req.params.noteId);
-//     if (noteIndex === -1) {
-//       return res.status(404).json({ error: "Note not found" });
-//     }
-
-//     const noteData = req.body;
-//     const updatedNote = {
-//       ...user.customers[customerIndex].notes[noteIndex],
-//       content: noteData.content,
-//       files: noteData.files || user.customers[customerIndex].notes[noteIndex].files,
-//       isPrivate: noteData.isPrivate,
-//       tags: noteData.tags || user.customers[customerIndex].notes[noteIndex].tags,
-//       updatedAt: new Date()
-//     };
-
-//     user.customers[customerIndex].notes[noteIndex] = updatedNote;
-//     user.customers[customerIndex].updatedAt = new Date();
-
-//     await user.save();
-
-//     res.json({
-//       note: updatedNote,
-//       message: "Not başarıyla güncellendi"
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Delete customer note
-// router.delete("/:userId/customers/:customerId/notes/:noteId", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customerIndex = user.customers.findIndex(customer => customer.id === req.params.customerId);
-
-//     if (customerIndex === -1) {
-//       return res.status(404).json({ error: "Customer not found" });
-//     }
-
-//     const noteIndex = user.customers[customerIndex].notes.findIndex(note => note.id === req.params.noteId);
-//     if (noteIndex === -1) {
-//       return res.status(404).json({ error: "Note not found" });
-//     }
-
-//     user.customers[customerIndex].notes.splice(noteIndex, 1);
-//     user.customers[customerIndex].updatedAt = new Date();
-
-//     await user.save();
-
-//     res.json({ message: "Not başarıyla silindi" });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // ==================== CUSTOMER STATISTICS ROUTES ====================
-
-// // Get customer statistics
-// router.get("/:userId/customersStats", async (req, res) => {
-//   console.log("Route Hitted")
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     console.log("USER ID from stats:", user)
-//     const customers = user.customers || [];
-
-//     const stats = {
-//       total: customers.length,
-//       active: customers.filter(c => c.status === 'active').length,
-//       inactive: customers.filter(c => c.status === 'inactive').length,
-//       blocked: customers.filter(c => c.status === 'blocked').length,
-//       prospects: customers.filter(c => c.status === 'prospect').length,
-//       archived: customers.filter(c => c.isArchived).length,
-
-//       // Appointment statistics
-//       totalAppointments: customers.reduce((sum, c) => sum + (c.totalAppointments || 0), 0),
-//       completedAppointments: customers.reduce((sum, c) => sum + (c.completedAppointments || 0), 0),
-//       cancelledAppointments: customers.reduce((sum, c) => sum + (c.cancelledAppointments || 0), 0),
-//       noShowAppointments: customers.reduce((sum, c) => sum + (c.noShowAppointments || 0), 0),
-
-//       // Financial statistics
-//       totalRevenue: customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0),
-//       outstandingBalance: customers.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0),
-
-//       // Recent activity
-//       newCustomersThisMonth: customers.filter(c => {
-//         const createdDate = new Date(c.createdAt);
-//         const now = new Date();
-//         return createdDate.getMonth() === now.getMonth() && createdDate.getFullYear() === now.getFullYear();
-//       }).length,
-
-//       recentCustomers: customers
-//         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-//         .slice(0, 5)
-//         .map(c => ({
-//           id: c.id,
-//           name: `${c.name} ${c.surname}`,
-//           email: c.email,
-//           createdAt: c.createdAt,
-//           totalSpent: c.totalSpent || 0
-//         })),
-
-//       // Customer sources
-//       sourceBreakdown: customers.reduce((acc, c) => {
-//         const source = c.source || 'unknown';
-//         acc[source] = (acc[source] || 0) + 1;
-//         return acc;
-//       }, {}),
-
-//       // Average ratings
-//       averageRating: customers.length > 0
-//         ? customers.reduce((sum, c) => sum + (c.averageRating || 0), 0) / customers.length
-//         : 0,
-
-//       // Categories
-//       categoryBreakdown: customers.reduce((acc, c) => {
-//         const category = c.category || 'uncategorized';
-//         acc[category] = (acc[category] || 0) + 1;
-//         return acc;
-//       }, {})
-//     };
-
-//     res.json({ stats });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // ==================== BULK OPERATIONS ROUTES ====================
-
-// // Bulk import customers from CSV
-// router.post("/:userId/customers/bulk-import", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const { customers: customersData } = req.body;
-
-//     if (!Array.isArray(customersData) || customersData.length === 0) {
-//       return res.status(400).json({ error: "Invalid customers data" });
-//     }
-
-//     const results = {
-//       success: 0,
-//       failed: 0,
-//       errors: []
-//     };
-
-//     for (let i = 0; i < customersData.length; i++) {
-//       try {
-//         const customerData = customersData[i];
-
-//         // Validate required fields
-//         if (!customerData.name || !customerData.surname || !customerData.email || !customerData.phone) {
-//           results.failed++;
-//           results.errors.push(`Row ${i + 1}: Missing required fields`);
-//           continue;
-//         }
-
-//         // Check if customer already exists
-//         const existingCustomer = user.customers?.find(c => c.email === customerData.email);
-//         if (existingCustomer) {
-//           results.failed++;
-//           results.errors.push(`Row ${i + 1}: Customer with email ${customerData.email} already exists`);
-//           continue;
-//         }
-
-//         const newCustomer = {
-//           id: uuidv4(),
-//           name: customerData.name,
-//           surname: customerData.surname,
-//           email: customerData.email,
-//           phone: customerData.phone,
-//           dateOfBirth: customerData.dateOfBirth ? new Date(customerData.dateOfBirth) : undefined,
-//           gender: customerData.gender,
-//           occupation: customerData.occupation,
-//           company: customerData.company,
-//           status: customerData.status || 'active',
-//           category: customerData.category,
-//           source: customerData.source || 'bulk-import',
-//           referredBy: customerData.referredBy,
-//           preferences: {
-//             communicationMethod: customerData.communicationMethod || 'email',
-//             language: 'tr',
-//             timezone: 'Europe/Istanbul',
-//             reminderSettings: {
-//               enabled: true,
-//               beforeHours: 24
-//             }
-//           },
-//           appointments: [],
-//           totalAppointments: 0,
-//           completedAppointments: 0,
-//           cancelledAppointments: 0,
-//           noShowAppointments: 0,
-//           totalSpent: 0,
-//           outstandingBalance: 0,
-//           notes: [],
-//           averageRating: 0,
-//           totalRatings: 0,
-//           consentGiven: {
-//             dataProcessing: true,
-//             marketing: customerData.marketingConsent || false,
-//             dateGiven: new Date()
-//           },
-//           isArchived: false,
-//           createdAt: new Date(),
-//           updatedAt: new Date()
-//         };
-
-//         if (!user.customers) {
-//           user.customers = [];
-//         }
-//         user.customers.push(newCustomer);
-//         results.success++;
-
-//       } catch (error) {
-//         results.failed++;
-//         results.errors.push(`Row ${i + 1}: ${error.message}`);
-//       }
-//     }
-
-//     await user.save();
-
-//     res.json({
-//       message: `Bulk import completed. ${results.success} customers imported, ${results.failed} failed.`,
-//       results
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-// // Export customers to CSV format
-// router.get("/:userId/customers/export", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const customers = user.customers || [];
-
-//     const csvData = customers.map(customer => ({
-//       name: customer.name,
-//       surname: customer.surname,
-//       email: customer.email,
-//       phone: customer.phone,
-//       dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().split('T')[0] : '',
-//       gender: customer.gender || '',
-//       occupation: customer.occupation || '',
-//       company: customer.company || '',
-//       status: customer.status,
-//       category: customer.category || '',
-//       source: customer.source || '',
-//       referredBy: customer.referredBy || '',
-//       totalAppointments: customer.totalAppointments || 0,
-//       completedAppointments: customer.completedAppointments || 0,
-//       totalSpent: customer.totalSpent || 0,
-//       averageRating: customer.averageRating || 0,
-//       lastAppointment: customer.lastAppointment ? customer.lastAppointment.toISOString().split('T')[0] : '',
-//       createdAt: customer.createdAt.toISOString().split('T')[0]
-//     }));
-
-//     res.json({
-//       customers: csvData,
-//       message: "Customer data exported successfully"
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

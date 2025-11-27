@@ -11,45 +11,236 @@ export function getCustomerEmailTemplate(bookingType, data) {
 
   const templates = {
     bireysel: {
-      subject: "Sipariş Özeti - Bireysel",
+      subject: "Randevunuz Oluşturuldu - Uzmanlio",
       html: `
         <!DOCTYPE html>
-        <html>
+        <html lang="tr">
         <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
-            .content { padding: 20px; background-color: #f9f9f9; }
-            .details { background-color: white; padding: 15px; margin: 15px 0; border-radius: 5px; }
-            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-            .label { font-weight: bold; color: #555; }
-          </style>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Randevunuz Oluşturuldu</title>
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+                
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: 'Inter', Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    background-color: #f8fafc;
+                }
+                
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background-color: #ffffff;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+                }
+                
+                .header {
+                    background: #CDFA89;
+                    padding: 40px 30px;
+                    text-align: center;
+                    color: #1f2937;
+                }
+                
+                .logo {
+                    max-width: 150px;
+                    height: auto;
+                    margin-bottom: 20px;
+                }
+                
+                .header h1 {
+                    font-size: 28px;
+                    font-weight: 600;
+                    margin-bottom: 8px;
+                }
+                
+                .header p {
+                    font-size: 16px;
+                    opacity: 0.9;
+                }
+                
+                .content {
+                    padding: 40px 30px;
+                }
+                
+                .greeting {
+                    font-size: 18px;
+                    margin-bottom: 25px;
+                    color: #1f2937;
+                }
+                
+                .appointment-card {
+                    background: #F3F7F6;
+                    border-radius: 12px;
+                    padding: 25px;
+                    margin: 25px 0;
+                    border-left: 4px solid #009743;
+                }
+                
+                .appointment-title {
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: #1f2937;
+                    margin-bottom: 15px;
+                }
+                
+                .appointment-details {
+                    display: grid;
+                    gap: 12px;
+                }
+                
+                .detail-item {
+                    display: flex;
+                    align-items: center;
+                    font-size: 15px;
+                }
+                
+                .detail-label {
+                    font-weight: 500;
+                    color: #374151;
+                    min-width: 80px;
+                }
+                
+                .detail-value {
+                    color: #1f2937;
+                    font-weight: 400;
+                }
+                
+                .video-link {
+                    background: #009743;
+                    color: white;
+                    padding: 15px 25px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    display: inline-block;
+                    font-weight: 500;
+                    margin: 20px 0;
+                    transition: transform 0.2s;
+                }
+                
+                .video-link:hover {
+                    transform: translateY(-1px);
+                }
+                
+                .important-note {
+                    background: #fef3c7;
+                    border: 1px solid #f59e0b;
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin: 20px 0;
+                }
+                
+                .important-note h4 {
+                    color: #d97706;
+                    font-weight: 600;
+                    margin-bottom: 5px;
+                }
+                
+                .footer {
+                    background-color: #f9fafb;
+                    padding: 30px;
+                    text-align: center;
+                    border-top: 1px solid #e5e7eb;
+                }
+                
+                .footer p {
+                    font-size: 14px;
+                    color: #6b7280;
+                    margin-bottom: 8px;
+                }
+                
+                .contact-info {
+                    margin-top: 20px;
+                    font-size: 13px;
+                    color: #9ca3af;
+                }
+                
+                @media (max-width: 600px) {
+                    .container {
+                        margin: 0;
+                        border-radius: 0;
+                    }
+                    
+                    .header, .content, .footer {
+                        padding: 25px 20px;
+                    }
+                    
+                    .header h1 {
+                        font-size: 24px;
+                    }
+                    
+                    .appointment-card {
+                        padding: 20px;
+                    }
+                }
+            </style>
         </head>
         <body>
-          <div class="container">
-            <div class="header">
-              <h1>✅ Rezervasyonunuz Alındı</h1>
+            <div class="container">
+                <div class="header">
+                    <h1>Randevunuz Onaylandı!</h1>
+                    <p>Randevu detaylarınız aşağıda yer almaktadır</p>
+                </div>
+                
+                <div class="content">
+                    <div class="greeting">
+                        Merhaba <strong>${customerName}</strong>,
+                    </div>
+                    
+                    <p>Uzmanlio üzerinden oluşturduğunuz randevu başarıyla kaydedildi. Randevu detaylarınız aşağıdaki gibidir:</p>
+                    
+                    <div class="appointment-card">
+                        <div class="appointment-title">Randevu Detayları</div>
+                        <div class="appointment-details">
+                            <div class="detail-item">
+                                <div class="detail-label">Uzman:</div>
+                                <div class="detail-value">${expertName}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Hizmet:</div>
+                                <div class="detail-value">${serviceName}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Tarih:</div>
+                                <div class="detail-value">${date || 'Uzman tarafından belirlenecek'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Saat:</div>
+                                <div class="detail-value">${time || 'Uzman tarafından belirlenecek'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Tutar:</div>
+                                <div class="detail-value">${price} TL</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="important-note">
+                        <h4>⚠️ Önemli Hatırlatma</h4>
+                        <p>Randevu saatinden 15 dakika önce hazır olmanızı rica ederiz. Geç kalma durumunda lütfen uzmanınızla iletişime geçin.</p>
+                    </div>
+                    
+                    <p style="margin-top: 25px;">Uzmanınız en kısa sürede sizinle iletişime geçecektir.</p>
+                    <p><strong>Teşekkür ederiz!</strong></p>
+                </div>
+                
+                <div class="footer">
+                    <p>Bu e-posta, Uzmanlio randevu sistemi tarafından otomatik olarak gönderilmiştir.</p>
+                    <div class="contact-info">
+                        <p>Uzmanlio</p>
+                        <p>www.uzmanlio.com | destek@uzmanlio.com</p>
+                    </div>
+                </div>
             </div>
-            <div class="content">
-              <p>Merhaba ${customerName},</p>
-              <p>Bireysel danışmanlık rezervasyonunuz başarıyla oluşturuldu.</p>
-              
-              <div class="details">
-                <p><span class="label">Hizmet:</span> ${serviceName}</p>
-                <p><span class="label">Uzman:</span> ${expertName}</p>
-                <p><span class="label">Tarih:</span> ${date || 'Uzman tarafından belirlenecek'}</p>
-                <p><span class="label">Saat:</span> ${time || 'Uzman tarafından belirlenecek'}</p>
-                <p><span class="label">Tutar:</span> ${price} TL</p>
-              </div>
-              
-              <p>Uzmanınız en kısa sürede sizinle iletişime geçecektir.</p>
-              <p>Teşekkür ederiz!</p>
-            </div>
-            <div class="footer">
-              <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
-            </div>
-          </div>
         </body>
         </html>
       `
