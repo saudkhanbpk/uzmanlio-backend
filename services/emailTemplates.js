@@ -732,3 +732,202 @@ export function getPasswordResetSuccessTemplate(data) {
       `
   };
 }
+
+/**
+ * Sub-User Invitation Email Template
+ * @param {object} data - { inviterName, inviterEmail, teamName, invitationToken, acceptUrl, declineUrl }
+ */
+export function getSubUserInvitationTemplate(data) {
+  return {
+    subject: `${data.inviterName} sizi ${data.teamName} ekibine davet ediyor`,
+    html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #009743 0%, #0e6836 100%); color: white; padding: 40px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px 20px; background-color: #f9f9f9; }
+            .invitation-box { background-color: white; padding: 25px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            .button { display: inline-block; padding: 12px 30px; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; font-weight: bold; }
+            .button-accept { background-color: #009743; }
+            .button-decline { background-color: #dc3545; }
+            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; background-color: #f0f0f0; border-radius: 0 0 10px 10px; }
+            .info-row { padding: 10px 0; border-bottom: 1px solid #eee; }
+            .info-row:last-child { border-bottom: none; }
+            .icon { font-size: 20px; margin-right: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0; font-size: 28px;">🎉 Ekip Daveti</h1>
+              <p style="margin: 10px 0 0 0; font-size: 16px;">Uzmanlio Platformu</p>
+            </div>
+            <div class="content">
+              <div class="invitation-box">
+                <h2 style="color: #009743; margin-top: 0;">Merhaba!</h2>
+                
+                <p style="font-size: 16px; line-height: 1.8;">
+                  <strong>${data.inviterName}</strong> (<a href="mailto:${data.inviterEmail}">${data.inviterEmail}</a>) 
+                  sizi <strong>${data.teamName}</strong> ekibine alt kullanıcı olarak davet etti.
+                </p>
+
+                <div style="background-color: #f8f9fa; padding: 20px; border-left: 4px solid #009743; margin: 20px 0;">
+                  <h3 style="margin-top: 0; color: #009743;">Alt Kullanıcı Olarak Neler Yapabilirsiniz?</h3>
+                  
+                  <div class="info-row">
+                    <span class="icon">📅</span>
+                    <strong>Randevu Yönetimi:</strong> Ekip randevularını görüntüleyin ve yönetin
+                  </div>
+                  
+                  <div class="info-row">
+                    <span class="icon">👥</span>
+                    <strong>Müşteri Erişimi:</strong> Ekip müşterilerine erişim
+                  </div>
+                  
+                  <div class="info-row">
+                    <span class="icon">📊</span>
+                    <strong>Raporlar:</strong> Ekip performans raporlarını görüntüleyin
+                  </div>
+                  
+                  <div class="info-row">
+                    <span class="icon">💼</span>
+                    <strong>Hizmetler:</strong> Ekip hizmetlerini yönetin
+                  </div>
+                </div>
+
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                  <p style="margin: 0; color: #856404;">
+                    <strong>⚠️ Önemli:</strong> Bu davet linki 7 gün boyunca geçerlidir. 
+                    Daveti kabul etmek veya reddetmek için aşağıdaki butonları kullanın.
+                  </p>
+                </div>
+
+                <div style="text-align: center; margin: 30px 0;">
+                  <a style="text-decoration: none; color: #fff;" href="${data.acceptUrl}" class="button button-accept">
+                    ✓ Daveti Kabul Et
+                  </a>
+                  <a style="text-decoration: none; color: #fff;" href="${data.declineUrl}" class="button button-decline">
+                    ✗ Daveti Reddet
+                  </a>
+                </div>
+
+                <div style="background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 15px; margin: 20px 0;">
+                  <p style="margin: 0; font-size: 14px; color: #004085;">
+                    <strong>ℹ️ Bilgi:</strong> Daveti kabul ettikten sonra, 
+                    <strong>${data.teamName}</strong> ekibinin bir parçası olacak ve ekip yöneticisinin 
+                    belirlediği yetkilere sahip olacaksınız.
+                  </p>
+                </div>
+
+                <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                  Eğer bu daveti beklemiyorsanız, bu e-postayı görmezden gelebilirsiniz.
+                </p>
+              </div>
+            </div>
+            <div class="footer">
+              <p style="margin: 5px 0;"><strong>Uzmanlio</strong></p>
+              <p style="margin: 5px 0;">Destek: support@uzmanlio.com</p>
+              <p style="margin: 15px 0 5px 0;">Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+  };
+}
+
+/**
+ * Email Verification Template
+ * @param {object} data - { name, email, verificationUrl }
+ */
+export function getEmailVerificationTemplate(data) {
+  const { name, email, verificationUrl } = data;
+
+  return {
+    subject: "E-posta Adresinizi Doğrulayın - Uzmanlio",
+    html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #009743 0%, #0e6836 100%); color: white; padding: 40px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { padding: 30px 20px; background-color: #f9f9f9; }
+            .verification-box { background-color: white; padding: 30px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+            .button { display: inline-block; padding: 15px 40px; background-color: #009743; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; font-size: 16px; }
+            .button:hover { background-color: #007a36; }
+            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; background-color: #f0f0f0; border-radius: 0 0 10px 10px; }
+            .warning-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px; }
+            .icon { font-size: 48px; margin-bottom: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0; font-size: 28px;">✉️ E-posta Doğrulama</h1>
+              <p style="margin: 10px 0 0 0; font-size: 16px;">Uzmanlio Platformu</p>
+            </div>
+            <div class="content">
+              <div class="verification-box">
+                <div class="icon">🔐</div>
+                <h2 style="color: #009743; margin-top: 0;">Hoş Geldiniz ${name}!</h2>
+                
+                <p style="font-size: 16px; line-height: 1.8; margin: 20px 0;">
+                  Uzmanlio'ya kaydolduğunuz için teşekkür ederiz. Hesabınızı aktifleştirmek için 
+                  e-posta adresinizi doğrulamanız gerekmektedir.
+                </p>
+
+                <p style="font-size: 14px; color: #666; margin: 15px 0;">
+                  Doğrulama işlemi için aşağıdaki butona tıklayın:
+                </p>
+
+                <div style="margin: 30px 0;">
+                  <a href="${verificationUrl}" class="button" style="color: white;">
+                    E-postamı Doğrula
+                  </a>
+                </div>
+
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 25px;">
+                  <p style="margin: 0; font-size: 13px; color: #666;">
+                    Buton çalışmıyorsa, aşağıdaki linki tarayıcınıza kopyalayın:
+                  </p>
+                  <p style="margin: 10px 0 0 0; font-size: 12px; word-break: break-all; color: #009743;">
+                    ${verificationUrl}
+                  </p>
+                </div>
+              </div>
+
+              <div class="warning-box">
+                <p style="margin: 0; color: #856404;">
+                  <strong>⚠️ Önemli:</strong> Bu doğrulama linki 24 saat boyunca geçerlidir. 
+                  Süre dolmadan önce e-postanızı doğrulamanız gerekmektedir.
+                </p>
+              </div>
+
+              <div style="background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 15px; margin: 20px 0; border-radius: 5px;">
+                <p style="margin: 0; font-size: 14px; color: #004085;">
+                  <strong>ℹ️ Bilgi:</strong> E-posta adresinizi doğruladıktan sonra, 
+                  platformun tüm özelliklerini kullanabileceksiniz.
+                </p>
+              </div>
+
+              <p style="margin-top: 25px; font-size: 14px; color: #666;">
+                Eğer bu hesabı siz oluşturmadıysanız, bu e-postayı görmezden gelebilirsiniz.
+              </p>
+            </div>
+            <div class="footer">
+              <p style="margin: 5px 0;"><strong>Uzmanlio</strong></p>
+              <p style="margin: 5px 0;">Uzmanlık Alanınızda Profesyonel Hizmet Platformu</p>
+              <p style="margin: 5px 0;">Destek: support@uzmanlio.com</p>
+              <p style="margin: 15px 0 5px 0;">Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+  };
+}

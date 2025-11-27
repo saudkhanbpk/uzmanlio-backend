@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import User from '../models/expertInformation.js';
+import Institution from '../models/institution.js';
 
 dotenv.config();
 
@@ -82,6 +83,20 @@ async function sendEmailNow(userId, emailId) {
         return emailObj;
     }
 
+    // Prepare email body with placeholders replaced
+    let body = emailObj.body;
+    const expertName = `${user.information.name} ${user.information.surname}`;
+    body = body.replace(/\{\{expert_name\}\}/g, expertName);
+
+    let companyName = '';
+    if (user.subscription.plantype === 'institutional' && user.subscription.institutionId) {
+        const institution = await Institution.findById(user.subscription.institutionId);
+        if (institution) {
+            companyName = institution.name;
+        }
+    }
+    body = body.replace(/\{\{company_name\}\}/g, companyName);
+
     const recipients = emailObj.recipientType === 'all' ? (user.customers?.map(c => c.email) || []) : emailObj.recipients;
     let sentCount = 0;
     let failedCount = 0;
@@ -92,7 +107,7 @@ async function sendEmailNow(userId, emailId) {
             from: process.env.EMAIL_USER,
             to: r,
             subject: emailObj.subject,
-            text: emailObj.body
+            text: body
         };
         try {
             await transporter.sendMail(mailOptions);

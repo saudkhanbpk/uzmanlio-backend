@@ -19,7 +19,7 @@ import calendarWebhookRoutes from "./routes/calendarWebhookRoutes.js";
 import backgroundJobService from "./services/backgroundJobs.js";
 import subscriptionRoutes from "./routes/expertRoutes/subscriptionRoutes.js";
 import institutionRoutes from "./routes/expertRoutes/institutionRoutes.js";
-import authRoutes from "./routes/expertRoutes/authRoutes.js"
+import authRoutes from "./routes/expertRoutes/authRoutes.js";
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
