@@ -237,7 +237,7 @@ const EventSchema = new Schema({
   recurringType: { type: String, enum: ["haftalık", "aylık"] },
   selectedClients: [
     {
-      id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", required: true },
+      id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
       name: { type: String, required: true },
       email: { type: String, required: true },
       packages: [{ type: String }],
@@ -375,7 +375,7 @@ const PackageSchema = new Schema({
   isPurchased: { type: Boolean, default: false },
   isOfflineEvent: { type: Boolean, default: false },
   selectedClients: [{
-    id: { type: Number },
+    id: { type: String },
     name: { type: String },
     email: { type: String }
   }],

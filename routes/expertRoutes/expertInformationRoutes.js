@@ -1235,20 +1235,78 @@ router.post("/:userId/events", async (req, res) => {
     // Generate unique ID for the event
     const eventId = uuidv4();
 
-    // Convert selectedClients to the correct format
-    const formattedClients = (eventData.selectedClients || []).map(c => ({
-      id: c._id,              // use Mongo objectId
-      name: c.name,
-      email: c.email,
-      packages: c.packages || []
-    }));
+    // Process selectedClients: Find/Create Customer and Link to Expert
+    const resolvedClients = [];
+    const inputClients = eventData.selectedClients || [];
 
+    for (const client of inputClients) {
+      let customerId = client._id || client.id;
+      let customerName = client.name;
+      let customerEmail = client.email;
+
+      // Check if ID is a valid ObjectId. If not (e.g. timestamp), treat as new/unknown.
+      const isValidId = mongoose.Types.ObjectId.isValid(customerId) && String(customerId).length === 24;
+
+      if (!isValidId) {
+        // Try to find by email
+        let existingCustomer = await Customer.findOne({ email: customerEmail });
+
+        if (!existingCustomer) {
+          // Create new customer
+          const nameParts = customerName.trim().split(' ');
+          const firstName = nameParts[0];
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          existingCustomer = await Customer.create({
+            name: firstName,
+            surname: lastName,
+            email: customerEmail,
+            phone: client.phone || "",
+            status: "active",
+            source: "website",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          console.log(`Created new customer: ${customerEmail} (${existingCustomer._id})`);
+        } else {
+          console.log(`Found existing customer by email: ${customerEmail} (${existingCustomer._id})`);
+        }
+        customerId = existingCustomer._id;
+      }
+
+      // Ensure customer is linked to Expert
+      if (!user.customers) {
+        user.customers = [];
+      }
+
+      const isLinked = user.customers.some(c =>
+        c.customerId && c.customerId.toString() === customerId.toString()
+      );
+
+      if (!isLinked) {
+        user.customers.push({
+          customerId: customerId,
+          isArchived: false,
+          addedAt: new Date()
+        });
+        console.log(`Linked customer ${customerId} to expert`);
+      }
+
+      resolvedClients.push({
+        id: customerId,
+        name: customerName,
+        email: customerEmail,
+        packages: client.packages || []
+      });
+    }
+
+    const formattedClients = resolvedClients;
 
     const newEvent = {
       id: eventId,
       title: eventData.title || eventData.serviceName,
       description: eventData.description,
-      serviceId: eventData.serviceId,
+      serviceId: eventData.service,
       serviceName: eventData.serviceName,
       serviceType: eventData.serviceType,
       date: eventData.date,
@@ -1277,7 +1335,22 @@ router.post("/:userId/events", async (req, res) => {
       user.events = [];
     }
     user.events.push(newEvent);
+    // user.packages.find(package => {
+    //   if (package.id === eventData.packageId) {
+    //     package.selectedClients.push({ id: customerId, name: customerName, email: customerEmail });
+    //   }
+    // })
+    user.packages.find(pkg => {
+      if (pkg.id === eventData.service) {
+        pkg.selectedClients.push({
+          id: customerId,
+          name: customerName,
+          email: customerEmail
+        });
+      }
+    });
     await user.save();
+
 
     // Extract emails from selectedClients
     const clientEmails = (formattedClients || []).map(c => c.email);
@@ -1318,7 +1391,7 @@ router.post("/:userId/events", async (req, res) => {
 
       else {
         //sending email to the customers one by one
-        formattedClients.forEach(client => {
+        formattedClients.map(client => {
           const groupusertemplate = getClientGroupSessionTemplate({
             participantName: client.name,
             expertName: user.information.name,
@@ -1353,7 +1426,7 @@ router.post("/:userId/events", async (req, res) => {
       //Else Send the package emails
     } else {
       //sending email to the customer
-      const packageTemplate = formattedClients.forEach(client => {
+      const packageTemplate = formattedClients.map(client => {
         const packagetemplate = getClientPackageSessionTemplate({
           participantName: client.name,
           expertName: user.information.name,
