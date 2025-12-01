@@ -1380,7 +1380,14 @@ router.post("/:userId/events", async (req, res) => {
           sessionTime: eventData.time,
           sessionDuration: eventData.duration,
         })
-        sendBulkEmail(clientEmails, "Danışan Randevu Oluşturdu", "Danışan Randevu Oluşturdu")
+        const htmlTemplate = `
+        <p>Merhaba ${formattedClients[0].name},</p>
+        <p>${user.information.name} senin için ${eventData.serviceName} randevusu oluşturdu.</p>
+        <p>Tarih: ${eventData.date} ${eventData.time}</p>
+        <p>Katılım linki: <a href="${eventData.platform || 'Link will be shared soon'}">Randevuya Katıl</a></p>
+      `;
+        await sendBulkEmail(clientEmails, "Danışan Randevu Oluşturdu", "Randevu oluşturuldu", htmlTemplate);
+
 
         //sending email to the Expert
         const template = getExpertEventCreatedTemplate({
@@ -1640,7 +1647,7 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
         for (const recipient of recipients) {
           const clientName = recipient.name;
           const customerEmailBody = `Merhaba ${clientName}, ${expertName} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
-          
+
           // Enhanced HTML template for customer
           const customerEmailHTML = `
             <!DOCTYPE html>
@@ -1706,7 +1713,7 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
         // Send email to expert for each customer
         for (const recipient of recipients) {
           const expertEmailBody = `${recipient.name} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
-          
+
           // Enhanced HTML template for expert
           const expertEmailHTML = `
             <!DOCTYPE html>
