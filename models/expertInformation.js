@@ -323,7 +323,7 @@ const ServiceSchema = new Schema({
   maxAttendees: { type: Number },
   isOfflineEvent: { type: Boolean, default: false },
   selectedClients: [{
-    id: { type: Number },
+    id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
     name: { type: String },
     email: { type: String }
   }],
@@ -375,7 +375,7 @@ const PackageSchema = new Schema({
   isPurchased: { type: Boolean, default: false },
   isOfflineEvent: { type: Boolean, default: false },
   selectedClients: [{
-    id: { type: String },
+    id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
     name: { type: String },
     email: { type: String }
   }],
