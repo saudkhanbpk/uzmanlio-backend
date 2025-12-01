@@ -388,7 +388,7 @@ router.post(
                     description: selectedOffering.description,
                     price: subtotal,
                     duration: selectedOffering.duration,
-                    sessions: selectedOffering.sessions || 1,
+                    sessions: selectedOffering.sessionsIncluded || 1,
                     meetingType: selectedOffering.meetingType,
                   }
                   : undefined,
@@ -400,7 +400,7 @@ router.post(
                     price: subtotal,
                     meetingType: selectedOffering.meetingType,
                     duration: selectedOffering.duration,
-                    sessions: selectedOffering.sessions || 1,
+                    sessions: selectedOffering.sessionsIncluded,
                   }
                   : undefined,
             },
