@@ -171,12 +171,18 @@ const safeDate = (value) => {
 };
 
 // ✅ Booking form route
+
 router.post(
   "/:finalCustomerId/form",
   bookingUpload.array("files"),
   handleMulterError,
   async (req, res) => {
+    // Use a session for transaction support (requires MongoDB replica set)
+    const session = await mongoose.startSession();
+
     try {
+      session.startTransaction();
+
       console.log("\n========== 🧾 NEW BOOKING FORM ==========");
       console.log("Timestamp:", new Date().toISOString());
 
@@ -188,7 +194,6 @@ router.post(
       const bookingData = JSON.parse(req.body.bookingData);
       console.log("📦 Parsed bookingData:", JSON.stringify(bookingData, null, 2));
       console.log("📎 Uploaded files:", req.files?.length || 0);
-
 
       const {
         clientInfo,
@@ -207,11 +212,11 @@ router.post(
         orderNotes,
         termsAccepted,
       } = bookingData;
-      console.log("Selected Offering:", selectedOffering)
-
+      console.log("Selected Offering:", selectedOffering);
 
       // --- Step 2: Validate required fields ---
       if (!clientInfo?.email || !selectedOffering?.id) {
+        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           error: "Missing required booking fields (clientInfo or selectedOffering)",
@@ -220,6 +225,7 @@ router.post(
 
       // Individual services must have date/time; others get assigned later by expert
       if (["bireysel", "hizmet"].includes(serviceType) && (!date || !time)) {
+        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           error: "Date and time are required for individual services",
@@ -233,18 +239,24 @@ router.post(
         ["grup", "paket"].includes(serviceType) ? null : time || null;
 
       // --- Step 4: Map frontend serviceType → backend eventType ---
-
       console.log("🔄 Mapping serviceType/packageType to eventType...", serviceType);
-      // ✅ Determine event type based on whichever field is active
-      // const mappedEventType = packageType
-      //   ? "package"
-      //   : serviceType
-      //     ? "service"
-      //     : "service"; // fallback (defaults to 'service')
-      const mappedEventType = selectedPackage.packageId !== "" ? "package" : "service";
+      const mappedEventType = selectedPackage?.packageId !== "" ? "package" : "service";
 
+      // --- Step 5: Find expert first (fail fast if not found) ---
+      const Expert = await User.findById(providerId)
+        .session(session)
+        .lean(false); // Keep as Mongoose document for manipulation
 
-      // --- Step 5: Find or create customer (upsert by email) ---
+      if (!Expert) {
+        await session.abortTransaction();
+        return res.status(404).json({
+          success: false,
+          error: "Expert not found",
+        });
+      }
+
+      // --- Step 6: Find or create customer (upsert by email) ---
+      // Add timeout and use session
       const customer = await Customer.findOneAndUpdate(
         { email: clientInfo.email },
         {
@@ -264,71 +276,89 @@ router.post(
             },
           },
         },
-        { new: true, upsert: true }
+        {
+          new: true,
+          upsert: true,
+          session, // Use session for transaction
+          maxTimeMS: 5000 // 5 second timeout
+        }
       );
 
-      // --- Step 6: Create appointment record ---
-      const appointment = await CustomerAppointments.create({
-        serviceId: mappedEventType === "service" ? selectedOffering.id : undefined,
-        serviceName: mappedEventType === "service" ? selectedOffering.title : undefined,
-        packageId: mappedEventType === "package" ? selectedOffering.id : undefined,
-        packageName: mappedEventType === "package" ? selectedOffering.title : undefined,
-        date: normalizedDate,
-        time: normalizedTime,
-        duration: selectedOffering.duration || 60,
-        status: "scheduled",
-        price: total,
-        paymentStatus: "pending",
-        notes: orderNotes,
-        meetingType: selectedOffering.meetingType || "",
-        eventType: selectedOffering.eventType || "online",
-      });
+      // --- Step 7: Create appointment record (only for services) ---
+      let appointment = null;
 
-      //Create the Event in Expert 
-      const Expert = await User.findById(providerId);
-      const newEvent = {
-        id: appointment._id,
-        title: selectedOffering.title,
-        description: "",
-        serviceId: mappedEventType === "service" ? selectedOffering.id : undefined,
-        serviceName: mappedEventType === "service" ? selectedOffering.title : undefined,
-        packageId: mappedEventType === "package" ? selectedOffering.id : undefined,
-        packageName: mappedEventType === "package" ? selectedOffering.title : undefined,
-        serviceType: mappedEventType === "service" ? "service" : "package",
-        date: selectedOffering.date || null,
-        time: selectedOffering.time || null,
-        duration: selectedOffering.duration || 60,
-        eventType: selectedOffering.eventType || "online",
-        customers: customer._id,
-        meetingType: selectedOffering.meetingType || "",
-        price: total,
-        status: "pending",
-        paymentType: 'online',
-        isRecurring: false,
-        appointmentNotes: orderNotes,
-        files: req.files?.map((f) => ({
-          name: f.originalname,
-          type: f.mimetype,
-          size: f.size,
-          url: f.path,
-        })) || [],
-        selectedClients: [{ id: customer._id, name: customer.name, email: customer.email }],
-        Client: customer._id,
-        category: selectedOffering.category,
-        subCategory: selectedOffering.subCategory,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      if (mappedEventType === "service") {
+        appointment = await CustomerAppointments.create(
+          [{
+            serviceId: selectedOffering.id,
+            serviceName: selectedOffering.title,
+            date: normalizedDate,
+            time: normalizedTime,
+            duration: selectedOffering.duration || 60,
+            status: "scheduled",
+            price: total,
+            paymentStatus: "pending",
+            notes: orderNotes,
+            meetingType: selectedOffering.meetingType || "",
+            eventType: selectedOffering.eventType || "online",
+          }],
+          { session }
+        );
+        appointment = appointment[0]; // create() with session returns array
 
-      Expert.events.push(newEvent);
-      // const currentOffering = mappedEventType === "service" ? service : package;
+        // Update customer with appointment info
+        customer.appointments.push(appointment._id);
+        customer.totalAppointments = (customer.totalAppointments || 0) + 1;
+        customer.lastAppointment = safeDate(date);
+        customer.totalSpent = (customer.totalSpent || 0) + total;
+
+        // Push to expert appointments
+        Expert.appointments.push(appointment._id);
+      }
+
+      // --- Step 8: Create event in Expert (only for services) ---
+      if (mappedEventType === "service" && appointment) {
+        const newEvent = {
+          id: appointment._id,
+          title: selectedOffering.title,
+          description: "",
+          serviceId: selectedOffering.id,
+          serviceName: selectedOffering.title,
+          serviceType: "service",
+          date: selectedOffering.date || null,
+          time: selectedOffering.time || null,
+          duration: selectedOffering.duration || 60,
+          eventType: selectedOffering.eventType || "online",
+          customers: customer._id,
+          meetingType: selectedOffering.meetingType || "",
+          price: total,
+          status: "pending",
+          paymentType: 'online',
+          isRecurring: false,
+          appointmentNotes: orderNotes,
+          files: req.files?.map((f) => ({
+            name: f.originalname,
+            type: f.mimetype,
+            size: f.size,
+            url: f.path,
+          })) || [],
+          selectedClients: [{
+            id: customer._id,
+            name: customer.name,
+            email: customer.email
+          }],
+          Client: customer._id,
+          category: selectedOffering.category,
+          subCategory: selectedOffering.subCategory,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        Expert.events.push(newEvent);
+      }
+
+      // --- Step 9: Add client to service/package selectedClients ---
       let CurrentService;
-      //Add the Client To the ServiceOR package, To Trace the Number Of Sales
-      // if (mappedEventType === "service") {
-      //   CurrrentService = await Expert.services.findById(selectedOffering.id);
-      // } else {
-      //   CurrrentService = await Expert.packages.findById(selectedOffering.id);
-      // }
       if (mappedEventType === "service") {
         CurrentService = Expert.services.find(
           s => s.id === selectedOffering.id
@@ -338,169 +368,206 @@ router.post(
           p => p.id === selectedOffering.id
         );
       }
-      CurrentService.selectedClients.push({ id: customer._id, name: customer.name, email: customer.email });
-      // await CurrentService.save();
-      await Expert.save();
 
-
-
-
-
-      // --- Step 7: Create note if notes/files exist ---
-      let note = null;
-      if (orderNotes || (req.files && req.files.length > 0)) {
-        note = await CustomerNote.create({
-          content: orderNotes || "Booking submission with attachments.",
-          author: "customer",
-          authorName: `${customer.name} ${customer.surname}`,
-          files:
-            req.files?.map((f) => ({
-              name: f.originalname,
-              type: f.mimetype,
-              size: f.size,
-              url: f.path,
-            })) || [],
+      if (CurrentService) {
+        CurrentService.selectedClients.push({
+          id: customer._id,
+          name: customer.name,
+          email: customer.email
         });
       }
 
-      // --- Step 8: Update customer info ---
-      customer.appointments.push(appointment._id);
-      if (note) customer.notes.push(note._id);
-      customer.totalAppointments = (customer.totalAppointments || 0) + 1;
-      customer.lastAppointment = safeDate(date);
-      customer.totalSpent = (customer.totalSpent || 0) + total;
-      await customer.save();
+      // --- Step 10: Create note if notes/files exist ---
+      let note = null;
+      if (orderNotes || (req.files && req.files.length > 0)) {
+        const noteArray = await CustomerNote.create(
+          [{
+            content: orderNotes || "Booking submission with attachments.",
+            author: "customer",
+            authorName: `${customer.name} ${customer.surname}`,
+            files:
+              req.files?.map((f) => ({
+                name: f.originalname,
+                type: f.mimetype,
+                size: f.size,
+                url: f.path,
+              })) || [],
+          }],
+          { session }
+        );
+        note = noteArray[0];
+        customer.notes.push(note._id);
+      }
 
-
-
-      console.log("Selected Offerings:", selectedOffering)
-
-      // --- Step 9: Create order record ---
-      const order = await Order.create({
-        orderDetails: {
-          events: [
-            {
-              eventType: mappedEventType,
-              service:
-                mappedEventType === "service"
-                  ? {
-                    name: selectedOffering.title,
-                    description: selectedOffering.description,
-                    price: subtotal,
-                    duration: selectedOffering.duration,
-                    sessions: selectedOffering.sessionsIncluded || 1,
-                    meetingType: selectedOffering.meetingType,
-                  }
-                  : undefined,
-              package:
-                mappedEventType === "package"
-                  ? {
-                    name: selectedOffering.title,
-                    details: selectedOffering.details,
-                    price: subtotal,
-                    meetingType: selectedOffering.meetingType,
-                    duration: selectedOffering.duration,
-                    sessions: selectedOffering.sessionsIncluded,
-                  }
-                  : undefined,
-            },
-          ],
-          totalAmount: total,
-        },
-        paymentInfo: {
-          method: paymentInfo?.method || "card",
-          status: "pending",
-          transactionId: `TRX-${uuidv4()}`,
-          cardInfo: {
-            cardNumber: paymentInfo?.cardNumber || "****",
-            cardHolderName: paymentInfo?.cardHolderName || "Unknown",
-            cardExpiry: paymentInfo?.cardExpiry || "",
-            cardCvv: paymentInfo?.cardCvv || "",
+      // --- Step 11: Create order record ---
+      const orderArray = await Order.create(
+        [{
+          orderDetails: {
+            events: [
+              {
+                eventType: mappedEventType,
+                service:
+                  mappedEventType === "service"
+                    ? {
+                      name: selectedOffering.title,
+                      description: selectedOffering.description,
+                      price: subtotal,
+                      duration: selectedOffering.duration,
+                      sessions: selectedOffering.sessionsIncluded || 1,
+                      meetingType: selectedOffering.meetingType,
+                    }
+                    : undefined,
+                package:
+                  mappedEventType === "package"
+                    ? {
+                      name: selectedOffering.title,
+                      details: selectedOffering.details,
+                      price: subtotal,
+                      meetingType: selectedOffering.meetingType,
+                      duration: selectedOffering.duration,
+                      sessions: selectedOffering.sessionsIncluded,
+                    }
+                    : undefined,
+              },
+            ],
+            totalAmount: total,
           },
-        },
-        userInfo: {
-          userId: customer._id,
-          name: `${customer.name} ${customer.surname}`,
-          email: customer.email,
-          phone: customer.phone,
-        },
-        expertInfo: {
-          expertId: providerId,
-          name: providerName,
-          accountNo: "PENDING_FETCH",
-          specialization: "PENDING_FETCH",
-          email: "PENDING_FETCH",
-        },
-        status: "pending",
-      });
-
-      await Expert.orders.push(order._id);
-      await Expert.appointments.push(appointment._id);
-      await Expert.save();
-
-      console.log("✅ Booking successfully created:", order._id);
-
-
-      try {
-        // Determine email type based on mappedEventType and meetingType
-        let emailType;
-        const expert = await findUserById(providerId);
-
-        if (mappedEventType === "package") {
-          emailType = "paket";
-        } else if (mappedEventType === "service") {
-          // Check meetingType to differentiate between individual and group
-          if (selectedOffering.meetingType === "1-1" || selectedOffering.meetingType === "bireysel") {
-            emailType = "bireysel";
-          } else if (selectedOffering.meetingType === "grup") {
-            emailType = "grup";
-          } else {
-            // Fallback: if meetingType is not set, default to bireysel
-            emailType = "bireysel";
-          }
-        }
-
-        console.log("📧 Sending emails with type:", emailType);
-
-        await sendBookingEmails(
-          emailType,
-          {
+          paymentInfo: {
+            method: paymentInfo?.method || "card",
+            status: "pending",
+            transactionId: `TRX-${uuidv4()}`,
+            cardInfo: {
+              cardNumber: paymentInfo?.cardNumber || "****",
+              cardHolderName: paymentInfo?.cardHolderName || "Unknown",
+              cardExpiry: paymentInfo?.cardExpiry || "",
+              cardCvv: paymentInfo?.cardCvv || "",
+            },
+          },
+          userInfo: {
+            userId: customer._id,
             name: `${customer.name} ${customer.surname}`,
             email: customer.email,
             phone: customer.phone,
           },
-          {
+          expertInfo: {
+            expertId: providerId,
             name: providerName,
-            email: expert.information?.email,
+            accountNo: "PENDING_FETCH",
+            specialization: "PENDING_FETCH",
+            email: "PENDING_FETCH",
           },
-          {
-            serviceName: selectedOffering.title,
-            price: total,
-            date: normalizedDate,
-            time: normalizedTime,
+          status: "pending",
+        }],
+        { session }
+      );
+      const order = orderArray[0];
+
+      Expert.orders.push(order._id);
+
+      // --- Step 12: Save all changes within transaction ---
+      await Promise.all([
+        customer.save({ session }),
+        Expert.save({ session })
+      ]);
+
+      // Commit the transaction
+      await session.commitTransaction();
+
+      console.log("✅ Booking successfully created:", order._id);
+
+      // --- Step 13: Send emails (AFTER transaction commits) ---
+      // Don't block response on email sending
+      setImmediate(async () => {
+        try {
+          // Determine email type based on mappedEventType and meetingType
+          let emailType;
+
+          if (mappedEventType === "package") {
+            emailType = "paket";
+          } else if (mappedEventType === "service") {
+            // Check meetingType to differentiate between individual and group
+            if (selectedOffering.meetingType === "1-1" || selectedOffering.meetingType === "bireysel") {
+              emailType = "bireysel";
+            } else if (selectedOffering.meetingType === "grup") {
+              emailType = "grup";
+            } else {
+              // Fallback: if meetingType is not set, default to bireysel
+              emailType = "bireysel";
+            }
           }
-        );
 
-        console.log("✅ Email notifications sent successfully");
-      } catch (emailError) {
-        console.error("⚠️ Failed to send email notifications:", emailError.message);
-        // Don't fail the booking if email fails
-      }
+          console.log("📧 Sending emails with type:", emailType);
 
-      // --- Step 10: Send response ---
+          await sendBookingEmails(
+            emailType,
+            {
+              name: `${customer.name} ${customer.surname}`,
+              email: customer.email,
+              phone: customer.phone,
+            },
+            {
+              name: providerName,
+              email: Expert.information?.email,
+            },
+            {
+              serviceName: selectedOffering.title,
+              price: total,
+              date: normalizedDate,
+              time: normalizedTime,
+            }
+          );
+
+          console.log("✅ Email notifications sent successfully");
+        } catch (emailError) {
+          console.error("⚠️ Failed to send email notifications:", emailError.message);
+          // Consider adding to a job queue for retry
+        }
+      });
+
+      // --- Step 14: Send response ---
       return res.status(201).json({
         success: true,
         message: "Booking created successfully",
-        data: { customer, appointment, order, note },
+        data: {
+          customer: {
+            _id: customer._id,
+            name: customer.name,
+            surname: customer.surname,
+            email: customer.email
+          },
+          appointment: appointment || null,
+          order: {
+            _id: order._id,
+            status: order.status,
+            totalAmount: order.orderDetails.totalAmount
+          },
+          note: note ? { _id: note._id } : null
+        },
       });
 
     } catch (error) {
+      // Abort transaction on any error
+      await session.abortTransaction();
+
       console.error("❌ Error during booking submission:", error);
+
+      // Handle specific MongoDB errors
+      if (error.name === 'MongooseError' && error.message.includes('buffering timed out')) {
+        return res.status(503).json({
+          success: false,
+          error: "Database connection timeout",
+          message: "The server is experiencing high load. Please try again in a moment.",
+        });
+      }
+
       return res.status(500).json({
         success: false,
         error: "Failed to process booking",
         message: error.message,
       });
+    } finally {
+      // Always end the session
+      session.endSession();
     }
   }
 );
