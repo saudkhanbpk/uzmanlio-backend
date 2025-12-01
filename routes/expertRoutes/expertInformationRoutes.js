@@ -1567,11 +1567,64 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
         for (const recipient of recipients) {
           const clientName = recipient.name;
           const customerEmailBody = `Merhaba ${clientName}, ${expertName} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+          
+          // Enhanced HTML template for customer
+          const customerEmailHTML = `
+            <!DOCTYPE html>
+            <html lang="tr">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
+                    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+                    .header { background: #CDFA89; padding: 40px 30px; text-align: center; color: #1f2937; }
+                    .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+                    .content { padding: 40px 30px; }
+                    .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #009743; }
+                    .detail-item { margin: 12px 0; font-size: 15px; }
+                    .detail-label { font-weight: 500; color: #374151; }
+                    .detail-value { color: #1f2937; }
+                    .join-link { background: #009743; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
+                    .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>✅ Randevu Onaylandı</h1>
+                        <p>Randevu talebiniz onaylandı</p>
+                    </div>
+                    <div class="content">
+                        <p>Merhaba <strong>${clientName}</strong>,</p>
+                        <p><strong>${expertName}</strong> ile <strong>${serviceName}</strong> randevu talebiniz onaylandı.</p>
+                        <div class="appointment-card">
+                            <div class="detail-item">
+                                <span class="detail-label">Tarih:</span>
+                                <span class="detail-value">${date}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Saat:</span>
+                                <span class="detail-value">${time}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Katılım Linki:</span>
+                                <span class="detail-value">${joinLink}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+          `;
 
           await sendEmail(recipient.email, {
             subject: 'Randevu Onaylandı',
             body: customerEmailBody,
-            html: `<p>${customerEmailBody}</p>`
+            html: customerEmailHTML
           });
 
           console.log(`✅ Approval email sent to customer: ${recipient.email}`);
@@ -1580,11 +1633,68 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
         // Send email to expert for each customer
         for (const recipient of recipients) {
           const expertEmailBody = `${recipient.name} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+          
+          // Enhanced HTML template for expert
+          const expertEmailHTML = `
+            <!DOCTYPE html>
+            <html lang="tr">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
+                    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+                    .header { background: #4CAF50; padding: 40px 30px; text-align: center; color: white; }
+                    .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+                    .content { padding: 40px 30px; }
+                    .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #4CAF50; }
+                    .detail-item { margin: 12px 0; font-size: 15px; }
+                    .detail-label { font-weight: 500; color: #374151; }
+                    .detail-value { color: #1f2937; }
+                    .join-link { background: #4CAF50; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
+                    .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>✅ Randevu Onaylandı</h1>
+                        <p>Randevu talebi onaylandı</p>
+                    </div>
+                    <div class="content">
+                        <p>Merhaba <strong>${expertName}</strong>,</p>
+                        <p><strong>${recipient.name}</strong> ile <strong>${serviceName}</strong> randevu talebiniz onaylandı.</p>
+                        <div class="appointment-card">
+                            <div class="detail-item">
+                                <span class="detail-label">Danışan:</span>
+                                <span class="detail-value">${recipient.name}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Tarih:</span>
+                                <span class="detail-value">${date}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Saat:</span>
+                                <span class="detail-value">${time}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Katılım Linki:</span>
+                                <span class="detail-value">${joinLink}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+          `;
 
           await sendEmail(user.information.email, {
             subject: 'Randevu Onaylandı',
             body: expertEmailBody,
-            html: `<p>${expertEmailBody}</p>`
+            html: expertEmailHTML
           });
         }
 
