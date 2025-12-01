@@ -237,7 +237,11 @@ const EventSchema = new Schema({
   recurringType: { type: String, enum: ["haftalık", "aylık"] },
   selectedClients: [
     {
-      id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer", required: true },
+      // `id` was previously required, but this caused validation failures for
+      // older events that don't have `selectedClients.id` populated.
+      // Make this optional (like in ServiceSchema/PackageSchema) to ensure
+      // backward compatibility while still storing it when available.
+      id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
       name: { type: String, required: true },
       email: { type: String, required: true },
       packages: [{ type: String }],
@@ -323,7 +327,7 @@ const ServiceSchema = new Schema({
   maxAttendees: { type: Number },
   isOfflineEvent: { type: Boolean, default: false },
   selectedClients: [{
-    id: { type: Number },
+    id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
     name: { type: String },
     email: { type: String }
   }],
@@ -375,7 +379,7 @@ const PackageSchema = new Schema({
   isPurchased: { type: Boolean, default: false },
   isOfflineEvent: { type: Boolean, default: false },
   selectedClients: [{
-    id: { type: Number },
+    id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
     name: { type: String },
     email: { type: String }
   }],
