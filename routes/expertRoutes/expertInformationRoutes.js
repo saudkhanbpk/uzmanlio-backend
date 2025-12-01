@@ -1194,7 +1194,16 @@ router.put("/:userId/profile", async (req, res) => {
 // Get all events for a user
 router.get("/:userId/events", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
+    // const user = await findUserById(req.params.userId);
+    const user = await User.findById(req.params.userId)
+      .populate({
+        path: "events",
+        populate: {
+          path: "customers",
+          model: "Customer"
+        }
+      });
+
     res.json({ events: user.events });
 
     // const events = user.events || [];
@@ -1519,37 +1528,99 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
       console.log("No active calendar providers found for user", req.params.userId);
     }
 
-    // Send Email to the customers
-    // Get the event's customer IDs
-    const customerIds = user.events[eventIndex].customers || [];
+    // Send Email to the customers and expert when booking is approved
+    const event = user.events[eventIndex];
+    const customerIds = event.customers || [];
+    const selectedClients = event.selectedClients || [];
 
-    if (customerIds.length > 0) {
+    // Send emails when status is approved
+    if (status === 'approved') {
       try {
-        // Fetch customer documents to get their emails
-        const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
-        const customerEmails = customers.map(c => c.email).filter(Boolean);
+        // Prepare expert information
+        const expertName = `${user.information.name} ${user.information.surname}`;
 
-        console.log("Sending emails to customers:", customerEmails);
+        // Prepare event details
+        const serviceName = event.serviceName || event.title;
+        const date = event.date;
+        const time = event.time;
+        const joinLink = event.platform || 'Link will be shared soon';
 
-        const meetingType = user.events[eventIndex].meetingType;
-        console.log("Meeting Type is :", meetingType)
+        // Get customer information from selectedClients
+        let recipients = [];
+
+        if (selectedClients && selectedClients.length > 0) {
+          recipients = selectedClients.map(client => ({
+            name: client.name,
+            email: client.email
+          }));
+        } else if (customerIds.length > 0) {
+          const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
+          recipients = customers.map(c => ({
+            name: c.name,
+            email: c.email
+          }));
+        }
+
+        console.log("Sending approval emails to:", recipients.length, "recipients");
+
+        // Send email to each customer
+        for (const recipient of recipients) {
+          const clientName = recipient.name;
+          const customerEmailBody = `Merhaba ${clientName}, ${expertName} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+
+          await sendEmail(recipient.email, {
+            subject: 'Randevu Onaylandı',
+            body: customerEmailBody,
+            html: `<p>${customerEmailBody}</p>`
+          });
+
+          console.log(`✅ Approval email sent to customer: ${recipient.email}`);
+        }
+
+        // Send email to expert for each customer
+        for (const recipient of recipients) {
+          const expertEmailBody = `${recipient.name} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+
+          await sendEmail(user.information.email, {
+            subject: 'Randevu Onaylandı',
+            body: expertEmailBody,
+            html: `<p>${expertEmailBody}</p>`
+          });
+        }
+
+        console.log(`✅ Approval email sent to expert: ${user.information.email}`);
+
+      } catch (emailError) {
+        console.error("Error sending approval emails:", emailError);
+        // Don't fail the request if email fails
+      }
+    }
+
+    // Send other status emails
+    else if (customerIds.length > 0 || (selectedClients && selectedClients.length > 0)) {
+      try {
+        let customerEmails = [];
+
+        if (selectedClients && selectedClients.length > 0) {
+          customerEmails = selectedClients.map(c => c.email).filter(Boolean);
+        } else {
+          const customers = await Customer.find({ _id: { $in: customerIds } }).select('email');
+          customerEmails = customers.map(c => c.email).filter(Boolean);
+        }
+
+        const meetingType = event.meetingType;
 
         if (customerEmails.length > 0) {
-          // Use proper OR condition with includes()
-          if (meetingType === '1-1' && ['approved', 'completed', 'pending'].includes(status)) {
-            console.log("meeting type is", meetingType)
+          if (meetingType === '1-1' && ['completed', 'pending'].includes(status)) {
             await sendBulkEmail(customerEmails, "Event Status Updated", "Your event status has been updated to " + status);
-          } else if (meetingType === 'grup' && ['approved', 'completed', 'pending'].includes(status)) {
-            console.log("meeting type is", meetingType)
+          } else if (meetingType === 'grup' && ['completed', 'pending'].includes(status)) {
             await sendBulkEmail(customerEmails, "Event Status Updated", "Your group event status has been updated to " + status);
           } else if (status === "cancelled") {
-            console.log("meeting type is", meetingType)
             await sendBulkEmail(customerEmails, "Event Canceled", "Your event has been canceled");
           }
         }
       } catch (emailError) {
         console.error("Error sending customer emails:", emailError);
-        // Don't fail the request if email fails
       }
     }
 
