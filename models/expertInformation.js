@@ -237,10 +237,6 @@ const EventSchema = new Schema({
   recurringType: { type: String, enum: ["haftalık", "aylık"] },
   selectedClients: [
     {
-      // `id` was previously required, but this caused validation failures for
-      // older events that don't have `selectedClients.id` populated.
-      // Make this optional (like in ServiceSchema/PackageSchema) to ensure
-      // backward compatibility while still storing it when available.
       id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
       name: { type: String, required: true },
       email: { type: String, required: true },

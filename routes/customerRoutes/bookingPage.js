@@ -312,6 +312,7 @@ router.post(
           size: f.size,
           url: f.path,
         })) || [],
+        selectedClients: [{ id: customer._id, name: customer.name, email: customer.email }],
         Client: customer._id,
         category: selectedOffering.category,
         subCategory: selectedOffering.subCategory,
@@ -320,7 +321,26 @@ router.post(
       };
 
       Expert.events.push(newEvent);
-      Expert.save();
+      // const currentOffering = mappedEventType === "service" ? service : package;
+      let CurrentService;
+      //Add the Client To the ServiceOR package, To Trace the Number Of Sales
+      // if (mappedEventType === "service") {
+      //   CurrrentService = await Expert.services.findById(selectedOffering.id);
+      // } else {
+      //   CurrrentService = await Expert.packages.findById(selectedOffering.id);
+      // }
+      if (mappedEventType === "service") {
+        CurrentService = Expert.services.find(
+          s => s.id === selectedOffering.id
+        );
+      } else {
+        CurrentService = Expert.packages.find(
+          p => p.id === selectedOffering.id
+        );
+      }
+      CurrentService.selectedClients.push({ id: customer._id, name: customer.name, email: customer.email });
+      // await CurrentService.save();
+      await Expert.save();
 
 
 
