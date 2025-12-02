@@ -345,15 +345,25 @@ export function getCustomerEmailTemplate(bookingType, data) {
  * @returns {object} Email subject and HTML body
  */
 export function getExpertEmailTemplate(bookingType, data) {
-  const { customerName, customerEmail, customerPhone, serviceName, price, date, time } = data;
+  const {
+    customerName,
+    customerEmail,
+    customerPhone,
+    serviceName,
+    price,
+    date,
+    time,
+    expertName, // used in the expert-facing text
+  } = data;
 
   const templates = {
     bireysel: {
-      subject: "Uzman Bildirimi - Bireysel",
+      subject: "Yeni Online Randevu - Uzmanlio",
       html: `
         <!DOCTYPE html>
-        <html>
+        <html lang="tr">
         <head>
+          <meta charset="UTF-8" />
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -367,25 +377,27 @@ export function getExpertEmailTemplate(bookingType, data) {
         <body>
           <div class="container">
             <div class="header">
-              <h1>📅 Yeni Bireysel Rezervasyon</h1>
+              <h1>📅 Yeni Randevu</h1>
             </div>
             <div class="content">
-              <p>Yeni bir bireysel danışmanlık rezervasyonu aldınız.</p>
+              <p>
+                Merhaba <strong>${expertName || ''}</strong>,
+                <strong>${customerName}</strong> senden
+                <strong>${serviceName}</strong> randevusu aldı.
+              </p>
+              <p>
+                Tarih: <strong>${date || 'Belirlenmedi'}</strong>
+                Saat: <strong>${time || 'Belirlenmedi'}</strong>
+              </p>
               
               <div class="details">
                 <h3>Müşteri Bilgileri</h3>
                 <p><span class="label">Ad Soyad:</span> ${customerName}</p>
                 <p><span class="label">E-posta:</span> ${customerEmail}</p>
                 <p><span class="label">Telefon:</span> ${customerPhone}</p>
-                
-                <h3>Rezervasyon Detayları</h3>
-                <p><span class="label">Hizmet:</span> ${serviceName}</p>
-                <p><span class="label">Tarih:</span> ${date || 'Belirlenmedi'}</p>
-                <p><span class="label">Saat:</span> ${time || 'Belirlenmedi'}</p>
-                <p><span class="label">Tutar:</span> ${price} TL</p>
               </div>
               
-              <p>Lütfen müşterinizle en kısa sürede iletişime geçiniz.</p>
+              <p>Randevuyu onaylamak ve detayları görmek için lütfen panelinizi ziyaret edin.</p>
             </div>
             <div class="footer">
               <p>Bu otomatik bir mesajdır.</p>

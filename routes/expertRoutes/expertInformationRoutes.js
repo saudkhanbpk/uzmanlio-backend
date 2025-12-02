@@ -1629,9 +1629,11 @@ router.put("/:userId/events/:eventId", async (req, res) => {
       return res.status(404).json({ error: "Event not found" });
     }
 
+    const existingEvent = user.events[eventIndex];
+
     const eventData = req.body;
     const updatedEvent = {
-      ...user.events[eventIndex],
+      ...existingEvent,
       title: eventData.title || eventData.serviceName,
       description: eventData.description,
       serviceId: eventData.serviceId,
@@ -1703,6 +1705,114 @@ router.put("/:userId/events/:eventId", async (req, res) => {
       });
     } else {
       console.log("No active calendar providers found for user", req.params.userId);
+    }
+
+    // If date or time changed, notify customers about the update
+    const dateChanged = eventData.date && eventData.date !== String(existingEvent.date || "");
+    const timeChanged = eventData.time && eventData.time !== String(existingEvent.time || "");
+
+    if (dateChanged || timeChanged) {
+      setImmediate(async () => {
+        try {
+          const event = updatedEvent;
+          const customerIds = event.customers || [];
+          const selectedClients = event.selectedClients || [];
+
+          // Prepare expert and event info
+          const expertName = `${user.information.name} ${user.information.surname}`;
+          const serviceName = event.serviceName || event.title;
+          const date = event.date;
+          const time = event.time;
+          const joinLink = event.platform || "Link will be shared soon";
+
+          // Resolve recipients
+          let recipients = [];
+          if (selectedClients && selectedClients.length > 0) {
+            recipients = selectedClients.map(client => ({
+              name: client.name,
+              email: client.email,
+            }));
+          } else if (customerIds.length > 0) {
+            const customers = await Customer.find({ _id: { $in: customerIds } }).select("email name");
+            recipients = customers.map(c => ({
+              name: c.name,
+              email: c.email,
+            }));
+          }
+
+          console.log("Sending date/time update emails to:", recipients.length, "recipients");
+
+          for (const recipient of recipients) {
+            const clientName = recipient.name;
+            const customerEmailBody =
+              `Merhaba ${clientName}, ${expertName} ile ${serviceName} randevunun zamanı güncellendi. ` +
+              `Yeni tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+
+            const customerEmailHTML = `
+              <!DOCTYPE html>
+              <html lang="tr">
+              <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <style>
+                      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
+                      .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+                      .header { background: #DBEAFE; padding: 40px 30px; text-align: center; color: #1f2937; }
+                      .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+                      .content { padding: 40px 30px; }
+                      .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #2563EB; }
+                      .detail-item { margin: 12px 0; font-size: 15px; }
+                      .detail-label { font-weight: 500; color: #374151; }
+                      .detail-value { color: #1f2937; }
+                      .join-link { background: #2563EB; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
+                      .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
+                  </style>
+              </head>
+              <body>
+                  <div class="container">
+                      <div class="header">
+                          <h1>⏰ Randevu Zamanı Güncellendi</h1>
+                          <p>Randevunuzun tarihi ve/veya saati değiştirildi</p>
+                      </div>
+                      <div class="content">
+                          <p>Merhaba <strong>${clientName}</strong>,</p>
+                          <p><strong>${expertName}</strong> ile <strong>${serviceName}</strong> randevunun zamanı güncellendi.</p>
+                          <div class="appointment-card">
+                              <div class="detail-item">
+                                  <span class="detail-label">Yeni Tarih:</span>
+                                  <span class="detail-value">${date}</span>
+                              </div>
+                              <div class="detail-item">
+                                  <span class="detail-label">Yeni Saat:</span>
+                                  <span class="detail-value">${time}</span>
+                              </div>
+                              <div class="detail-item">
+                                  <span class="detail-label">Katılım Linki:</span>
+                                  <span class="detail-value">${joinLink}</span>
+                              </div>
+                          </div>
+                      </div>
+                      <div class="footer">
+                          <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+                      </div>
+                  </div>
+              </body>
+              </html>
+            `;
+
+            await sendEmail(recipient.email, {
+              subject: "Randevu Zamanı Güncellendi",
+              body: customerEmailBody,
+              html: customerEmailHTML,
+            });
+
+            console.log(`✅ Date/time update email sent to customer: ${recipient.email}`);
+          }
+        } catch (emailError) {
+          console.error("Error sending date/time update emails:", emailError);
+          // Don't fail the request if email fails
+        }
+      });
     }
 
     res.json({
@@ -1934,6 +2044,107 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
       }
     }
 
+    // Send emails when status is cancelled/rejected
+    else if (status === 'cancelled') {
+      try {
+        // Prepare expert information
+        const expertName = `${user.information.name} ${user.information.surname}`;
+
+        // Prepare event details
+        const serviceName = event.serviceName || event.title;
+
+        // Get customer information from selectedClients
+        let recipients = [];
+
+        if (selectedClients && selectedClients.length > 0) {
+          recipients = selectedClients.map(client => ({
+            name: client.name,
+            email: client.email
+          }));
+        } else if (customerIds.length > 0) {
+          const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
+          recipients = customers.map(c => ({
+            name: c.name,
+            email: c.email
+          }));
+        }
+
+        console.log("Sending rejection/cancellation emails to:", recipients.length, "recipients");
+
+        // Send email to each customer
+        for (const recipient of recipients) {
+          const clientName = recipient.name;
+          const customerEmailBody = `Merhaba ${clientName}, ${serviceName} randevu talebin ${expertName} tarafından reddedildi. Detaylar için Uzmanlio hesabını kontrol edebilirsin.`;
+
+          // Enhanced HTML template for customer rejection
+          const customerEmailHTML = `
+            <!DOCTYPE html>
+            <html lang="tr">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
+                    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+                    .header { background: #fef3c7; padding: 40px 30px; text-align: center; color: #1f2937; }
+                    .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+                    .content { padding: 40px 30px; }
+                    .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #dc3545; }
+                    .detail-item { margin: 12px 0; font-size: 15px; }
+                    .detail-label { font-weight: 500; color: #374151; }
+                    .detail-value { color: #1f2937; }
+                    .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
+                    .info-box { background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 15px; margin: 20px 0; border-radius: 5px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>❌ Randevu Reddedildi</h1>
+                        <p>Randevu talebiniz reddedildi</p>
+                    </div>
+                    <div class="content">
+                        <p>Merhaba <strong>${clientName}</strong>,</p>
+                        <p><strong>${serviceName}</strong> randevu talebin <strong>${expertName}</strong> tarafından reddedildi.</p>
+                        <div class="appointment-card">
+                            <div class="detail-item">
+                                <span class="detail-label">Hizmet:</span>
+                                <span class="detail-value">${serviceName}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Uzman:</span>
+                                <span class="detail-value">${expertName}</span>
+                            </div>
+                        </div>
+                        <div class="info-box">
+                            <p style="margin: 0; color: #004085;">
+                                <strong>ℹ️ Bilgi:</strong> Detaylar için Uzmanlio hesabını kontrol edebilirsin.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+          `;
+
+          await sendEmail(recipient.email, {
+            subject: 'Randevu Reddedildi',
+            body: customerEmailBody,
+            html: customerEmailHTML
+          });
+
+          console.log(`✅ Rejection email sent to customer: ${recipient.email}`);
+        }
+
+      } catch (emailError) {
+        console.error("Error sending rejection emails:", emailError);
+        // Don't fail the request if email fails
+      }
+    }
+
     // Send other status emails
     else if (customerIds.length > 0 || (selectedClients && selectedClients.length > 0)) {
       try {
@@ -1953,9 +2164,8 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
             await sendBulkEmail(customerEmails, "Event Status Updated", "Your event status has been updated to " + status);
           } else if (meetingType === 'grup' && ['completed', 'pending'].includes(status)) {
             await sendBulkEmail(customerEmails, "Event Status Updated", "Your group event status has been updated to " + status);
-          } else if (status === "cancelled") {
-            await sendBulkEmail(customerEmails, "Event Canceled", "Your event has been canceled");
           }
+          // Note: 'cancelled' status is now handled in the dedicated block above
         }
       } catch (emailError) {
         console.error("Error sending customer emails:", emailError);
