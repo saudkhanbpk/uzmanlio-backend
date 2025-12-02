@@ -14,6 +14,7 @@ import {
   getExpertEventCreatedTemplate, getClient11SessionTemplate,
   getClientGroupSessionTemplate, getClientPackageSessionTemplate
 } from "../../services/eventEmailTemplates.js";
+import { sendSms } from "../../services/netgsmService.js";
 import agenda from "../../services/agendaService.js";
 
 const router = express.Router();
@@ -1624,7 +1625,7 @@ router.put("/:userId/events/:eventId", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
 
-     const eventIndex = user.events.findIndex(event =>
+    const eventIndex = user.events.findIndex(event =>
       event.id === req.params.eventId || event._id.toString() === req.params.eventId
     );
 
@@ -1901,74 +1902,114 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
 
         console.log("Sending approval emails to:", recipients.length, "recipients");
 
-        // Send email to each customer
-        for (const recipient of recipients) {
-          const clientName = recipient.name;
-          const customerEmailBody = `Merhaba ${clientName}, ${expertName} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+        // // Send email to each customer
+        // for (const recipient of recipients) {
+        //   const clientName = recipient.name;
+        //   const customerEmailBody = `Merhaba ${clientName}, ${expertName} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
 
 
 
-          // Enhanced HTML template for customer
-          const customerEmailHTML = `
-            <!DOCTYPE html>
-            <html lang="tr">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
-                    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
-                    .header { background: #CDFA89; padding: 40px 30px; text-align: center; color: #1f2937; }
-                    .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
-                    .content { padding: 40px 30px; }
-                    .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #009743; }
-                    .detail-item { margin: 12px 0; font-size: 15px; }
-                    .detail-label { font-weight: 500; color: #374151; }
-                    .detail-value { color: #1f2937; }
-                    .join-link { background: #009743; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
-                    .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>✅ Randevu Onaylandı</h1>
-                        <p>Randevu talebiniz onaylandı</p>
-                    </div>
-                    <div class="content">
-                        <p>Merhaba <strong>${clientName}</strong>,</p>
-                        <p><strong>${expertName}</strong> ile <strong>${serviceName}</strong> randevu talebiniz onaylandı.</p>
-                        <div class="appointment-card">
-                            <div class="detail-item">
-                                <span class="detail-label">Tarih:</span>
-                                <span class="detail-value">${date}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Saat:</span>
-                                <span class="detail-value">${time}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Katılım Linki:</span>
-                                <span class="detail-value">${joinLink}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="footer">
-                        <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-          `;
+        //   // Enhanced HTML template for customer
+        //   const customerEmailHTML = `
+        //     <!DOCTYPE html>
+        //     <html lang="tr">
+        //     <head>
+        //         <meta charset="UTF-8">
+        //         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        //         <style>
+        //             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
+        //             .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+        //             .header { background: #CDFA89; padding: 40px 30px; text-align: center; color: #1f2937; }
+        //             .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+        //             .content { padding: 40px 30px; }
+        //             .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #009743; }
+        //             .detail-item { margin: 12px 0; font-size: 15px; }
+        //             .detail-label { font-weight: 500; color: #374151; }
+        //             .detail-value { color: #1f2937; }
+        //             .join-link { background: #009743; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
+        //             .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
+        //         </style>
+        //     </head>
+        //     <body>
+        //         <div class="container">
+        //             <div class="header">
+        //                 <h1>✅ Randevu Onaylandı</h1>
+        //                 <p>Randevu talebiniz onaylandı</p>
+        //             </div>
+        //             <div class="content">
+        //                 <p>Merhaba <strong>${clientName}</strong>,</p>
+        //                 <p><strong>${expertName}</strong> ile <strong>${serviceName}</strong> randevu talebiniz onaylandı.</p>
+        //                 <div class="appointment-card">
+        //                     <div class="detail-item">
+        //                         <span class="detail-label">Tarih:</span>
+        //                         <span class="detail-value">${date}</span>
+        //                     </div>
+        //                     <div class="detail-item">
+        //                         <span class="detail-label">Saat:</span>
+        //                         <span class="detail-value">${time}</span>
+        //                     </div>
+        //                     <div class="detail-item">
+        //                         <span class="detail-label">Katılım Linki:</span>
+        //                         <span class="detail-value">${joinLink}</span>
+        //                     </div>
+        //                 </div>
+        //             </div>
+        //             <div class="footer">
+        //                 <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+        //             </div>
+        //         </div>
+        //     </body>
+        //     </html>
+        //   `;
 
-          await sendEmail(recipient.email, {
-            subject: 'Randevu Onaylandı',
-            body: customerEmailBody,
-            html: customerEmailHTML
-          });
+        //   await sendEmail(recipient.email, {
+        //     subject: 'Randevu Onaylandı',
+        //     body: customerEmailBody,
+        //     html: customerEmailHTML
+        //   });
 
-          console.log(`✅ Approval email sent to customer: ${recipient.email}`);
+        //   console.log(`✅ Approval email sent to customer: ${recipient.email}`);
+        // }
+
+        // Send SMS notifications to customers
+        console.log('📱 Sending SMS notifications to customers...');
+
+        // Fetch full customer data to get phone numbers
+        let customersWithPhones = [];
+
+        if (selectedClients && selectedClients.length > 0) {
+          // If selectedClients exist, we need to fetch their phone numbers from the Customer model
+          const customerEmails = selectedClients.map(c => c.email);
+          customersWithPhones = await Customer.find({ email: { $in: customerEmails } }).select('name email phone');
+        } else if (customerIds.length > 0) {
+          // Fetch customers by IDs
+          customersWithPhones = await Customer.find({ _id: { $in: customerIds } }).select('name email phone');
         }
+
+        console.log(`📱 Found ${customersWithPhones.length} customers with potential phone numbers`);
+
+        // Send SMS to each customer with a valid phone number
+        for (const customer of customersWithPhones) {
+          if (customer.phone && customer.phone.trim() !== '') {
+            const smsMessage = `Merhaba ${customer.name}, ${expertName} ile ${serviceName} randevunuz onaylandı. Tarih: ${date} ${time}. İyi günler!`;
+
+            try {
+              const smsResult = await sendSms(customer.phone, smsMessage);
+
+              if (smsResult.success) {
+                console.log(`✅ SMS sent successfully to ${customer.name} (${customer.phone}), JobID: ${smsResult.jobID}`);
+              } else {
+                console.error(`❌ Failed to send SMS to ${customer.name} (${customer.phone}): ${smsResult.error}`);
+              }
+            } catch (smsError) {
+              console.error(`❌ Error sending SMS to ${customer.name} (${customer.phone}):`, smsError);
+              // Don't fail the request if SMS fails
+            }
+          } else {
+            console.log(`⚠️ Customer ${customer.name} (${customer.email}) has no phone number, skipping SMS`);
+          }
+        }
+
 
         // Send email to expert for each customer
         for (const recipient of recipients) {
@@ -2998,12 +3039,13 @@ router.get("/:userId/customers", async (req, res) => {
 router.get("/:userId/customers/:customerId", async (req, res) => {
   try {
     const { userId, customerId } = req.params;
+    const customerIDFromRequest = customerId
     const user = await findUserById(userId);
 
-    const ownsCustomer = user.customers.some(id => id.toString() === customerId);
+    const ownsCustomer = user.customers.some(customerId => customerId === customerIDFromRequest);
     if (!ownsCustomer) return res.status(404).json({ error: "Customer not found for this user" });
 
-    const customer = await Customer.findById(customerId);
+    const customer = await Customer.findById(customerIDFromRequest);
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     res.json({ customer });
@@ -3166,12 +3208,24 @@ router.put("/:userId/customers/:customerId", async (req, res) => {
 router.delete("/:userId/customers/:customerId", async (req, res) => {
   try {
     const { userId, customerId } = req.params;
+    let customId = customerId
     const user = await findUserById(userId);
 
-    const index = user.customers.findIndex(id => id.toString() === customerId);
-    if (index === -1) return res.status(404).json({ error: "Customer not found for this user" });
+    const customerIndex = user.customers.findIndex(customer =>
+      customer.customerId === customId || customer.customerId._id.toString() === customId
+    );
 
-    user.customers.splice(index, 1);
+    if (customerIndex === -1) {
+      const eventIds = user.customers.map(e => ({ id: e.id, _id: e._id }));
+      return res.status(404).json({ error: "Event not found", availableEvents: eventIds });
+    }
+
+    // const index = user.customers.findIndex(id => id.toString() === customerId);
+    // if (index === -1) return res.status(404).json({ error: "Customer not found for this user" });
+    const customerToDelete = Customer.findById(customId);
+    if (!customerToDelete) return res.status(404).json({ error: "Customer not found" });
+    await customerToDelete.deleteOne();
+    user.customers.splice(customerIndex, 1);
     await user.save();
 
     res.json({ message: "Customer reference successfully removed from user" });
