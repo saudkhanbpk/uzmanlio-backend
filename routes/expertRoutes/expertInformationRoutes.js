@@ -66,16 +66,24 @@ const parseEventDateTime = (dateStr, timeStr) => {
 };
 
 const cancelAgendaJob = async (jobId) => {
+  console.log("cancelAgendaJob jobId:", jobId);
   if (!agenda || !jobId) return false;
   try {
-    // agenda.cancel accepts a query; cancel by _id
-    await agenda.cancel({ _id: mongoose.Types.ObjectId(jobId) });
-    return true;
+    // Use `new` to create ObjectId
+    const numRemoved = await agenda.cancel({ _id: new mongoose.Types.ObjectId(jobId) });
+    if (numRemoved > 0) {
+      console.log("Agenda Task Deleted Successfully");
+      return true;
+    } else {
+      console.log("Agenda Task not found or already executed");
+      return false;
+    }
   } catch (err) {
     console.error("cancelAgendaJob error:", err?.message || err);
     return false;
   }
 };
+
 
 const scheduleReminderForEvent = async (user, event) => {
   if (!agenda || !event || !event.date) return null;
@@ -2235,6 +2243,8 @@ router.delete("/:userId/events/:eventId", async (req, res) => {
     console.log("user is found")
     const eventIndex = user.events.findIndex(event => event.id === req.params.eventId);
     console.log("eventIndex is found:", eventIndex)
+    const agendaJobId = user.events[eventIndex].agendaJobId;
+    console.log("agendaJobId is found:", agendaJobId)
 
     if (eventIndex === -1) {
       return res.status(404).json({ error: "Event not found" });
