@@ -289,6 +289,8 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
   } catch (err) {
     console.error("sendEventReminder error:", err?.message || err);
   }
+
+
 });
 
 /**
