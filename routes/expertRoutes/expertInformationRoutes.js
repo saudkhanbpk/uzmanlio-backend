@@ -1631,10 +1631,14 @@ router.post("/:userId/events", async (req, res) => {
 router.put("/:userId/events/:eventId", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
-    const eventIndex = user.events.findIndex(event => event.id === req.params.eventId);
+
+     const eventIndex = user.events.findIndex(event =>
+      event.id === req.params.eventId || event._id.toString() === req.params.eventId
+    );
 
     if (eventIndex === -1) {
-      return res.status(404).json({ error: "Event not found" });
+      const eventIds = user.events.map(e => ({ id: e.id, _id: e._id }));
+      return res.status(404).json({ error: "Event not found", availableEvents: eventIds });
     }
 
     const existingEvent = user.events[eventIndex];
@@ -1671,8 +1675,8 @@ router.put("/:userId/events/:eventId", async (req, res) => {
     user.events[eventIndex] = updatedEvent;
     await user.save();
 
-    var dateChanged = eventData.date && eventData.date !== oldEvent.date;
-    var timeChanged = eventData.time && eventData.time !== oldEvent.time;
+    var dateChanged = eventData.date && eventData.date !== existingEvent.date;
+    var timeChanged = eventData.time && eventData.time !== existingEvent.time;
 
     if (dateChanged || timeChanged) {
       try {
