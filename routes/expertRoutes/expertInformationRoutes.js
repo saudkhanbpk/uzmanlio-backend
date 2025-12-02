@@ -1663,8 +1663,8 @@ router.put("/:userId/events/:eventId", async (req, res) => {
     user.events[eventIndex] = updatedEvent;
     await user.save();
 
-    const dateChanged = eventData.date && eventData.date !== oldEvent.date;
-    const timeChanged = eventData.time && eventData.time !== oldEvent.time;
+    var dateChanged = eventData.date && eventData.date !== oldEvent.date;
+    var timeChanged = eventData.time && eventData.time !== oldEvent.time;
 
     if (dateChanged || timeChanged) {
       try {
@@ -1708,8 +1708,8 @@ router.put("/:userId/events/:eventId", async (req, res) => {
     }
 
     // If date or time changed, notify customers about the update
-    const dateChanged = eventData.date && eventData.date !== String(existingEvent.date || "");
-    const timeChanged = eventData.time && eventData.time !== String(existingEvent.time || "");
+    var dateChanged = eventData.date && eventData.date !== String(existingEvent.date || "");
+    var timeChanged = eventData.time && eventData.time !== String(existingEvent.time || "");
 
     if (dateChanged || timeChanged) {
       setImmediate(async () => {
