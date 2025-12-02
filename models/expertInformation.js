@@ -253,6 +253,7 @@ const EventSchema = new Schema({
       uploadDate: { type: String, required: true },
     },
   ],
+  agendaJobId: { type: String }, // Stores Agenda job ID for reminder scheduling
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

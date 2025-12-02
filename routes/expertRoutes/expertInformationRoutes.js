@@ -14,6 +14,7 @@ import {
   getExpertEventCreatedTemplate, getClient11SessionTemplate,
   getClientGroupSessionTemplate, getClientPackageSessionTemplate
 } from "../../services/eventEmailTemplates.js";
+import agenda from "../../services/agendaService.js";
 
 const router = express.Router();
 
@@ -47,6 +48,103 @@ const findUserById = async (userId) => {
   }
   return user;
 };
+
+
+// =================== AGENDA HELPERS ===================
+
+const parseEventDateTime = (dateStr, timeStr) => {
+  if (!dateStr) return null;
+  const timePart = timeStr ? timeStr.trim() : "00:00";
+  // try ISO first
+  let dt = new Date(`${dateStr}T${timePart}`);
+  if (isNaN(dt.getTime())) {
+    dt = new Date(`${dateStr} ${timePart}`);
+    if (isNaN(dt.getTime())) return null;
+  }
+  return dt;
+};
+
+const cancelAgendaJob = async (jobId) => {
+  if (!agenda || !jobId) return false;
+  try {
+    // agenda.cancel accepts a query; cancel by _id
+    await agenda.cancel({ _id: mongoose.Types.ObjectId(jobId) });
+    return true;
+  } catch (err) {
+    console.error("cancelAgendaJob error:", err?.message || err);
+    return false;
+  }
+};
+
+const scheduleReminderForEvent = async (user, event) => {
+  if (!agenda || !event || !event.date) return null;
+
+  try {
+    const dt = parseEventDateTime(event.date, event.time);
+    if (!dt) {
+      console.log("❌ parseEventDateTime returned null for:", event.date, event.time);
+      return null;
+    }
+
+    console.log("📅 Parsed Event DateTime:", dt.toISOString());
+    const remindAt = new Date(dt.getTime() - 2 * 60 * 60 * 1000);
+    const now = new Date();
+
+    console.log("⏰ Reminder At:", remindAt.toISOString());
+    console.log("⏱️ Now:", now.toISOString());
+
+    const jobData = {
+      userId: user._id?.toString?.() || user.id,
+      eventId: event.id,
+      expertEmail: user.information?.email,
+      eventTitle: event.title || event.serviceName,
+      eventDate: event.date,
+      eventTime: event.time
+    };
+
+    // If reminder time is already passed → schedule for 10 seconds later
+    if (remindAt <= now) {
+      console.log("⚡ Reminder time already passed → scheduling immediately (10 sec later)");
+
+      const job = await agenda.schedule(
+        new Date(Date.now() + 10000),
+        "sendEventReminder",
+        jobData
+      );
+
+      const jobId = job?.attrs?._id?.toString?.();
+      console.log("⚡ Immediate Job Created:", jobId);
+      return jobId;
+    }
+
+    // Normal scheduling
+    const job = await agenda.schedule(remindAt, "sendEventReminder", jobData);
+    const jobId = job?.attrs?._id?.toString?.();
+
+    console.log("✅ Future Reminder Scheduled. Job ID:", jobId);
+    return jobId;
+
+  } catch (err) {
+    console.error("scheduleReminderForEvent error:", err);
+    return null;
+  }
+};
+
+
+const rescheduleReminderForEvent = async (user, event, oldJobId) => {
+  try {
+    if (oldJobId) {
+      await cancelAgendaJob(oldJobId);
+    }
+    return await scheduleReminderForEvent(user, event);
+  } catch (err) {
+    console.error("rescheduleReminderForEvent error:", err?.message || err);
+    return null;
+  }
+};
+
+
+
 
 // ==================== PROFILE IMAGE UPLOAD ====================
 
@@ -284,10 +382,10 @@ router.get("/:userId", async (req, res) => {
     console.log("Fetching profile for userId:", req.params.userId);
 
     const user = await User.findById(req.params.userId)
-      .populate({
+      .populate([{
         path: "customers.customerId",
         model: "Customer"
-      });
+      }]);
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
@@ -1361,6 +1459,26 @@ router.post("/:userId/events", async (req, res) => {
     await user.save();
 
 
+    //Create the Agenda instance (Schedling Emails before 2 hours Of Appointment)
+    try {
+      const savedUser = await User.findById(req.params.userId);
+      const savedEvent = savedUser.events.find(e => e.id === eventId);
+      console.log("Checking For the User and Event")
+      if (savedEvent) {
+        const jobId = await scheduleReminderForEvent(savedUser, savedEvent);
+        console.log("Job Id Created", jobId)
+
+        if (jobId) {
+          savedEvent.agendaJobId = jobId;
+          await savedUser.save();
+          console.log("Agenda job scheduled for event", eventId, "jobId:", jobId);
+        }
+      }
+    } catch (schedErr) {
+      console.error("Error scheduling agenda job after event create:", schedErr);
+    }
+
+
     // Extract emails from selectedClients
     const clientEmails = (formattedClients || []).map(c => c.email);
     console.log("Client Emails:", clientEmails);
@@ -1542,6 +1660,32 @@ router.put("/:userId/events/:eventId", async (req, res) => {
 
     user.events[eventIndex] = updatedEvent;
     await user.save();
+
+    const dateChanged = eventData.date && eventData.date !== oldEvent.date;
+    const timeChanged = eventData.time && eventData.time !== oldEvent.time;
+
+    if (dateChanged || timeChanged) {
+      try {
+        const savedUser = await User.findById(req.params.userId);
+        const savedEvent = savedUser.events.find(e => e.id === req.params.eventId);
+        if (savedEvent) {
+          const newJobId = await rescheduleReminderForEvent(savedUser, savedEvent, oldAgendaJobId);
+          if (newJobId) {
+            savedEvent.agendaJobId = newJobId;
+            await savedUser.save();
+            console.log("Rescheduled agenda job for event", req.params.eventId, "newJobId:", newJobId);
+          } else {
+            // if no new job scheduled, remove stored id
+            if (oldAgendaJobId) {
+              savedEvent.agendaJobId = undefined;
+              await savedUser.save();
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error rescheduling agenda job on event update:", err);
+      }
+    }
 
     // Sync to connected calendars in background
     const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
@@ -1844,6 +1988,16 @@ router.delete("/:userId/events/:eventId", async (req, res) => {
     user.events.splice(eventIndex, 1);
     await user.save();
     console.log("event is deleted")
+
+    // Cancel scheduled agenda job if existed
+    if (agendaJobId) {
+      try {
+        await cancelAgendaJob(agendaJobId);
+        console.log("Canceled agenda job for deleted event:", agendaJobId);
+      } catch (err) {
+        console.error("Failed to cancel agenda job when deleting event:", err);
+      }
+    }
 
     // Sync to connected calendars in background
     const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
