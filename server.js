@@ -20,6 +20,7 @@ import backgroundJobService from "./services/backgroundJobs.js";
 import subscriptionRoutes from "./routes/expertRoutes/subscriptionRoutes.js";
 import institutionRoutes from "./routes/expertRoutes/institutionRoutes.js";
 import authRoutes from "./routes/expertRoutes/authRoutes.js";
+import fs from "fs";
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -30,8 +31,30 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Debug route to check file access
+app.get('/debug/find-file', (req, res) => {
+  const searchName = '1763142635630-80a4a857-12e9-4306-b642-a5193c0c8a3e-Gemini_Generated_Image_dvlaq6dvlaq6dvla.png';
 
-// Serve static files
+  const locations = [
+    path.join(__dirname, 'uploads', searchName),
+    path.join(__dirname, 'uploads', 'Experts_Files', searchName),
+    path.join(__dirname, 'uploads', 'Experts_Files', 'gallery', searchName),
+  ];
+
+  const results = locations.map(loc => ({
+    path: loc,
+    exists: fs.existsSync(loc)
+  }));
+
+  res.json({ searchName, results });
+});
+// app.use('./uploads', express.static(path.join(__dirname, 'uploads')));
+
+// // Serve static files
+// const uploadsPath = path.join(__dirname, "uploads");
+// console.log("Serving static files from:", uploadsPath);
+// app.use("/uploads", express.static(uploadsPath));
+
 const uploadsPath = path.join(__dirname, "uploads");
 console.log("Serving static files from:", uploadsPath);
 app.use("/uploads", express.static(uploadsPath));
@@ -91,15 +114,7 @@ app.get("/api/status", async (req, res) => {
 
 
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error("Server error:", {
-    message: err.message,
-    stack: err.stack,
-    url: req.originalUrl
-  });
-  res.status(500).json({ error: "Internal Server Error", details: err.message });
-});
+
 // Expert information routes
 app.use("/api/expert", authRoutes);
 app.use("/api/expert", profileRoutes);
@@ -119,7 +134,7 @@ app.use("/api/expert/:userId/coupons", userCouponsRoutes);
 app.use("/api/expert/:userId/emails", userEmailsRoutes);
 
 // Serve uploaded files
-app.use("/uploads", express.static("uploads"));
+// app.use("/uploads", express.static("uploads"));
 
 //customer Routes
 
@@ -149,7 +164,15 @@ if (process.env.NODE_ENV !== 'test') {
 app.use("/api/booking/customers", bookingPage);
 
 
-
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error("Server error:", {
+    message: err.message,
+    stack: err.stack,
+    url: req.originalUrl
+  });
+  res.status(500).json({ error: "Internal Server Error", details: err.message });
+});
 // Start Server
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

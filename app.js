@@ -2,6 +2,7 @@ import { requestLogger } from './middlewares/debugMiddleware.js';
 import express from 'express';
 import cors from 'cors';
 const app = express();
+import path from 'path';
 
 // Add early in your middleware chain
 // app.use(requestLogger);
@@ -11,6 +12,8 @@ app.use(cors({
     origin: true,
     credentials: true
 }));
+app.use('./uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // Add headers middleware
 app.use((req, res, next) => {

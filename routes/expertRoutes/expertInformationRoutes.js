@@ -3610,23 +3610,23 @@ router.get("/:userId/customers/export", async (req, res) => {
         surname: customer.surname,
         email: customer.email,
         phone: customer.phone,
-        dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().split('T')[0] : '',
+        dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().split('T')[0] : null,
         gender: customer.gender || '',
-        occupation: customer.occupation || '',
-        company: customer.company || '',
-        status: customer.status,
-        category: customer.category || '',
-        source: customer.source || '',
-        referredBy: customer.referredBy || '',
-        totalAppointments: customer.totalAppointments || 0,
-        completedAppointments: customer.completedAppointments || 0,
-        totalSpent: customer.totalSpent || 0,
-        averageRating: customer.averageRating || 0,
-        lastAppointment: customer.lastAppointment ? customer.lastAppointment.toISOString().split('T')[0] : '',
-        createdAt: customer.createdAt.toISOString().split('T')[0],
-        // Added fields from User model
-        isArchived: c.isArchived || false,
-        addedAt: c.addedAt ? new Date(c.addedAt).toISOString().split('T')[0] : ''
+        // occupation: customer.occupation || '',
+        // company: customer.company || '',
+        // status: customer.status,
+        // category: customer.category || '',
+        // source: customer.source || '',
+        // referredBy: customer.referredBy || '',
+        // totalAppointments: customer.totalAppointments || 0,
+        // completedAppointments: customer.completedAppointments || 0,
+        // totalSpent: customer.totalSpent || 0,
+        // averageRating: customer.averageRating || 0,
+        // lastAppointment: customer.lastAppointment ? customer.lastAppointment.toISOString().split('T')[0] : null,
+        // createdAt: customer.createdAt.toISOString().split('T')[0],
+        // // Added fields from User model
+        // isArchived: c.isArchived || false,
+        // addedAt: c.addedAt ? new Date(c.addedAt).toISOString().split('T')[0] : ''
       };
     }).filter(Boolean); // remove any nulls
 
