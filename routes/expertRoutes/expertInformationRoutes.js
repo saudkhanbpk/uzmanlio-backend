@@ -10,6 +10,7 @@ import calendarSyncService from "../../services/calendarSyncService.js";
 import Customer from "../../models/customer.js";
 import CustomerAppointments from "../../models/customerAppointment.js";
 import { sendBulkEmail, sendEmail } from "../../services/email.js";
+import { Parser } from "json2csv";
 import {
   getExpertEventCreatedTemplate, getClient11SessionTemplate,
   getClientGroupSessionTemplate, getClientPackageSessionTemplate
@@ -3292,6 +3293,53 @@ router.patch("/:userId/customers/:customerId/status", async (req, res) => {
 });
 
 
+//===========Export customers CSV =========================
+router.get("/:userId/customerscsv/export", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId)
+      .populate({
+        path: "customers.customerId",
+        model: "Customer",
+      })
+      .lean();
+    console.log("User customers:", user.customers);
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const csvData = (user.customers || [])
+      .map(c => {
+        const customer = c.customerId;
+        if (!customer) return null;
+
+        return {
+          name: customer.name,
+          surname: customer.surname,
+          email: customer.email,
+          phone: customer.phone,
+          dateOfBirth: customer.dateOfBirth
+            ? customer.dateOfBirth.toISOString().split("T")[0]
+            : "",
+          gender: customer.gender || "",
+        };
+      })
+      .filter(Boolean);
+
+    // Convert JSON → CSV
+    const json2csvParser = new Parser();
+    const csv = json2csvParser.parse(csvData);
+
+    // Set CSV headers for download
+    res.header("Content-Type", "text/csv");
+    res.attachment("customers.csv");
+    return res.send(csv);
+
+  } catch (error) {
+    console.error("CSV Export Error:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
 // ==================== CUSTOMER NOTES ROUTES ====================
 
@@ -3587,54 +3635,55 @@ router.post("/:userId/customers/bulk-import", async (req, res) => {
 
 
 // Export customers to CSV format
-router.get("/:userId/customers/export", async (req, res) => {
-  try {
-    const { userId } = req.params;
+// router.get("/:userId/customers/export", async (req, res) => {
+//   try {
+//     const { userId } = req.params;
 
-    // Fetch the user with populated customer references
-    const user = await User.findById(userId)
-      .populate({
-        path: "customers.customerId", // populate the referenced Customer
-        model: "Customer"
-      })
-      .lean();
+//     // Fetch the user with populated customer references
+//     const user = await User.findById(userId)
+//       .populate({
+//         path: "customers.customerId", // populate the referenced Customer
+//         model: "Customer"
+//       })
+//       .lean();
 
-    if (!user) return res.status(404).json({ error: "User not found" });
+//     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Map customers to include full data + isArchived/addedAt from user.customers
-    const csvData = (user.customers || []).map(c => {
-      const customer = c.customerId; // populated customer document
-      if (!customer) return null; // skip if somehow not found
-      return {
-        name: customer.name,
-        surname: customer.surname,
-        email: customer.email,
-        phone: customer.phone,
-        dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().split('T')[0] : null,
-        gender: customer.gender || '',
-        // occupation: customer.occupation || '',
-        // company: customer.company || '',
-        // status: customer.status,
-        // category: customer.category || '',
-        // source: customer.source || '',
-        // referredBy: customer.referredBy || '',
-        // totalAppointments: customer.totalAppointments || 0,
-        // completedAppointments: customer.completedAppointments || 0,
-        // totalSpent: customer.totalSpent || 0,
-        // averageRating: customer.averageRating || 0,
-        // lastAppointment: customer.lastAppointment ? customer.lastAppointment.toISOString().split('T')[0] : null,
-        // createdAt: customer.createdAt.toISOString().split('T')[0],
-        // // Added fields from User model
-        // isArchived: c.isArchived || false,
-        // addedAt: c.addedAt ? new Date(c.addedAt).toISOString().split('T')[0] : ''
-      };
-    }).filter(Boolean); // remove any nulls
+//     // Map customers to include full data + isArchived/addedAt from user.customers
+//     const csvData = (user.customers || []).map(c => {
+//       const customer = c.customerId; // populated customer document
+//       if (!customer) return null; // skip if somehow not found
+//       return {
+//         name: customer.name,
+//         surname: customer.surname,
+//         email: customer.email,
+//         phone: customer.phone,
+//         dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().split('T')[0] : null,
+//         gender: customer.gender || '',
+//         // occupation: customer.occupation || '',
+//         // company: customer.company || '',
+//         // status: customer.status,
+//         // category: customer.category || '',
+//         // source: customer.source || '',
+//         // referredBy: customer.referredBy || '',
+//         // totalAppointments: customer.totalAppointments || 0,
+//         // completedAppointments: customer.completedAppointments || 0,
+//         // totalSpent: customer.totalSpent || 0,
+//         // averageRating: customer.averageRating || 0,
+//         // lastAppointment: customer.lastAppointment ? customer.lastAppointment.toISOString().split('T')[0] : null,
+//         // createdAt: customer.createdAt.toISOString().split('T')[0],
+//         // // Added fields from User model
+//         // isArchived: c.isArchived || false,
+//         // addedAt: c.addedAt ? new Date(c.addedAt).toISOString().split('T')[0] : ''
+//       };
+//     }).filter(Boolean); // remove any nulls
 
-    res.json({ customers: csvData, message: "Customer data exported successfully" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+//     res.json({ customers: csvData, message: "Customer data exported successfully" });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
 
 
 
