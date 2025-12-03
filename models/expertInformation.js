@@ -222,7 +222,7 @@ const EventSchema = new Schema({
   maxAttendees: { type: Number },
   customers: [{ type: Schema.Types.ObjectId, ref: "Customer" }],
   attendees: { type: Number, default: 0 },
-  category: { type: String, required: true },
+  category: { type: String },
   status: {
     type: String,
     enum: ["pending", "approved", "completed", "cancelled", "scheduled"],
