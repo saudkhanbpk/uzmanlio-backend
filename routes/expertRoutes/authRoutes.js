@@ -158,6 +158,19 @@ router.post("/login", async (req, res) => {
             })
         }
 
+        // Check subscription status
+        const now = new Date();
+        let subscriptionExpired = false;
+        let subscriptionEndDate = null;
+
+        if (existingUser.subscription && existingUser.subscription.endDate) {
+            subscriptionEndDate = existingUser.subscription.endDate;
+            subscriptionExpired = new Date(subscriptionEndDate) < now;
+        } else {
+            // If no subscription data exists, consider it expired
+            subscriptionExpired = true;
+        }
+
         const { accessToken, refreshToken } = await generateTokens(existingUser._id);
         existingUser.refreshToken = refreshToken;
         await existingUser.save({ validateBeforeSave: false });
@@ -168,7 +181,10 @@ router.post("/login", async (req, res) => {
             .status(200).json({
                 user: userWithoutPassword,
                 accessToken,
-                refreshToken
+                refreshToken,
+                subscriptionExpired,
+                subscriptionEndDate,
+                subscriptionValid: !subscriptionExpired
             }, "User logged in successfully");
 
     } catch (error) {
