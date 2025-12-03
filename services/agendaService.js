@@ -1,7 +1,9 @@
 import Agenda from "agenda";
 import mongoose from "mongoose";
 import User from "../models/expertInformation.js";
+import Customer from "../models/customer.js";
 import { sendEmail, sendBulkEmail } from "./email.js";
+import { sendSms } from "./netgsmService.js";
 
 // Read Mongo connection from env (support both MONGO_URL and MONGO_URI)
 let mongoAddress = process.env.MONGO_URL || process.env.MONGO_URI || process.env.MONGO;
@@ -64,6 +66,7 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
 
     const expertName = `${user.information?.name || ''} ${user.information?.surname || ''}`.trim();
     const expertEmail = user.information?.email;
+    const expertPhone = user.information?.phone;
 
     // Collect all recipient emails
     const recipients = new Set();
@@ -71,15 +74,22 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
 
     // Process selected clients - handle both object and ID references
     const selectedClients = [];
+    const clientIds = []; // Track IDs to fetch phones
+
     for (const clientRef of (event.selectedClients || [])) {
       let clientData = null;
 
       // If it's an object with email directly
       if (clientRef && typeof clientRef === 'object' && clientRef.email) {
         clientData = clientRef;
+        if (clientRef.id || clientRef._id) {
+          clientIds.push(clientRef.id || clientRef._id);
+        }
       }
       // If it's an ID, find in user.customers
       else if (clientRef && typeof clientRef === 'string') {
+        clientIds.push(clientRef); // It's an ID
+
         const foundCustomer = (user.customers || []).find(c => {
           const customer = c.customerId || c;
           return String(customer._id || customer.id) === String(clientRef);
@@ -102,8 +112,11 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
     const recipientList = Array.from(recipients);
     if (recipientList.length === 0) {
       console.warn("sendEventReminder: no recipient emails for event", eventId);
-      return;
+      // We might still want to send SMS even if no emails, but usually they go together.
+      // Continuing to SMS logic...
     }
+
+    // --- EMAIL SENDING ---
 
     // Send email to expert
     if (expertEmail) {
@@ -193,10 +206,10 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
       };
 
       await sendEmail(expertEmailTemplate);
-      console.log(`✅ Reminder sent to expert: ${expertEmail}`);
+      console.log(`✅ Reminder email sent to expert: ${expertEmail}`);
     }
 
-    // Send reminder to each client
+    // Send email to each client
     for (const client of selectedClients) {
       const clientEmailTemplate = {
         to: client.email,
@@ -224,7 +237,7 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
                 <h1>⏰ Etkinlik Hatırlatması</h1>
               </div>
               <div class="content">
-                <p>Merhaba ${client.name} this is Reminder Email,</p>
+                <p>Merhaba ${client.name},</p>
                 <p>Yaklaşan randevunuz için bir hatırlatma:</p>
                 
                 <div class="event-details">
@@ -282,10 +295,46 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
       };
 
       await sendEmail(clientEmailTemplate);
-      console.log(`✅ Reminder sent to client: ${client.email}`);
+      console.log(`✅ Reminder email sent to client: ${client.email}`);
     }
 
-    console.log(`✅ All reminders sent successfully for event: ${event.title || event.serviceName}`);
+    console.log(`✅ All reminder emails sent successfully for event: ${event.title || event.serviceName}`);
+
+
+    // --- SMS SENDING ---
+    const joinLink = event.platform || "Link yakında paylaşılacak";
+
+    // 1. Send SMS to Expert
+    if (expertPhone) {
+      const expertMsg = `Hatırlatma: ${event.serviceName} randevunuz ${event.date} ${event.time}’te. Katılım linki: ${joinLink}`;
+      try {
+        await sendSms(expertPhone, expertMsg);
+        console.log(`✅ Reminder SMS sent to expert: ${expertPhone}`);
+      } catch (smsErr) {
+        console.error(`❌ Failed to send SMS to expert ${expertPhone}:`, smsErr);
+      }
+    }
+
+    // 2. Send SMS to Clients
+    if (clientIds.length > 0) {
+      // Fetch full customer details to get phone numbers
+      const customers = await Customer.find({ _id: { $in: clientIds } }).select("phone name");
+
+      for (const customer of customers) {
+        if (customer.phone) {
+          const clientMsg = `Hatırlatma: ${expertName} ile ${event.serviceName} randevun ${event.date} ${event.time}’te. Katılım linki: ${joinLink}`;
+          try {
+            await sendSms(customer.phone, clientMsg);
+            console.log(`✅ Reminder SMS sent to client: ${customer.name} (${customer.phone})`);
+          } catch (smsErr) {
+            console.error(`❌ Failed to send SMS to client ${customer.name}:`, smsErr);
+          }
+        } else {
+          console.log(`⚠️ Client ${customer.name} has no phone number, skipping SMS.`);
+        }
+      }
+    }
+
   } catch (err) {
     console.error("sendEventReminder error:", err?.message || err);
   }
