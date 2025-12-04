@@ -203,7 +203,7 @@ router.post("/forgot-password", async (req, res) => {
         if (!email) {
             return res.status(400).json({
                 success: false,
-                message: "Email is required"
+                message: "Geçerli bir E-Posta Adresi Girin"
             });
         }
 
@@ -465,7 +465,7 @@ router.post("/resend-verification", async (req, res) => {
         if (!email) {
             return res.status(400).json({
                 success: false,
-                message: "Email is required"
+                message: "Geçerli bir E-Posta Adresi Girin"
             });
         }
 

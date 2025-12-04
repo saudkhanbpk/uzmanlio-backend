@@ -31,6 +31,22 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Serve static files from uploads directory - MUST be early in middleware stack
+const uploadsPath = path.join(__dirname, "uploads");
+console.log("Serving static files from:", uploadsPath);
+
+// Configure static file serving with proper options
+app.use("/uploads", express.static(uploadsPath, {
+  maxAge: '1d', // Cache files for 1 day
+  etag: true,
+  lastModified: true,
+  index: false, // Don't serve index.html files
+  setHeaders: (res, filePath) => {
+    // Set proper content type headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+}));
+
 // Debug route to check file access
 app.get('/debug/find-file', (req, res) => {
   const searchName = '1763142635630-80a4a857-12e9-4306-b642-a5193c0c8a3e-Gemini_Generated_Image_dvlaq6dvlaq6dvla.png';
@@ -48,16 +64,6 @@ app.get('/debug/find-file', (req, res) => {
 
   res.json({ searchName, results });
 });
-// app.use('./uploads', express.static(path.join(__dirname, 'uploads')));
-
-// // Serve static files
-// const uploadsPath = path.join(__dirname, "uploads");
-// console.log("Serving static files from:", uploadsPath);
-// app.use("/uploads", express.static(uploadsPath));
-
-const uploadsPath = path.join(__dirname, "uploads");
-console.log("Serving static files from:", uploadsPath);
-app.use("/uploads", express.static(uploadsPath));
 
 // MongoDB connection
 const mongoUrl = process.env.MONGO_URL || "mongodb://localhost:27017";
@@ -132,9 +138,6 @@ app.use("/api/calendar/webhooks", calendarWebhookRoutes);
 app.use("/api/expert/:userId/coupons", userCouponsRoutes);
 // Emails per user
 app.use("/api/expert/:userId/emails", userEmailsRoutes);
-
-// Serve uploaded files
-// app.use("/uploads", express.static("uploads"));
 
 //customer Routes
 

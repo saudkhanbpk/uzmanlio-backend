@@ -3581,7 +3581,7 @@ router.post("/:userId/customers/bulk-import", async (req, res) => {
           email: cData.email,
           phone: cData.phone,
           dateOfBirth: cData.dateOfBirth ? new Date(cData.dateOfBirth) : undefined,
-          gender: cData.gender,
+          gender: cData.gender || 'prefer-not-to-say',
           occupation: cData.occupation,
           company: cData.company,
           status: cData.status || 'active',

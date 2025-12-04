@@ -56,7 +56,7 @@ const CustomerSchema = new Schema({
     // Relationship and interaction tracking
     source: {
         type: String,
-        enum: ["website", "referral", "social-media", "advertisement", "walk-in", "other"],
+        enum: ["website", "referral", "social-media", "advertisement", "walk-in", "bulk-import", "other"],
         default: "website",
     },
     referredBy: { type: String },

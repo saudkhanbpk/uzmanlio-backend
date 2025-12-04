@@ -305,6 +305,7 @@ const ServiceSchema = new Schema({
   icon: { type: String },
   iconBg: { type: String, default: '' },
   price: { type: String, default: '0' },
+  discount: { type: Number, default: 0 },
   duration: { type: String, default: '0' },
   category: { type: String },
   features: [{ type: String }],
@@ -341,6 +342,7 @@ const PackageSchema = new Schema({
   title: { type: String, required: true },
   description: { type: String, default: '' },
   price: { type: Number, default: 0 },
+  discount: { type: Number, default: 0 },
   originalPrice: { type: Number },
   duration: { type: Number, default: 0 }, // in minutes (for session duration)
   appointmentCount: { type: Number, default: 1 }, // number of sessions/appointments

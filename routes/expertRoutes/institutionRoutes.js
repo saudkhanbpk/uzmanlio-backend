@@ -273,7 +273,7 @@ router.post("/:userId/institution/invite-user", async (req, res) => {
     const inviterUserId = req.params.userId;
 
     if (!email) {
-      return res.status(400).json({ error: "Email is required" });
+      return res.status(400).json({ error: "Geçerli bir E-Posta Adresi Girin" });
     }
 
     const user = await findUserById(inviterUserId);
