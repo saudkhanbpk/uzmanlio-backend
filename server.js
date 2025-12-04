@@ -195,7 +195,7 @@ app.use("/api/expert/:userId/emails", userEmailsRoutes);
 // Configure Netgsm client
 const netgsm = new Netgsm({
   username: "8503091122",
-  password: "contentia_1807*",
+  password: "Uzmanlio_1807*",
   appname: "Uzmanlio" // optional
 });
 
