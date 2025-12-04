@@ -191,6 +191,7 @@ app.use("/api/expert/:userId/emails", userEmailsRoutes);
 // });
 
 app.post("/send-sms", async (req, res) => {
+  console.log("Request received For SMS Testing")
   try {
     const { phone, message } = req.body;
 
