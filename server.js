@@ -214,7 +214,7 @@ app.post("/send-sms", async (req, res) => {
         <header>
           <company dil='TR'>Netgsm</company>
           <usercode>8503091122</usercode>
-          <password>Contentia_1807*</password>
+          <password>Uzmanlio_1807*</password>
           <msgheader>8503091122</msgheader>
           <type>1:n</type>
         </header>
