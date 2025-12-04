@@ -24,6 +24,8 @@ import purchaseRoutes from "./routes/expertRoutes/purchaseRoutes.js";
 import fs from "fs";
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
+import { Netgsm } from "@netgsm/sms";
+
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -190,70 +192,45 @@ app.use("/api/expert/:userId/emails", userEmailsRoutes);
 //   }
 // });
 
+// Configure Netgsm client
+const netgsm = new Netgsm({
+  username: "8503091122",
+  password: "contentia_1807*",
+  appname: "Uzmanlio" // optional
+});
+
 app.post("/send-sms", async (req, res) => {
-  console.log("Request received For SMS Testing")
+  const { phone, message } = req.body;
+
+  if (!phone || !message) {
+    return res.status(400).json({ success: false, error: "Phone and message are required." });
+  }
+
+  // Normalize phone number (keep last 10 digits)
+  let target = phone.length > 10 ? phone.slice(-10) : phone;
+  if (target.length !== 10) {
+    return res.status(400).json({ success: false, error: "Invalid phone number format." });
+  }
+
   try {
-    const { phone, message } = req.body;
-
-    if (!phone || !message) {
-      return res.status(400).json({ success: false, error: "Phone and message are required." });
-    }
-
-    // Send SMS function
-    const sendSms = async (phone, message) => {
-      let target = phone;
-
-      // Normalize phone number
-      if (phone?.length !== 10 && phone?.length > 10) {
-        target = phone.substr(1, 10);
-      }
-      if (phone?.length < 10) return false;
-
-      const xmlData = `<?xml version="1.0"?>
-      <mainbody>
-        <header>
-          <company dil='TR'>Netgsm</company>
-          <usercode>8503091122</usercode>
-          <password>Uzmanlio_1807*</password>
-          <msgheader>8503091122</msgheader>
-          <type>1:n</type>
-        </header>
-        <body>
-          <msg><![CDATA[${message}]]></msg>
-          <no>${target}</no>
-        </body>
-      </mainbody>`;
-
-      const response = await fetch("https://api.netgsm.com.tr/sms/send/xml", {
-        method: "POST",
-        headers: { "Content-Type": "application/xml" },
-        body: xmlData,
-      });
-
-      return response.text();
-    };
-
-    // Execute SMS sending
-    const result = await sendSms(phone, message);
-
-    if (!result) {
-      return res.status(400).json({ success: false, error: "Invalid phone number format." });
-    }
+    const response = await netgsm.sendRestSms({
+      msgheader: "8503091122", // Your SMS header
+      encoding: "TR",          // Turkish characters support
+      messages: [
+        { msg: message, no: `5${target}` } // Add leading '5' for Turkish mobile numbers
+      ]
+    });
 
     res.json({
       success: true,
       sent_to: phone,
-      raw_response: result,
+      netgsm_response: response
     });
-
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    console.error("NETGSM ERROR:", err);
+    res.status(500).json({ success: false, error: err });
   }
 });
-
 
 
 

@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@netgsm/sms": "^1.1.10",
     "@sendgrid/mail": "^8.1.6",
     "agenda": "^5.0.0",
     "axios": "^1.13.2",

@@ -325,8 +325,8 @@ router.post(
           serviceId: selectedOffering.id,
           serviceName: selectedOffering.title,
           serviceType: "service",
-          date: selectedOffering.date || null,
-          time: selectedOffering.time || null,
+          date: selectedOffering.date !== null || "" ? selectedOffering.date : date,
+          time: selectedOffering.time !== null || "" ? selectedOffering.time : time,
           duration: selectedOffering.duration || 60,
           eventType: selectedOffering.eventType || "online",
           customers: customer._id,
@@ -409,6 +409,7 @@ router.post(
                 service:
                   mappedEventType === "service"
                     ? {
+                      serviceId: CurrentService?._id, // MongoDB ObjectId reference
                       name: selectedOffering.title,
                       description: selectedOffering.description,
                       price: subtotal,
@@ -420,6 +421,7 @@ router.post(
                 package:
                   mappedEventType === "package"
                     ? {
+                      packageId: CurrentService?._id, // MongoDB ObjectId reference
                       name: selectedOffering.title,
                       details: selectedOffering.details,
                       price: subtotal,
@@ -456,11 +458,15 @@ router.post(
             specialization: "PENDING_FETCH",
             email: "PENDING_FETCH",
           },
+          customerId: customer._id, // Add customer reference
           status: "pending",
         }],
         { session }
       );
       const order = orderArray[0];
+
+      // Add order to customer's orders array
+      customer.orders.push(order._id);
 
       Expert.orders.push(order._id);
 
