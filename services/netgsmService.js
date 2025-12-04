@@ -178,3 +178,4 @@ export function handleSmsError(result) {
         errorMessage: result.error || 'Failed to send SMS',
     };
 }
+

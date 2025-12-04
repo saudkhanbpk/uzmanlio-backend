@@ -1,0 +1,254 @@
+import express from "express";
+import mongoose from "mongoose";
+import User from "../../models/expertInformation.js";
+import Customer from "../../models/customer.js";
+import Order from "../../models/orders.js";
+
+const router = express.Router();
+
+// Helper function to find user by ID
+const findUserById = async (userId) => {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new Error('Invalid user ID');
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new Error('User not found');
+    }
+    return user;
+};
+
+// ==================== PURCHASE ROUTES ====================
+
+// Create a new purchase entry
+router.post("/:userId/purchases", async (req, res) => {
+    try {
+        console.log("Creating purchase entry for userId:", req.params.userId);
+        console.log("Purchase data received:", req.body);
+
+        const { customerData, packageId } = req.body;
+
+        // Validate required fields
+        if (!customerData || !packageId) {
+            return res.status(400).json({
+                error: "Missing required fields: customerData and packageId are required"
+            });
+        }
+
+        // Get expert information
+        const expert = await findUserById(req.params.userId);
+
+        // Step 1: Determine if customer exists or needs to be created
+        let customer;
+        let isNewCustomer = false;
+
+        // Check if customerData is a valid ObjectID (existing customer)
+        if (mongoose.Types.ObjectId.isValid(customerData) && typeof customerData === 'string') {
+            // Existing customer - fetch from database
+            customer = await Customer.findById(customerData);
+            if (!customer) {
+                return res.status(404).json({ error: "Customer not found" });
+            }
+            console.log("Using existing customer:", customer._id);
+        } else {
+            // New customer - create in database
+            const newCustomerData = {
+                name: customerData.name,
+                surname: customerData.surname,
+                email: customerData.email,
+                phone: customerData.phone,
+                source: 'bulk-import', // Manual entry by expert
+                status: 'active'
+            };
+
+            customer = new Customer(newCustomerData);
+            await customer.save();
+            isNewCustomer = true;
+            console.log("Created new customer:", customer._id);
+
+            // Add customer reference to expert's customers array
+            if (!expert.customers) {
+                expert.customers = [];
+            }
+            expert.customers.push({
+                customerId: customer._id,
+                isArchived: false,
+                addedAt: new Date()
+            });
+        }
+
+        // Step 2: Fetch package details from expert's packages
+        const packageItem = expert.packages.find(pkg => pkg.id === packageId);
+        if (!packageItem) {
+            return res.status(404).json({ error: "Package not found" });
+        }
+
+        console.log("Found package:", packageItem.title);
+
+        // Step 3: Create order
+        const orderData = {
+            orderDetails: {
+                events: [{
+                    eventType: 'package',
+                    package: {
+                        packageId: packageItem._id, // MongoDB ObjectId reference
+                        name: packageItem.title,
+                        details: packageItem.description || '',
+                        price: packageItem.price,
+                        sessions: packageItem.appointmentCount || packageItem.sessionsIncluded || 1,
+                        duration: packageItem.duration,
+                        meetingType: packageItem.meetingType || ''
+                    },
+                    quantity: 1
+                }],
+                totalAmount: packageItem.price,
+                orderDate: new Date()
+            },
+            paymentInfo: {
+                method: "manual-entry",
+                status: "paid", // Manual entries are considered paid
+                transactionId: `MANUAL-${Date.now()}`
+            },
+            userInfo: {
+                userId: customer._id,
+                name: `${customer.name} ${customer.surname}`,
+                email: customer.email,
+                phone: customer.phone || ''
+            },
+            customerId: customer._id,
+            expertInfo: {
+                expertId: expert._id,
+                name: `${expert.information.name} ${expert.information.surname}`,
+                accountNo: expert.expertInformation?.subMerchantID || 'N/A',
+                specialization: expert.title || '',
+                email: expert.information.email
+            },
+            status: 'completed', // Manual entries are completed
+            couponUsage: false
+        };
+
+        const order = new Order(orderData);
+        await order.save();
+        console.log("Created order:", order._id);
+
+        // Step 4: Update customer's orders array
+        if (!customer.orders) {
+            customer.orders = [];
+        }
+        customer.orders.push(order._id);
+        customer.totalSpent = (customer.totalSpent || 0) + packageItem.price;
+        await customer.save();
+        console.log("Updated customer orders array");
+
+        // Step 5: Update package's purchasedBy array
+        const packageIndex = expert.packages.findIndex(pkg => pkg.id === packageId);
+        if (packageIndex !== -1) {
+            if (!expert.packages[packageIndex].purchasedBy) {
+                expert.packages[packageIndex].purchasedBy = [];
+            }
+
+            expert.packages[packageIndex].purchasedBy.push({
+                userId: customer._id,
+                purchaseDate: new Date(),
+                expiryDate: packageItem.validUntil || null,
+                sessionsUsed: 0
+            });
+
+            expert.packages[packageIndex].isPurchased = true;
+            expert.markModified('packages');
+        }
+
+        // Step 6: Add order reference to expert's orders array
+        if (!expert.orders) {
+            expert.orders = [];
+        }
+        expert.orders.push(order._id);
+        expert.markModified('customers');
+        expert.markModified('orders');
+        await expert.save();
+        console.log("Updated expert packages and orders");
+
+        res.json({
+            success: true,
+            message: "Purchase entry created successfully",
+            order: {
+                id: order._id,
+                orderNumber: order.paymentInfo.transactionId,
+                customer: {
+                    id: customer._id,
+                    name: `${customer.name} ${customer.surname}`,
+                    email: customer.email,
+                    phone: customer.phone
+                },
+                package: {
+                    id: packageItem.id,
+                    title: packageItem.title,
+                    price: packageItem.price,
+                    sessions: packageItem.appointmentCount || packageItem.sessionsIncluded
+                },
+                totalAmount: packageItem.price,
+                orderDate: order.orderDetails.orderDate,
+                isNewCustomer
+            }
+        });
+
+    } catch (error) {
+        console.error("Error creating purchase entry:", error);
+        res.status(500).json({
+            error: error.message || "Failed to create purchase entry",
+            details: error.stack
+        });
+    }
+});
+
+// Get all purchase entries for an expert
+router.get("/:userId/purchases", async (req, res) => {
+    try {
+        const expert = await findUserById(req.params.userId);
+
+        // Get all packages with purchases
+        const purchasedPackages = expert.packages.filter(
+            pkg => pkg.purchasedBy && pkg.purchasedBy.length > 0
+        );
+
+        // Fetch customer details for each purchase
+        const purchaseDetails = [];
+
+        for (const pkg of purchasedPackages) {
+            for (const purchase of pkg.purchasedBy) {
+                const customer = await Customer.findById(purchase.userId);
+                if (customer) {
+                    purchaseDetails.push({
+                        packageId: pkg.id,
+                        packageTitle: pkg.title,
+                        packagePrice: pkg.price,
+                        appointmentCount: pkg.appointmentCount || pkg.sessionsIncluded,
+                        customer: {
+                            id: customer._id,
+                            name: `${customer.name} ${customer.surname}`,
+                            email: customer.email,
+                            phone: customer.phone
+                        },
+                        purchaseDate: purchase.purchaseDate,
+                        sessionsUsed: purchase.sessionsUsed || 0,
+                        expiryDate: purchase.expiryDate
+                    });
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            purchases: purchaseDetails,
+            totalPurchases: purchaseDetails.length
+        });
+
+    } catch (error) {
+        console.error("Error fetching purchases:", error);
+        res.status(500).json({
+            error: error.message || "Failed to fetch purchases"
+        });
+    }
+});
+
+export default router;

@@ -68,6 +68,9 @@ const CustomerSchema = new Schema({
     cancelledAppointments: { type: Number, default: 0 },
     noShowAppointments: { type: Number, default: 0 },
 
+    // Orders history
+    orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
+
     // Financial information
     totalSpent: { type: Number, default: 0 },
     outstandingBalance: { type: Number, default: 0 },

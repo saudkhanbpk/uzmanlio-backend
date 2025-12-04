@@ -20,7 +20,10 @@ import backgroundJobService from "./services/backgroundJobs.js";
 import subscriptionRoutes from "./routes/expertRoutes/subscriptionRoutes.js";
 import institutionRoutes from "./routes/expertRoutes/institutionRoutes.js";
 import authRoutes from "./routes/expertRoutes/authRoutes.js";
+import purchaseRoutes from "./routes/expertRoutes/purchaseRoutes.js";
 import fs from "fs";
+import axios from "axios";
+import { parseStringPromise } from "xml2js";
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -129,6 +132,7 @@ app.use("/api/expert", packagesRoutes);
 app.use("/api/expert", galleryRoutes);
 app.use("/api/expert", subscriptionRoutes);
 app.use("/api/expert", institutionRoutes);
+app.use("/api/expert", purchaseRoutes);
 
 // Calendar integration routes
 app.use("/api/calendar/auth", calendarAuthRoutes);
@@ -138,6 +142,119 @@ app.use("/api/calendar/webhooks", calendarWebhookRoutes);
 app.use("/api/expert/:userId/coupons", userCouponsRoutes);
 // Emails per user
 app.use("/api/expert/:userId/emails", userEmailsRoutes);
+
+// app.post("/send-sms", async (req, res) => {
+//   try {
+//     const { message, phone } = req.body;
+
+//     if (!message || !phone) {
+//       return res.status(400).json({ error: "Message and phone are required" });
+//     }
+
+//     const url = "https://api.netgsm.com.tr/sms/send/xml";
+
+//     // IMPORTANT: XML must NOT contain any leading spaces or indentation!
+//     const xmlData =
+//       `<?xml version="1.0" encoding="UTF-8"?>
+// <mainbody>
+//   <header>
+//     <usercode>${process.env.NETGSM_USERNAME}</usercode>
+//     <password>${process.env.NETGSM_PASSWORD}</password>
+//     <msgheader>${process.env.NETGSM_MSGHEADER}</msgheader>
+//   </header>
+//   <body>
+//     <msg><![CDATA[${message}]]></msg>
+//     <no>${phone}</no>
+//   </body>
+// </mainbody>`;
+
+//     const response = await axios.post(url, xmlData, {
+//       headers: {
+//         "Content-Type": "application/xml",
+//       },
+//       timeout: 15000,
+//     });
+
+//     res.json({
+//       success: true,
+//       xml_sent: xmlData,
+//       response_raw: response.data,
+//     });
+
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "SMS send failed",
+//       error: error.message,
+//     });
+//   }
+// });
+
+app.post("/send-sms", async (req, res) => {
+  try {
+    const { phone, message } = req.body;
+
+    if (!phone || !message) {
+      return res.status(400).json({ success: false, error: "Phone and message are required." });
+    }
+
+    // Send SMS function
+    const sendSms = async (phone, message) => {
+      let target = phone;
+
+      // Normalize phone number
+      if (phone?.length !== 10 && phone?.length > 10) {
+        target = phone.substr(1, 10);
+      }
+      if (phone?.length < 10) return false;
+
+      const xmlData = `<?xml version="1.0"?>
+      <mainbody>
+        <header>
+          <company dil='TR'>Netgsm</company>
+          <usercode>8503091122</usercode>
+          <password>Contentia_1807*</password>
+          <msgheader>8503091122</msgheader>
+          <type>1:n</type>
+        </header>
+        <body>
+          <msg><![CDATA[${message}]]></msg>
+          <no>${target}</no>
+        </body>
+      </mainbody>`;
+
+      const response = await fetch("https://api.netgsm.com.tr/sms/send/xml", {
+        method: "POST",
+        headers: { "Content-Type": "application/xml" },
+        body: xmlData,
+      });
+
+      return response.text();
+    };
+
+    // Execute SMS sending
+    const result = await sendSms(phone, message);
+
+    if (!result) {
+      return res.status(400).json({ success: false, error: "Invalid phone number format." });
+    }
+
+    res.json({
+      success: true,
+      sent_to: phone,
+      raw_response: result,
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+
+
 
 //customer Routes
 
