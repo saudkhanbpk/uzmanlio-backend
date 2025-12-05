@@ -228,11 +228,16 @@ const EventSchema = new Schema({
     enum: ["pending", "approved", "completed", "cancelled", "scheduled"],
     default: "pending",
   },
-  paymentType: {
-    type: String,
-    enum: ["online", "havale-eft", "paketten-tahsil"],
-    default: "online",
-  },
+  paymentType: [{
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
+    paymentMethod: {  // CHANGED from 'type' to 'paymentMethod'
+      type: String,
+      enum: ["online", "havale-eft", "paketten-tahsil"],
+      default: "online"
+    },
+    packageId: { type: mongoose.Schema.Types.ObjectId, ref: "Package" },
+    orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order" }  // ADD THIS LINE
+  }],
   isRecurring: { type: Boolean, default: false },
   recurringType: { type: String, enum: ["haftalık", "aylık"] },
   selectedClients: [

@@ -21,6 +21,7 @@ const eventSchema = new Schema({
         details: { type: String },
         price: { type: Number },
         sessions: { type: Number },
+        completedSessions: { type: Number, default: 0 },
         duration: { type: Number },
         meetingType: { type: String } // bireysel, grup, etc.
     },
