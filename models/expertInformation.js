@@ -262,6 +262,7 @@ const EventSchema = new Schema({
   repetitionJobIds: { type: String }, // Comma-separated job IDs
   originalEventId: { type: String }, // Reference to original event if this is a repetition
   repetitionNumber: { type: Number }, // Which repetition this is (1, 2, 3, etc.)
+  completedRepetitions: { type: Number, default: 0 }, // Number of completed repetitions
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -651,6 +652,10 @@ const UserSchema = new Schema(
       education: [EducationSchema],
     },
     titles: [Title],
+    eventRepetitionWarnings: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "EventRepetitionWarning"
+    }],
     experience: [ExperienceSchema],
     certificates: [CertificateSchema],
     diploma: [DiplomaSchema],
