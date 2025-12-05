@@ -239,7 +239,7 @@ const EventSchema = new Schema({
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order" }  // ADD THIS LINE
   }],
   isRecurring: { type: Boolean, default: false },
-  recurringType: { type: String, enum: ["haftalık", "aylık"] },
+  recurringType: { type: String, enum: ["weekly", "monthly"] },
   selectedClients: [
     {
       id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
@@ -259,6 +259,9 @@ const EventSchema = new Schema({
     },
   ],
   agendaJobId: { type: String }, // Stores Agenda job ID for reminder scheduling
+  repetitionJobIds: { type: String }, // Comma-separated job IDs
+  originalEventId: { type: String }, // Reference to original event if this is a repetition
+  repetitionNumber: { type: Number }, // Which repetition this is (1, 2, 3, etc.)
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

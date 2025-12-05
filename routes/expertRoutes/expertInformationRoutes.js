@@ -18,6 +18,7 @@ import {
 import { sendSms } from "../../services/netgsmService.js";
 import agenda from "../../services/agendaService.js";
 import Order from "../../models/orders.js";
+import { scheduleRepeatedEvents } from "../../services/repetitionAgendaService.js";
 const router = express.Router();
 
 // Get __dirname equivalent
@@ -1376,348 +1377,154 @@ router.get("/:userId/events/status/:status", async (req, res) => {
   }
 });
 
-// // Create new event
-// router.post("/:userId/events", async (req, res) => {
-//   try {
-//     const user = await findUserById(req.params.userId);
-//     const eventData = req.body;
-//     console.log("Requested Data", req.body)
 
-//     // Generate unique ID for the event
-//     const eventId = uuidv4();
-
-//     // Process selectedClients: Find/Create Customer and Link to Expert
-//     const resolvedClients = [];
-//     const inputClients = eventData.selectedClients || [];
-
-//     for (const client of inputClients) {
-//       let customerId = client._id || client.id;
-//       let customerName = client.name;
-//       let customerEmail = client.email;
-
-//       // Check if ID is a valid ObjectId. If not (e.g. timestamp), treat as new/unknown.
-//       const isValidId = mongoose.Types.ObjectId.isValid(customerId) && String(customerId).length === 24;
-
-//       if (!isValidId) {
-//         // Try to find by email
-//         let existingCustomer = await Customer.findOne({ email: customerEmail });
-
-//         if (!existingCustomer) {
-//           // Create new customer
-//           const nameParts = customerName.trim().split(' ');
-//           const firstName = nameParts[0];
-//           const lastName = nameParts.slice(1).join(' ') || '';
-
-//           existingCustomer = await Customer.create({
-//             name: firstName,
-//             surname: lastName,
-//             email: customerEmail,
-//             phone: client.phone || "",
-//             status: "active",
-//             source: "website",
-//             createdAt: new Date(),
-//             updatedAt: new Date()
-//           });
-//           console.log(`Created new customer: ${customerEmail} (${existingCustomer._id})`);
-//         } else {
-//           console.log(`Found existing customer by email: ${customerEmail} (${existingCustomer._id})`);
-//         }
-//         customerId = existingCustomer._id;
-//       }
-
-//       // Ensure customer is linked to Expert
-//       if (!user.customers) {
-//         user.customers = [];
-//       }
-
-//       const isLinked = user.customers.some(c =>
-//         c.customerId && c.customerId.toString() === customerId.toString()
-//       );
-
-//       if (!isLinked) {
-//         user.customers.push({
-//           customerId: customerId,
-//           isArchived: false,
-//           addedAt: new Date()
-//         });
-//         console.log(`Linked customer ${customerId} to expert`);
-//       }
-
-//       resolvedClients.push({
-//         id: customerId,
-//         name: customerName,
-//         email: customerEmail,
-//         packages: client.packages || []
-//       });
-//     }
-
-//     const formattedClients = resolvedClients;
-
-//     const newEvent = {
-//       id: eventId,
-//       title: eventData.title || eventData.serviceName,
-//       description: eventData.description,
-//       serviceId: eventData.service,
-//       serviceName: eventData.serviceName,
-//       serviceType: eventData.serviceType,
-//       date: eventData.date,
-//       time: eventData.time,
-//       duration: eventData.duration,
-//       location: eventData.location,
-//       platform: eventData.platform,
-//       eventType: eventData.eventType,
-//       meetingType: eventData.meetingType,
-//       price: eventData.price,
-//       maxAttendees: eventData.maxAttendees,
-//       attendees: eventData.attendees || 0,
-//       category: eventData.category,
-//       status: eventData.status || 'pending',
-//       paymentType: eventData.paymentType || 'online',
-//       isRecurring: eventData.isRecurring || false,
-//       recurringType: eventData.recurringType,
-//       selectedClients: formattedClients || [],
-//       appointmentNotes: eventData.appointmentNotes,
-//       files: eventData.files || [],
-//       createdAt: new Date(),
-//       updatedAt: new Date()
-//     };
-
-//     if (!user.events) {
-//       user.events = [];
-//     }
-//     user.events.push(newEvent);
-//     // user.packages.find(package => {
-//     //   if (package.id === eventData.packageId) {
-//     //     package.selectedClients.push({ id: customerId, name: customerName, email: customerEmail });
-//     //   }
-//     // })
-//     user.packages.find(pkg => {
-//       if (pkg.id === eventData.service) {
-//         pkg.selectedClients.push({
-//           id: customerId,
-//           name: customerName,
-//           email: customerEmail
-//         });
-//       }
-//     });
-//     await user.save();
-
-
-//     //Create the Agenda instance (Schedling Emails before 2 hours Of Appointment)
-//     try {
-//       const savedUser = await User.findById(req.params.userId);
-//       const savedEvent = savedUser.events.find(e => e.id === eventId);
-//       console.log("Checking For the User and Event")
-//       if (savedEvent) {
-//         const jobId = await scheduleReminderForEvent(savedUser, savedEvent);
-//         console.log("Job Id Created", jobId)
-
-//         if (jobId) {
-//           savedEvent.agendaJobId = jobId;
-//           await savedUser.save();
-//           console.log("Agenda job scheduled for event", eventId, "jobId:", jobId);
-//         }
-//       }
-//     } catch (schedErr) {
-//       console.error("Error scheduling agenda job after event create:", schedErr);
-//     }
-
-
-//     // Extract emails from selectedClients
-//     const clientEmails = (formattedClients || []).map(c => c.email);
-//     console.log("Client Emails:", clientEmails);
-
-
-//     //if the Event is Service Event , then Send the Service Email to Expert and Customers Both
-//     if (eventData.serviceType === 'service') {
-//       console.log("Event is service")
-
-//       if (eventData.meetingType === '1-1') {
-//         //sending email to the customer
-//         const singleusertemplate = getClient11SessionTemplate({
-//           participantName: formattedClients[0].name,
-//           expertName: user.information.name,
-//           sessionName: eventData.serviceName,
-//           sessionDate: eventData.date,
-//           sessionTime: eventData.time,
-//           sessionDuration: eventData.duration,
-//         })
-//         const htmlTemplate = `
-//         <p>Merhaba ${formattedClients[0].name},</p>
-//         <p>${user.information.name} senin için ${eventData.serviceName} randevusu oluşturdu.</p>
-//         <p>Tarih: ${eventData.date} ${eventData.time}</p>
-//         <p>Katılım linki: <a href="${eventData.platform || 'Link will be shared soon'}">Randevuya Katıl</a></p>
-//       `;
-//         await sendBulkEmail(clientEmails, "Danışan Randevu Oluşturdu", "Randevu oluşturuldu", htmlTemplate);
-
-
-//         //sending email to the Expert
-//         const template = getExpertEventCreatedTemplate({
-//           expertName: user.information.name,
-//           clientName: formattedClients[0].name,
-//           eventDate: eventData.date,
-//           eventTime: eventData.time,
-//           eventLocation: eventData.location,
-//           serviceName: eventData.serviceName
-//         })
-//         sendEmail(user.information.email, {
-//           subject: "Danışan Randevu Oluşturdu",
-//           body: "Danışan için yeni bir randevu oluşturuldu.",
-//           html: template
-//         })
-//       }
-
-//       else {
-//         //sending email to the customers one by one
-//         formattedClients.map(client => {
-//           const groupusertemplate = getClientGroupSessionTemplate({
-//             participantName: client.name,
-//             expertName: user.information.name,
-//             sessionName: eventData.serviceName,
-//             sessionDate: eventData.date,
-//             sessionTime: eventData.time,
-//             sessionDuration: eventData.duration,
-//           })
-//           sendEmail(client.email, {
-//             subject: "Group event created",
-//             body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
-//             html: groupusertemplate.html
-//           })
-//         })
-
-//         //sending email to the Expert
-//         const template = getExpertEventCreatedTemplate({
-//           expertName: user.information.name,
-//           clientName: formattedClients[0].name,
-//           eventDate: eventData.date,
-//           eventTime: eventData.time,
-//           eventLocation: eventData.location,
-//           serviceName: eventData.serviceName
-//         })
-//         sendEmail(user.information.email, {
-//           subject: "Group event created",
-//           body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
-//           html: template.html
-//         });
-//       }
-
-//       //Else Send the package emails
-//     } else {
-//       //sending email to the customer
-//       const packageTemplate = formattedClients.map(client => {
-//         const packagetemplate = getClientPackageSessionTemplate({
-//           participantName: client.name,
-//           expertName: user.information.name,
-//           sessionName: eventData.serviceName,
-//           sessionDate: eventData.date,
-//           sessionTime: eventData.time,
-//           sessionDuration: eventData.duration,
-//         })
-//         console.log("Event is not service , sending package email to customers and user")
-//         sendEmail(client.email, "Package Event Created", "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu", packageTemplate.html)
-//       })
-//       //sending email to the Expert
-//       const template = getExpertEventCreatedTemplate({
-//         expertName: user.information.name,
-//         clientName: formattedClients[0].name,
-//         eventDate: eventData.date,
-//         eventTime: eventData.time,
-//         eventLocation: eventData.location,
-//         serviceName: eventData.serviceName
-//       })
-//       sendEmail(user.information.email, {
-//         subject: "Package Event Created",
-//         body: "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu",
-//         html: template
-//       });
-//     }
-
-//     if (user.calendarProviders && user.calendarProviders.length > 0) {
-//       const activeProviders = user.calendarProviders.filter(cp => cp.isActive);
-
-//       if (activeProviders.length > 0) {
-//         // Run sync in background (asynchroniously)
-//         // setImmediate(async () => {
-//         for (const provider of activeProviders) {
-//           try {
-//             const response = await calendarSyncService.syncAppointmentToProvider(req.params.userId, newEvent, provider)
-//             if (response.success) {
-//               console.log("sunced Event To Calendar Successfully")
-//             } else {
-//               console.log("Sunc Failed to Calendar", error)
-//             }
-//           } catch (error) {
-//             console.error(`❌ Failed to sync event to ${provider.provider}:`, error);
-//           }
-//         }
-//         // });
-//       }
-//     }
-
-//     res.status(201).json({
-//       event: newEvent,
-//       message: "Event created successfully"
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// });
 
 router.post("/:userId/events", async (req, res) => {
   try {
-    const userId = req.params.userId;
+    const user = await findUserById(req.params.userId);
     const eventData = req.body;
+    console.log("Requested Data", req.body);
 
-    console.log("Creating event for userId:", userId);
-    console.log("Event data received:", eventData);
+    // Generate unique ID for the event
+    const eventId = uuidv4();
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+    // Process selectedClients: Find/Create Customer and Link to Expert
+    const resolvedClients = [];
+    const inputClients = eventData.selectedClients || [];
+
+    for (const client of inputClients) {
+      let customerId = client._id || client.id;
+      let customerName = client.name;
+      let customerEmail = client.email;
+
+      // Check if ID is a valid ObjectId. If not (e.g. timestamp), treat as new/unknown.
+      const isValidId = mongoose.Types.ObjectId.isValid(customerId) && String(customerId).length === 24;
+
+      if (!isValidId) {
+        // Try to find by email
+        let existingCustomer = await Customer.findOne({ email: customerEmail });
+
+        if (!existingCustomer) {
+          // Create new customer
+          const nameParts = customerName.trim().split(' ');
+          const firstName = nameParts[0];
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          existingCustomer = await Customer.create({
+            name: firstName,
+            surname: lastName,
+            email: customerEmail,
+            phone: client.phone || "",
+            status: "active",
+            source: "website",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          console.log(`Created new customer: ${customerEmail} (${existingCustomer._id})`);
+        } else {
+          console.log(`Found existing customer by email: ${customerEmail} (${existingCustomer._id})`);
+        }
+        customerId = existingCustomer._id;
+      }
+
+      // Ensure customer is linked to Expert
+      if (!user.customers) {
+        user.customers = [];
+      }
+
+      const isLinked = user.customers.some(c =>
+        c.customerId && c.customerId.toString() === customerId.toString()
+      );
+
+      if (!isLinked) {
+        user.customers.push({
+          customerId: customerId,
+          isArchived: false,
+          addedAt: new Date()
+        });
+        console.log(`Linked customer ${customerId} to expert`);
+      }
+
+      resolvedClients.push({
+        id: customerId,
+        name: customerName,
+        email: customerEmail,
+        packages: client.packages || []
+      });
     }
 
-    // Generate unique event ID
+    const formattedClients = resolvedClients;
+
     const newEvent = {
-      id: uuidv4(),
-      ...eventData,
-      createdAt: new Date()
+      id: eventId,
+      title: eventData.title || eventData.serviceName,
+      description: eventData.description,
+      serviceId: eventData.service,
+      serviceName: eventData.serviceName,
+      serviceType: eventData.serviceType,
+      date: eventData.date,
+      time: eventData.time,
+      duration: eventData.duration,
+      location: eventData.location,
+      platform: eventData.platform,
+      eventType: eventData.eventType,
+      meetingType: eventData.meetingType,
+      price: eventData.price,
+      maxAttendees: eventData.maxAttendees,
+      attendees: eventData.attendees || 0,
+      category: eventData.category,
+      status: eventData.status || 'pending',
+      paymentType: eventData.paymentType || 'online',
+      isRecurring: eventData.isRecurring || false,
+      recurringType: eventData.recurringType,
+      selectedClients: formattedClients || [],
+      appointmentNotes: eventData.appointmentNotes,
+      files: eventData.files || [],
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
-    // Add event to user's events array
     if (!user.events) {
       user.events = [];
     }
     user.events.push(newEvent);
 
-    // === NEW: Process package-based payments ===
+
+
+    user.packages.find(pkg => {
+      if (pkg.id === eventData.service) {
+        pkg.selectedClients.push({
+          id: customerId,
+          name: customerName,
+          email: customerEmail
+        });
+      }
+    });
+
+    // === Process package-based payments ===
     if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
       console.log("Processing payment types:", eventData.paymentType);
 
       for (const payment of eventData.paymentType) {
-        // Only process package-based payments
         if (payment.paymentMethod === 'paketten-tahsil' && payment.orderId && payment.packageId) {
           console.log(`Incrementing session for order: ${payment.orderId}, package: ${payment.packageId}`);
 
           try {
-            // Find the order and increment completedSessions
             const order = await Order.findById(payment.orderId);
 
             if (order && order.orderDetails?.events) {
-              // Find the specific package event in the order
               for (let event of order.orderDetails.events) {
                 if (
                   event.eventType === 'package' &&
                   event.package &&
                   event.package.packageId?.toString() === payment.packageId.toString()
                 ) {
-                  // Increment completedSessions
                   event.package.completedSessions = (event.package.completedSessions || 0) + 1;
                   console.log(`✅ Incremented completedSessions to ${event.package.completedSessions} for package ${payment.packageId}`);
                   break;
                 }
               }
 
-              // Save the updated order
               await order.save();
               console.log(`✅ Order ${payment.orderId} updated successfully`);
             } else {
@@ -1725,7 +1532,6 @@ router.post("/:userId/events", async (req, res) => {
             }
           } catch (orderError) {
             console.error(`❌ Error updating order ${payment.orderId}:`, orderError);
-            // Continue processing other payments even if one fails
           }
         }
       }
@@ -1733,19 +1539,283 @@ router.post("/:userId/events", async (req, res) => {
 
     await user.save();
 
-    // Send email notifications (existing code continues...)
-    // ... rest of your existing code
+    const savedUser = await User.findById(req.params.userId);
+    const savedEvent = savedUser.events.find(e => e.id === newEvent.id);
+
+    //Create the Agenda instance (Scheduling Emails before 2 hours Of Appointment)
+    try {
+      // const savedUser = await User.findById(req.params.userId);
+      // const savedEvent = savedUser.events.find(e => e.id === eventId);
+      console.log("Checking For the User and Event");
+      if (savedEvent) {
+        const jobId = await scheduleReminderForEvent(savedUser, savedEvent);
+        console.log("Job Id Created", jobId);
+
+        if (jobId) {
+          savedEvent.agendaJobId = jobId;
+          await savedUser.save();
+          console.log("Agenda job scheduled for event", eventId, "jobId:", jobId);
+        }
+      }
+    } catch (schedErr) {
+      console.error("Error scheduling agenda job after event create:", schedErr);
+    }
+
+    // === NEW: Schedule repetitions if enabled ===
+    let repetitionJobIds = null;
+    if (eventData.isRecurring && eventData.repetitions && eventData.repetitions.length > 0) {
+      console.log("📅 Scheduling event repetitions...");
+
+      try {
+        repetitionJobIds = await scheduleRepeatedEvents(
+          savedUser._id,
+          savedEvent._id,
+          {
+            ...eventData,
+            // Remove repetition data from repeated events to avoid infinite loop
+            isRecurring: false,
+            repetitions: []
+          },
+          {
+            isRecurring: eventData.isRecurring,
+            recurringType: eventData.recurringType,
+            repetitions: eventData.repetitions
+          }
+        );
+
+        if (repetitionJobIds) {
+          // Store job IDs in the event for future cancellation
+          if (savedEvent) {
+            savedEvent.repetitionJobIds = repetitionJobIds;
+            await savedUser.save();
+          }
+          console.log(`✅ Scheduled ${eventData.repetitions[0].numberOfRepetitions} repetitions`);
+        }
+      } catch (repError) {
+        console.error("❌ Error scheduling repetitions:", repError);
+        // Don't fail the entire request if repetition scheduling fails
+      }
+    }
+
+    // Extract emails from selectedClients
+    const clientEmails = (formattedClients || []).map(c => c.email);
+    console.log("Client Emails:", clientEmails);
+
+    //if the Event is Service Event , then Send the Service Email to Expert and Customers Both
+    if (eventData.serviceType === 'service') {
+      console.log("Event is service");
+
+      if (eventData.meetingType === '1-1') {
+        //sending email to the customer
+        const singleusertemplate = getClient11SessionTemplate({
+          participantName: formattedClients[0].name,
+          expertName: user.information.name,
+          sessionName: eventData.serviceName,
+          sessionDate: eventData.date,
+          sessionTime: eventData.time,
+          sessionDuration: eventData.duration,
+        });
+        const htmlTemplate = `
+        <p>Merhaba ${formattedClients[0].name},</p>
+        <p>${user.information.name} senin için ${eventData.serviceName} randevusu oluşturdu.</p>
+        <p>Tarih: ${eventData.date} ${eventData.time}</p>
+        <p>Katılım linki: <a href="${eventData.platform || 'Link will be shared soon'}">Randevuya Katıl</a></p>
+      `;
+        await sendBulkEmail(clientEmails, "Danışan Randevu Oluşturdu", "Randevu oluşturuldu", htmlTemplate);
+
+        //sending email to the Expert
+        const template = getExpertEventCreatedTemplate({
+          expertName: user.information.name,
+          clientName: formattedClients[0].name,
+          eventDate: eventData.date,
+          eventTime: eventData.time,
+          eventLocation: eventData.location,
+          serviceName: eventData.serviceName
+        });
+        sendEmail(user.information.email, {
+          subject: "Danışan Randevu Oluşturdu",
+          body: "Danışan için yeni bir randevu oluşturuldu.",
+          html: template
+        });
+      }
+
+      else {
+        //sending email to the customers one by one
+        formattedClients.map(client => {
+          const groupusertemplate = getClientGroupSessionTemplate({
+            participantName: client.name,
+            expertName: user.information.name,
+            sessionName: eventData.serviceName,
+            sessionDate: eventData.date,
+            sessionTime: eventData.time,
+            sessionDuration: eventData.duration,
+          });
+          sendEmail(client.email, {
+            subject: "Group event created",
+            body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
+            html: groupusertemplate.html
+          });
+        });
+
+        //sending email to the Expert
+        const template = getExpertEventCreatedTemplate({
+          expertName: user.information.name,
+          clientName: formattedClients[0].name,
+          eventDate: eventData.date,
+          eventTime: eventData.time,
+          eventLocation: eventData.location,
+          serviceName: eventData.serviceName
+        });
+        sendEmail(user.information.email, {
+          subject: "Group event created",
+          body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
+          html: template.html
+        });
+      }
+
+      //Else Send the package emails
+    } else {
+      //sending email to the customer
+      const packageTemplate = formattedClients.map(client => {
+        const packagetemplate = getClientPackageSessionTemplate({
+          participantName: client.name,
+          expertName: user.information.name,
+          sessionName: eventData.serviceName,
+          sessionDate: eventData.date,
+          sessionTime: eventData.time,
+          sessionDuration: eventData.duration,
+        });
+        console.log("Event is not service , sending package email to customers and user");
+        sendEmail(client.email, "Package Event Created", "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu", packagetemplate.html);
+      });
+      //sending email to the Expert
+      const template = getExpertEventCreatedTemplate({
+        expertName: user.information.name,
+        clientName: formattedClients[0].name,
+        eventDate: eventData.date,
+        eventTime: eventData.time,
+        eventLocation: eventData.location,
+        serviceName: eventData.serviceName
+      });
+      sendEmail(user.information.email, {
+        subject: "Package Event Created",
+        body: "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu",
+        html: template
+      });
+    }
+
+    if (user.calendarProviders && user.calendarProviders.length > 0) {
+      const activeProviders = user.calendarProviders.filter(cp => cp.isActive);
+
+      if (activeProviders.length > 0) {
+        for (const provider of activeProviders) {
+          try {
+            const response = await calendarSyncService.syncAppointmentToProvider(req.params.userId, newEvent, provider);
+            if (response.success) {
+              console.log("synced Event To Calendar Successfully");
+            } else {
+              console.log("Sync Failed to Calendar", error);
+            }
+          } catch (error) {
+            console.error(`❌ Failed to sync event to ${provider.provider}:`, error);
+          }
+        }
+      }
+    }
 
     res.status(201).json({
+      event: newEvent,
       message: "Event created successfully",
-      event: newEvent
+      repetitionsScheduled: repetitionJobIds ? true : false
     });
-
-  } catch (err) {
-    console.error("Error creating event:", err);
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
+
+// router.post("/:userId/events", async (req, res) => {
+//   try {
+//     const userId = req.params.userId;
+//     const eventData = req.body;
+
+//     console.log("Creating event for userId:", userId);
+//     console.log("Event data received:", eventData);
+
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ error: "User not found" });
+//     }
+
+//     // Generate unique event ID
+//     const newEvent = {
+//       id: uuidv4(),
+//       ...eventData,
+//       createdAt: new Date()
+//     };
+
+//     // Add event to user's events array
+//     if (!user.events) {
+//       user.events = [];
+//     }
+//     user.events.push(newEvent);
+
+//     // === NEW: Process package-based payments ===
+//     if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
+//       console.log("Processing payment types:", eventData.paymentType);
+
+//       for (const payment of eventData.paymentType) {
+//         // Only process package-based payments
+//         if (payment.paymentMethod === 'paketten-tahsil' && payment.orderId && payment.packageId) {
+//           console.log(`Incrementing session for order: ${payment.orderId}, package: ${payment.packageId}`);
+
+//           try {
+//             // Find the order and increment completedSessions
+//             const order = await Order.findById(payment.orderId);
+
+//             if (order && order.orderDetails?.events) {
+//               // Find the specific package event in the order
+//               for (let event of order.orderDetails.events) {
+//                 if (
+//                   event.eventType === 'package' &&
+//                   event.package &&
+//                   event.package.packageId?.toString() === payment.packageId.toString()
+//                 ) {
+//                   // Increment completedSessions
+//                   event.package.completedSessions = (event.package.completedSessions || 0) + 1;
+//                   console.log(`✅ Incremented completedSessions to ${event.package.completedSessions} for package ${payment.packageId}`);
+//                   break;
+//                 }
+//               }
+
+//               // Save the updated order
+//               await order.save();
+//               console.log(`✅ Order ${payment.orderId} updated successfully`);
+//             } else {
+//               console.warn(`⚠️ Order ${payment.orderId} not found or has no events`);
+//             }
+//           } catch (orderError) {
+//             console.error(`❌ Error updating order ${payment.orderId}:`, orderError);
+//             // Continue processing other payments even if one fails
+//           }
+//         }
+//       }
+//     }
+
+//     await user.save();
+
+//     // Send email notifications (existing code continues...)
+//     // ... rest of your existing code
+
+//     res.status(201).json({
+//       message: "Event created successfully",
+//       event: newEvent
+//     });
+
+//   } catch (err) {
+//     console.error("Error creating event:", err);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 // Update event
 router.put("/:userId/events/:eventId", async (req, res) => {
