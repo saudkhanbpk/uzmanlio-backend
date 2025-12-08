@@ -1555,6 +1555,9 @@ router.post("/:userId/events", async (req, res) => {
 
     await user.save();
 
+    const savedUser = await User.findById(req.params.userId);
+    const savedEvent = savedUser.events.find(e => e.id === newEvent.id);
+
     // === NEW: Create orders for customers without packages ===
     if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
       console.log("📦 Creating orders for customers without packages...");
@@ -1569,38 +1572,67 @@ router.post("/:userId/events", async (req, res) => {
             try {
               console.log(`💰 Creating order for ${customer.name} - Price: ${eventData.price}`);
 
+              // Fetch customer details
+              const customerDoc = await Customer.findById(customerId);
+
               // Create new order for this customer
               const newOrder = await Order.create({
-                userId: customerId,
-                expertId: req.params.userId,
+                userInfo: {
+                  userId: customerId,
+                  name: customer.name,
+                  email: customer.email,
+                  phone: customerDoc?.phone || ''
+                },
+                expertInfo: {
+                  expertId: req.params.userId,
+                  name: user.information?.name || 'Expert',
+                  accountNo: user.information?.accountNo || 'N/A',
+                  email: user.information?.email || ''
+                },
                 orderDetails: {
                   events: [
                     {
                       eventType: 'service',
                       service: {
-                        serviceId: eventData.service,
-                        serviceName: eventData.serviceName,
-                        serviceType: eventData.serviceType,
+                        name: eventData.serviceName,
+                        description: eventData.description || '',
                         price: parseFloat(eventData.price),
-                        eventId: newEvent.id,
-                        eventDate: eventData.date,
-                        eventTime: eventData.time,
-                        paymentMethod: payment.paymentMethod,
-                        status: 'pending'
+                        duration: parseInt(eventData.duration) || 0,
+                        meetingType: eventData.meetingType || '1-1'
                       }
                     }
-                  ]
+                  ],
+                  totalAmount: parseFloat(eventData.price)
                 },
-                totalAmount: parseFloat(eventData.price),
-                paymentStatus: 'pending',
-                paymentMethod: payment.paymentMethod,
-                orderStatus: 'active',
-                createdAt: new Date(),
-                updatedAt: new Date()
+                paymentInfo: {
+                  method: payment.paymentMethod,
+                  status: 'pending'
+                },
+                status: 'pending',
+                orderSource: 'expert-created-event'
               });
 
               console.log(`✅ Created order ${newOrder._id} for customer ${customer.name}`);
 
+
+              // Update customer's orders and appointments arrays
+              if (customerDoc) {
+                if (!customerDoc.orders) {
+                  customerDoc.orders = [];
+                }
+                if (!customerDoc.appointments) {
+                  customerDoc.appointments = [];
+                }
+
+                // Add order ID to customer's orders
+                customerDoc.orders.push(newOrder._id);
+
+                // Add event ID to customer's appointments (using the event's MongoDB _id)
+                customerDoc.appointments.push(savedEvent._id);
+
+                await customerDoc.save();
+                console.log(`✅ Updated customer ${customer.name} - Added order and appointment`);
+              }
               // Update the payment type with the new order ID
               const paymentIndex = eventData.paymentType.findIndex(
                 p => p.customerId.toString() === customerId.toString()
@@ -1623,8 +1655,6 @@ router.post("/:userId/events", async (req, res) => {
       }
     }
 
-    const savedUser = await User.findById(req.params.userId);
-    const savedEvent = savedUser.events.find(e => e.id === newEvent.id);
     //Create the Agenda instance (Scheduling Emails before 2 hours Of Appointment)
     try {
       // const savedUser = await User.findById(req.params.userId);
@@ -2512,19 +2542,64 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
 router.delete("/:userId/events/:eventId", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
-    console.log("user is found")
+    console.log("user is found");
+
     const eventIndex = user.events.findIndex(event => event.id === req.params.eventId);
-    console.log("eventIndex is found:", eventIndex)
-    const agendaJobId = user.events[eventIndex].agendaJobId;
-    console.log("agendaJobId is found:", agendaJobId)
+    console.log("eventIndex is found:", eventIndex);
 
     if (eventIndex === -1) {
       return res.status(404).json({ error: "Event not found" });
     }
 
+    const eventToDelete = user.events[eventIndex];
+    const agendaJobId = eventToDelete.agendaJobId;
+    console.log("agendaJobId is found:", agendaJobId);
+
+    // === NEW: Remove order IDs and event ID from customers ===
+    if (eventToDelete.paymentType && Array.isArray(eventToDelete.paymentType)) {
+      console.log("🗑️ Removing event and order references from customers...");
+
+      for (const payment of eventToDelete.paymentType) {
+        try {
+          const customerId = payment.customerId;
+          const customer = await Customer.findById(customerId);
+
+          if (customer) {
+            // Remove order ID from customer's orders array if it exists
+            if (payment.orderId && customer.orders) {
+              const orderIndex = customer.orders.findIndex(
+                orderId => orderId.toString() === payment.orderId.toString()
+              );
+              if (orderIndex !== -1) {
+                customer.orders.splice(orderIndex, 1);
+                console.log(`✅ Removed order ${payment.orderId} from customer ${customer.name}`);
+              }
+            }
+
+            // Remove event ID from customer's appointments array
+            if (customer.appointments) {
+              const appointmentIndex = customer.appointments.findIndex(
+                apptId => apptId.toString() === eventToDelete._id.toString()
+              );
+              if (appointmentIndex !== -1) {
+                customer.appointments.splice(appointmentIndex, 1);
+                console.log(`✅ Removed appointment ${eventToDelete._id} from customer ${customer.name}`);
+              }
+            }
+
+            await customer.save();
+            console.log(`✅ Updated customer ${customer.name} after event deletion`);
+          }
+        } catch (customerError) {
+          console.error(`❌ Error updating customer ${payment.customerId}:`, customerError);
+        }
+      }
+    }
+
+    // Delete the event
     user.events.splice(eventIndex, 1);
     await user.save();
-    console.log("event is deleted")
+    console.log("event is deleted");
 
     // Cancel scheduled agenda job if existed
     if (agendaJobId) {
@@ -2543,17 +2618,18 @@ router.delete("/:userId/events/:eventId", async (req, res) => {
       setImmediate(async () => {
         for (const provider of providers) {
           try {
-            await deleteAppointmentFromProvider(req.params.userId, updatedEvent, provider);
-            console.log(`Deleted event ${updatedEvent.title} from ${provider.provider}`);
+            await deleteAppointmentFromProvider(req.params.userId, eventToDelete, provider);
+            console.log(`Deleted event ${eventToDelete.title} from ${provider.provider}`);
           } catch (error) {
-            console.error(`Failed Deleting ${updatedEvent.title} from ${provider.provider}:`, error);
+            console.error(`Failed Deleting ${eventToDelete.title} from ${provider.provider}:`, error);
           }
         }
       });
     } else {
       console.log("No active calendar providers found for user", req.params.userId);
     }
-    console.log("event is deleted SUCCESSFULLY")
+
+    console.log("event is deleted SUCCESSFULLY");
     res.json({ message: "Event deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
