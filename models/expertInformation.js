@@ -395,6 +395,7 @@ const PackageSchema = new Schema({
   validUntil: { type: Date },
   purchasedBy: [{
     userId: { type: Schema.Types.ObjectId, ref: "User" },
+    orderId: { type: Schema.Types.ObjectId, ref: "Order" },
     purchaseDate: { type: Date, default: Date.now },
     expiryDate: { type: Date },
     sessionsUsed: { type: Number, default: 0 }

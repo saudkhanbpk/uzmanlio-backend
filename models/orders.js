@@ -63,7 +63,8 @@ const orderSchema = new Schema({
         specialization: { type: String },
         email: { type: String }
     },
-    status: { type: String, default: 'pending' },
+    status: { type: String, default: 'pending', enum: ['pending', "in-Progress", "completed", "cancelled"] },
+    orderSource: { type: String, default: null },
     couponUsage: { type: Boolean, default: false }
 }, {
     timestamps: true

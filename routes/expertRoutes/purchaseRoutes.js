@@ -149,6 +149,7 @@ router.post("/:userId/purchases", async (req, res) => {
 
             expert.packages[packageIndex].purchasedBy.push({
                 userId: customer._id,
+                orderId: order._id,
                 purchaseDate: new Date(),
                 expiryDate: packageItem.validUntil || null,
                 sessionsUsed: 0
@@ -201,38 +202,115 @@ router.post("/:userId/purchases", async (req, res) => {
     }
 });
 
-// Get all purchase entries for an expert
-router.get("/:userId/purchases", async (req, res) => {
+// // Get all purchase entries for an expert
+// router.get("/:userId/purchases", async (req, res) => {
+//     try {
+//         const expert = await findUserById(req.params.userId);
+
+//         // Get all packages with purchases
+//         const purchasedPackages = expert.packages.filter(
+//             pkg => pkg.purchasedBy && pkg.purchasedBy.length > 0
+//         );
+
+//         // Fetch customer details for each purchase
+//         const purchaseDetails = [];
+
+//         for (const pkg of purchasedPackages) {
+//             for (const purchase of pkg.purchasedBy) {
+//                 const customer = await Customer.findById(purchase.userId);
+//                 if (customer) {
+//                     purchaseDetails.push({
+//                         packageId: pkg.id,
+//                         packageTitle: pkg.title,
+//                         packagePrice: pkg.price,
+//                         appointmentCount: pkg.appointmentCount || pkg.sessionsIncluded,
+//                         customer: {
+//                             id: customer._id,
+//                             name: `${customer.name} ${customer.surname}`,
+//                             email: customer.email,
+//                             phone: customer.phone
+//                         },
+//                         purchaseDate: purchase.purchaseDate,
+//                         sessionsUsed: purchase.sessionsUsed || 0,
+//                         expiryDate: purchase.expiryDate
+//                     });
+//                 }
+//             }
+//         }
+
+//         res.json({
+//             success: true,
+//             purchases: purchaseDetails,
+//             totalPurchases: purchaseDetails.length
+//         });
+
+//     } catch (error) {
+//         console.error("Error fetching purchases:", error);
+//         res.status(500).json({
+//             error: error.message || "Failed to fetch purchases"
+//         });
+//     }
+// });
+// Get package purchases with customer and order details
+router.get("/:userId/packages/purchases/details", async (req, res) => {
     try {
-        const expert = await findUserById(req.params.userId);
+        const user = await findUserById(req.params.userId);
 
         // Get all packages with purchases
-        const purchasedPackages = expert.packages.filter(
+        const purchasedPackages = user.packages.filter(
             pkg => pkg.purchasedBy && pkg.purchasedBy.length > 0
         );
 
-        // Fetch customer details for each purchase
+        // Fetch customer and order details for each purchase
         const purchaseDetails = [];
 
         for (const pkg of purchasedPackages) {
             for (const purchase of pkg.purchasedBy) {
-                const customer = await Customer.findById(purchase.userId);
-                if (customer) {
-                    purchaseDetails.push({
-                        packageId: pkg.id,
-                        packageTitle: pkg.title,
-                        packagePrice: pkg.price,
-                        appointmentCount: pkg.appointmentCount || pkg.sessionsIncluded,
-                        customer: {
-                            id: customer._id,
-                            name: `${customer.name} ${customer.surname}`,
-                            email: customer.email,
-                            phone: customer.phone
-                        },
-                        purchaseDate: purchase.purchaseDate,
-                        sessionsUsed: purchase.sessionsUsed || 0,
-                        expiryDate: purchase.expiryDate
-                    });
+                try {
+                    // Fetch customer details
+                    const customer = await Customer.findById(purchase.userId);
+
+                    // Fetch order details
+                    const order = await Order.findById(purchase.orderId);
+
+                    if (customer && order) {
+                        // Get completed sessions from order
+                        const packageEvent = order.orderDetails.events.find(
+                            event => event.eventType === 'package'
+                        );
+                        const completedSessions = packageEvent?.package?.completedSessions || 0;
+
+                        purchaseDetails.push({
+                            packageId: pkg.id,
+                            packageTitle: pkg.title,
+                            packagePrice: pkg.price,
+                            totalSessions: pkg.appointmentCount || pkg.sessionsIncluded,
+                            customer: {
+                                id: customer._id,
+                                name: customer.name,
+                                surname: customer.surname,
+                                fullName: `${customer.name} ${customer.surname}`,
+                                email: customer.email,
+                                phone: customer.phone || '-'
+                            },
+                            order: {
+                                id: order._id,
+                                orderNumber: order.paymentInfo.transactionId,
+                                totalAmount: order.orderDetails.totalAmount,
+                                paymentStatus: order.paymentInfo.status,
+                                orderStatus: order.status,
+                                orderDate: order.orderDetails.orderDate
+                            },
+                            purchaseDate: purchase.purchaseDate,
+                            expiryDate: purchase.expiryDate,
+                            sessionsUsed: purchase.sessionsUsed || 0,
+                            completedSessions: completedSessions,
+                            remainingSessions: (pkg.appointmentCount || pkg.sessionsIncluded) - (purchase.sessionsUsed || 0)
+                        });
+                    }
+                } catch (err) {
+                    console.error(`Error fetching details for purchase:`, err);
+                    // Continue with other purchases even if one fails
                 }
             }
         }
@@ -244,9 +322,9 @@ router.get("/:userId/purchases", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error fetching purchases:", error);
+        console.error("Error fetching purchase details:", error);
         res.status(500).json({
-            error: error.message || "Failed to fetch purchases"
+            error: error.message || "Failed to fetch purchase details"
         });
     }
 });

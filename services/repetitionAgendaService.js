@@ -177,6 +177,82 @@ agenda.define("create-repeated-event", async (job) => {
         }
 
         await user.save();
+
+        // === Create orders for customers without packages ===
+        if (originalEvent.paymentType && Array.isArray(originalEvent.paymentType)) {
+            console.log("📦 Creating orders for customers without packages in repetition...");
+
+            for (const payment of originalEvent.paymentType) {
+                // Only process customers who are NOT using package payment
+                if (payment.paymentMethod !== 'paketten-tahsil' && !payment.orderId) {
+                    const customerId = payment.customerId?.toString() || payment.customerId;
+                    const customer = originalEvent.selectedClients.find(
+                        c => c.id?.toString() === customerId
+                    );
+
+                    if (customer && originalEvent.price) {
+                        try {
+                            console.log(`💰 Creating order for ${customer.name} - Price: ${originalEvent.price}`);
+
+                            // Create new order for this customer
+                            const newOrder = await Order.create({
+                                userId: customerId,
+                                expertId: userId,
+                                orderDetails: {
+                                    events: [
+                                        {
+                                            eventType: 'service',
+                                            service: {
+                                                serviceId: originalEvent.serviceId,
+                                                serviceName: originalEvent.serviceName,
+                                                serviceType: originalEvent.serviceType,
+                                                price: parseFloat(originalEvent.price),
+                                                eventId: newEvent.id,
+                                                eventDate: eventData.date,
+                                                eventTime: eventData.time,
+                                                paymentMethod: payment.paymentMethod,
+                                                status: 'pending'
+                                            }
+                                        }
+                                    ]
+                                },
+                                totalAmount: parseFloat(originalEvent.price),
+                                paymentStatus: 'pending',
+                                paymentMethod: payment.paymentMethod,
+                                orderStatus: 'active',
+                                createdAt: new Date(),
+                                updatedAt: new Date()
+                            });
+
+                            console.log(`✅ Created order ${newOrder._id} for customer ${customer.name} in repetition`);
+
+                            // Update the newly created event's payment type with the order ID
+                            const userToUpdate = await User.findById(userId);
+                            const createdEvent = userToUpdate.events.find(e => e.id === newEvent.id);
+
+                            if (createdEvent && createdEvent.paymentType) {
+                                const paymentIndex = createdEvent.paymentType.findIndex(
+                                    p => p.customerId?.toString() === customerId
+                                );
+                                if (paymentIndex !== -1) {
+                                    createdEvent.paymentType[paymentIndex].orderId = newOrder._id;
+                                    await userToUpdate.save();
+                                    console.log(`✅ Updated repetition event payment type with order ID ${newOrder._id}`);
+                                }
+                            }
+
+                        } catch (orderError) {
+                            console.error(`❌ Error creating order for customer ${customerId}:`, orderError);
+                        }
+                    } else {
+                        if (!originalEvent.price) {
+                            console.warn(`⚠️ No price set for event, skipping order creation for customer ${customerId}`);
+                        }
+                    }
+                }
+            }
+        }
+
         console.log(`✅ Repetition ${currentRepetition}/${totalRepetitions} created successfully`);
 
         // Log summary of issues

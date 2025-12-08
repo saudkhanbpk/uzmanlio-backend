@@ -333,13 +333,18 @@ router.post(
           meetingType: selectedOffering.meetingType || "",
           price: total,
           status: "pending",
-          paymentType: 'online',
+          paymentType: [{
+            customerId: customer._id,
+            paymentMethod: 'online',
+            orderId: null // Will be updated later if needed
+          }],
           isRecurring: false,
           appointmentNotes: orderNotes,
           files: req.files?.map((f) => ({
             name: f.originalname,
             type: f.mimetype,
             size: f.size,
+            uploadDate: new Date(),
             url: f.path,
           })) || [],
           selectedClients: [{
@@ -357,25 +362,7 @@ router.post(
         Expert.events.push(newEvent);
       }
 
-      // --- Step 9: Add client to service/package selectedClients ---
-      let CurrentService;
-      if (mappedEventType === "service") {
-        CurrentService = Expert.services.find(
-          s => s.id === selectedOffering.id
-        );
-      } else {
-        CurrentService = Expert.packages.find(
-          p => p.id === selectedOffering.id
-        );
-      }
 
-      if (CurrentService) {
-        CurrentService.selectedClients.push({
-          id: customer._id,
-          name: customer.name,
-          email: customer.email
-        });
-      }
 
       // --- Step 10: Create note if notes/files exist ---
       let note = null;
@@ -397,6 +384,18 @@ router.post(
         );
         note = noteArray[0];
         customer.notes.push(note._id);
+      }
+
+      // --- Step 9: Add client to service/package selectedClients ---
+      let CurrentService;
+      if (mappedEventType === "service") {
+        CurrentService = Expert.services.find(
+          s => s.id === selectedOffering.id
+        );
+      } else {
+        CurrentService = Expert.packages.find(
+          p => p.id === selectedOffering.id
+        );
       }
 
       // --- Step 11: Create order record ---
@@ -460,6 +459,7 @@ router.post(
           },
           customerId: customer._id, // Add customer reference
           status: "pending",
+          orderSource: "BookingPage"
         }],
         { session }
       );
@@ -475,6 +475,35 @@ router.post(
         customer.save({ session }),
         Expert.save({ session })
       ]);
+
+
+
+      if (CurrentService) {
+        // Initialize arrays if they don't exist
+        if (!CurrentService.selectedClients) {
+          CurrentService.selectedClients = [];
+        }
+        if (!CurrentService.purchasedBy) {
+          CurrentService.purchasedBy = [];
+        }
+
+        CurrentService.selectedClients.push({
+          id: customer._id,
+          name: customer.name,
+          email: customer.email
+        });
+
+        CurrentService.purchasedBy.push({
+          userId: customer._id,
+          orderId: order._id,
+          purchaseDate: new Date(),
+          expiryDate: null,
+          sessionsUsed: 0,
+        });
+
+        // Mark the service/package as modified so Mongoose saves it
+        Expert.markModified(mappedEventType === 'service' ? 'services' : 'packages');
+      }
 
       // Commit the transaction
       await session.commitTransaction();

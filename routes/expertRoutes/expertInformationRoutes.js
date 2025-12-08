@@ -1539,9 +1539,76 @@ router.post("/:userId/events", async (req, res) => {
 
     await user.save();
 
+    // === NEW: Create orders for customers without packages ===
+    if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
+      console.log("📦 Creating orders for customers without packages...");
+
+      for (const payment of eventData.paymentType) {
+        // Only process customers who are NOT using package payment
+        if (payment.paymentMethod !== 'paketten-tahsil' && !payment.orderId) {
+          const customerId = payment.customerId;
+          const customer = formattedClients.find(c => c.id.toString() === customerId.toString());
+
+          if (customer && eventData.price) {
+            try {
+              console.log(`💰 Creating order for ${customer.name} - Price: ${eventData.price}`);
+
+              // Create new order for this customer
+              const newOrder = await Order.create({
+                userId: customerId,
+                expertId: req.params.userId,
+                orderDetails: {
+                  events: [
+                    {
+                      eventType: 'service',
+                      service: {
+                        serviceId: eventData.service,
+                        serviceName: eventData.serviceName,
+                        serviceType: eventData.serviceType,
+                        price: parseFloat(eventData.price),
+                        eventId: newEvent.id,
+                        eventDate: eventData.date,
+                        eventTime: eventData.time,
+                        paymentMethod: payment.paymentMethod,
+                        status: 'pending'
+                      }
+                    }
+                  ]
+                },
+                totalAmount: parseFloat(eventData.price),
+                paymentStatus: 'pending',
+                paymentMethod: payment.paymentMethod,
+                orderStatus: 'active',
+                createdAt: new Date(),
+                updatedAt: new Date()
+              });
+
+              console.log(`✅ Created order ${newOrder._id} for customer ${customer.name}`);
+
+              // Update the payment type with the new order ID
+              const paymentIndex = eventData.paymentType.findIndex(
+                p => p.customerId.toString() === customerId.toString()
+              );
+              if (paymentIndex !== -1) {
+                savedEvent.paymentType[paymentIndex].orderId = newOrder._id;
+                await savedUser.save();
+                console.log(`✅ Updated event payment type with order ID ${newOrder._id}`);
+              }
+
+            } catch (orderError) {
+              console.error(`❌ Error creating order for customer ${customerId}:`, orderError);
+            }
+          } else {
+            if (!eventData.price) {
+              console.warn(`⚠️ No price set for event, skipping order creation for customer ${customerId}`);
+            }
+          }
+        }
+      }
+    }
+
     const savedUser = await User.findById(req.params.userId);
     const savedEvent = savedUser.events.find(e => e.id === newEvent.id);
-
     //Create the Agenda instance (Scheduling Emails before 2 hours Of Appointment)
     try {
       // const savedUser = await User.findById(req.params.userId);
