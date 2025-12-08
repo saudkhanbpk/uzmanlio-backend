@@ -21,6 +21,7 @@ import subscriptionRoutes from "./routes/expertRoutes/subscriptionRoutes.js";
 import institutionRoutes from "./routes/expertRoutes/institutionRoutes.js";
 import authRoutes from "./routes/expertRoutes/authRoutes.js";
 import purchaseRoutes from "./routes/expertRoutes/purchaseRoutes.js";
+import paymentRoutes from "./routes/expertRoutes/paymentRoutes.js";
 import fs from "fs";
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
@@ -135,6 +136,7 @@ app.use("/api/expert", galleryRoutes);
 app.use("/api/expert", subscriptionRoutes);
 app.use("/api/expert", institutionRoutes);
 app.use("/api/expert", purchaseRoutes);
+app.use("/api/expert", paymentRoutes);
 
 // Calendar integration routes
 app.use("/api/calendar/auth", calendarAuthRoutes);
