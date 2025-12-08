@@ -2,6 +2,7 @@ import Agenda from "agenda";
 import User from "../models/expertInformation.js";
 import Order from "../models/orders.js";
 import { v4 as uuidv4 } from "uuid";
+import Customer from "../models/customer.js";
 import EventRepetitionWarning from "../models/eventRepetitionWarnings.js";
 
 // Read Mongo connection from env (same logic as first Agenda)
@@ -194,38 +195,71 @@ agenda.define("create-repeated-event", async (job) => {
                         try {
                             console.log(`💰 Creating order for ${customer.name} - Price: ${originalEvent.price}`);
 
+                            // Fetch customer details
+                            const customerDoc = await Customer.findById(customerId);
+
                             // Create new order for this customer
                             const newOrder = await Order.create({
-                                userId: customerId,
-                                expertId: userId,
+                                userInfo: {
+                                    userId: customerId,
+                                    name: customer.name,
+                                    email: customer.email,
+                                    phone: customerDoc?.phone || ''
+                                },
+                                expertInfo: {
+                                    expertId: userId,
+                                    name: user.information?.name || 'Expert',
+                                    accountNo: user.information?.accountNo || 'N/A',
+                                    email: user.information?.email || ''
+                                },
                                 orderDetails: {
                                     events: [
                                         {
                                             eventType: 'service',
                                             service: {
-                                                serviceId: originalEvent.serviceId,
-                                                serviceName: originalEvent.serviceName,
-                                                serviceType: originalEvent.serviceType,
+                                                name: originalEvent.serviceName,
+                                                description: originalEvent.description || '',
                                                 price: parseFloat(originalEvent.price),
-                                                eventId: newEvent.id,
-                                                eventDate: eventData.date,
-                                                eventTime: eventData.time,
-                                                paymentMethod: payment.paymentMethod,
-                                                status: 'pending'
+                                                duration: parseInt(originalEvent.duration) || 0,
+                                                meetingType: originalEvent.meetingType || '1-1'
                                             }
                                         }
-                                    ]
+                                    ],
+                                    totalAmount: parseFloat(originalEvent.price)
                                 },
-                                totalAmount: parseFloat(originalEvent.price),
-                                paymentStatus: 'pending',
-                                paymentMethod: payment.paymentMethod,
-                                orderStatus: 'active',
-                                createdAt: new Date(),
-                                updatedAt: new Date()
+                                paymentInfo: {
+                                    method: payment.paymentMethod,
+                                    status: 'pending'
+                                },
+                                status: 'pending',
+                                orderSource: 'expert-repetition-event'
                             });
 
                             console.log(`✅ Created order ${newOrder._id} for customer ${customer.name} in repetition`);
 
+
+                            if (customerDoc) {
+                                if (!customerDoc.orders) {
+                                    customerDoc.orders = [];
+                                }
+                                if (!customerDoc.appointments) {
+                                    customerDoc.appointments = [];
+                                }
+
+                                // Add order ID to customer's orders
+                                customerDoc.orders.push(newOrder._id);
+
+                                // Add event ID to customer's appointments (using the newly created event's MongoDB _id)
+                                // We need to get the saved event's _id
+                                const userWithNewEvent = await User.findById(userId);
+                                const createdEventDoc = userWithNewEvent.events.find(e => e.id === newEvent.id);
+                                if (createdEventDoc) {
+                                    customerDoc.appointments.push(createdEventDoc._id);
+                                }
+
+                                await customerDoc.save();
+                                console.log(`✅ Updated customer ${customer.name} - Added order and appointment for repetition`);
+                            }
                             // Update the newly created event's payment type with the order ID
                             const userToUpdate = await User.findById(userId);
                             const createdEvent = userToUpdate.events.find(e => e.id === newEvent.id);
