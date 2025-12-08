@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
 import User from "../../models/expertInformation.js";
+import CustomerNote from "../../models/customerNotes.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
 import Customer from "../../models/customer.js";
 import CustomerAppointments from "../../models/customerAppointment.js";
@@ -3703,8 +3704,8 @@ router.get("/:userId/customers/:customerId/notes", async (req, res) => {
     const belongsToUser = user.customers.some(c => c.customerId.toString() === customerId);
     if (!belongsToUser) return res.status(404).json({ error: "Customer not found for this user" });
 
-    // Fetch customer
-    const customer = await Customer.findById(customerId).lean();
+    // Fetch customer with populated notes
+    const customer = await Customer.findById(customerId).populate('notes').lean();
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     // Sort notes by newest first
@@ -3730,7 +3731,7 @@ router.get("/:userId/customers/:customerId/notes", async (req, res) => {
 
 // Add customer note
 router.post("/:userId/customers/:customerId/notes",
-  customerNoteUpload.single(),
+  customerNoteUpload.single('file'),
   handleMulterError,
   async (req, res) => {
     try {
@@ -3751,27 +3752,28 @@ router.post("/:userId/customers/:customerId/notes",
       // Handle file upload if present
       const files = [];
       if (req.file) {
-        const relativePath = `/uploads/Experts_Files/customer_notes/${req.file.filename}`;
+        const file = req.file;
+        const relativePath = `/uploads/Experts_Files/customer_notes/${file.filename}`;
         const fileUrl = `${req.protocol}://${req.get("host")}${relativePath}`;
 
         // Determine file type
         let fileType = 'document';
-        if (req.file.mimetype.startsWith('image/')) {
+        if (file.mimetype.startsWith('image/')) {
           fileType = 'image';
-        } else if (req.file.mimetype === 'application/pdf') {
+        } else if (file.mimetype === 'application/pdf') {
           fileType = 'pdf';
         }
 
         files.push({
-          name: req.file.originalname,
+          name: file.originalname,
           type: fileType,
-          size: `${(req.file.size / 1024).toFixed(1)} KB`,
+          size: `${(file.size / 1024).toFixed(1)} KB`,
           url: fileUrl,
           uploadedAt: new Date()
         });
       }
 
-      const newNote = {
+      const newNote = new CustomerNote({
         id: noteId,
         content: noteData.content || '',
         author: noteData.author || 'expert',
@@ -3779,11 +3781,11 @@ router.post("/:userId/customers/:customerId/notes",
         files: files,
         isPrivate: noteData.isPrivate === 'true' || noteData.isPrivate === true,
         tags: noteData.tags ? (Array.isArray(noteData.tags) ? noteData.tags : [noteData.tags]) : [],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      });
 
-      customer.notes.push(newNote);
+      await newNote.save();
+
+      customer.notes.push(newNote._id);
       customer.lastContact = new Date();
       customer.updatedAt = new Date();
       await customer.save();
