@@ -1,61 +1,84 @@
+import nodemailer from 'nodemailer';
 import { getCustomerEmailTemplate, getExpertEmailTemplate } from "./emailTemplates.js";
 import dotenv from "dotenv";
 dotenv.config();
 
-// Resend API Configuration
-// Get your API key from: https://resend.com/api-keys
-const RESEND_API_KEY = process.env.RESEND_API_KEY || "re_bF3Xmwbo_CWB7TFiKLj7CSfEKY9to31qd";
-const SENDER_EMAIL = process.env.SENDER_EMAIL || "Uzmanlio@resend.dev"; // Default Resend testing email
+// SMTP Configuration from environment variables
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD;
+const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com'; // Default to Gmail
+const EMAIL_PORT = process.env.EMAIL_PORT || 587;
+const EMAIL_SECURE = process.env.EMAIL_SECURE === 'true'; // false for TLS, true for SSL
 const SENDER_NAME = process.env.SENDER_NAME || "Uzmanlio";
 
-// Validate API key
-if (!RESEND_API_KEY) {
-    console.error("❌ RESEND_API_KEY is not set in environment variables!");
-    console.error("⚠️  Get your API key from: https://resend.com/api-keys");
-    console.error("⚠️  Sign up at: https://resend.com/signup");
+// Validate configuration
+if (!EMAIL_USER || !EMAIL_APP_PASSWORD) {
+    console.error("❌ EMAIL_USER or EMAIL_APP_PASSWORD is not set in environment variables!");
+    console.error("⚠️  Please set these in your .env file:");
+    console.error("   EMAIL_USER=your-email@gmail.com");
+    console.error("   EMAIL_APP_PASSWORD=your-app-password");
+    console.error("⚠️  For Gmail, create an App Password at: https://myaccount.google.com/apppasswords");
+}
+
+// Create reusable transporter
+let transporter = null;
+
+/**
+ * Initialize nodemailer transporter
+ */
+function getTransporter() {
+    if (transporter) {
+        return transporter;
+    }
+
+    if (!EMAIL_USER || !EMAIL_APP_PASSWORD) {
+        throw new Error("Email configuration is missing. Please set EMAIL_USER and EMAIL_APP_PASSWORD in .env");
+    }
+
+    transporter = nodemailer.createTransport({
+        host: EMAIL_HOST,
+        port: EMAIL_PORT,
+        secure: EMAIL_SECURE, // true for 465, false for other ports
+        auth: {
+            user: EMAIL_USER,
+            pass: EMAIL_APP_PASSWORD,
+        },
+    });
+
+    console.log("✅ Email transporter initialized");
+    return transporter;
 }
 
 /**
- * Send email using Resend API
+ * Send email using nodemailer SMTP
  * @param {string} receiver - Email address of the receiver
  * @param {object} emailData - Email data containing subject and body
  */
 async function sendEmail(receiver, emailData) {
     try {
-        console.log("📧 Sending email via Resend to:", receiver);
-        console.log("🔑 Using API key:", RESEND_API_KEY ? RESEND_API_KEY.substring(0, 10) + "..." : "NOT SET");
+        console.log("📧 Sending email via SMTP to:", receiver);
 
-        if (!RESEND_API_KEY) {
-            throw new Error("RESEND_API_KEY is not configured");
-        }
+        const transport = getTransporter();
 
-        const response = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${RESEND_API_KEY}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
-                to: [receiver],
-                subject: emailData.subject,
-                html: emailData.html || `<p>${emailData.body || emailData.text || ''}</p>`,
-                text: emailData.text || emailData.body || '',
-            }),
-        });
+        const mailOptions = {
+            from: `${SENDER_NAME} <${EMAIL_USER}>`,
+            to: receiver,
+            subject: emailData.subject,
+            text: emailData.text || emailData.body || '',
+            html: emailData.html || `<p>${emailData.body || emailData.text || ''}</p>`,
+        };
 
-        const data = await response.json();
+        const info = await transport.sendMail(mailOptions);
 
-        if (!response.ok) {
-            console.error("❌ Resend API Response Status:", response.status);
-            console.error("❌ Resend API Response:", JSON.stringify(data, null, 2));
-            throw new Error(`Resend API error (${response.status}): ${data.message || response.statusText}`);
-        }
-
-        console.log("✅ Email sent via Resend:", data.id);
-        return { success: true, messageId: data.id, provider: "resend" };
+        console.log("✅ Email sent successfully:", info.messageId);
+        return {
+            success: true,
+            messageId: info.messageId,
+            provider: "smtp",
+            response: info.response
+        };
     } catch (error) {
-        console.error("❌ Resend email error:", error.message);
+        console.error("❌ SMTP email error:", error.message);
         return {
             success: false,
             error: `Email sending failed: ${error.message}`
@@ -64,7 +87,7 @@ async function sendEmail(receiver, emailData) {
 }
 
 /**
- * Send bulk email using Resend API
+ * Send bulk email using nodemailer SMTP
  * @param {string[]} emails - array of recipient emails
  * @param {string} subject - email subject
  * @param {string} text - plain text body
@@ -76,35 +99,27 @@ async function sendBulkEmail(emails, subject, text, html = null) {
     }
 
     try {
-        if (!RESEND_API_KEY) {
-            throw new Error("RESEND_API_KEY is not configured");
-        }
+        const transport = getTransporter();
 
-        const response = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${RESEND_API_KEY}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
-                to: emails,
-                subject,
-                html: html || `<p>${text}</p>`,
-                text,
-            }),
-        });
+        const mailOptions = {
+            from: `${SENDER_NAME} <${EMAIL_USER}>`,
+            to: emails.join(', '), // Join multiple recipients
+            subject,
+            text,
+            html: html || `<p>${text}</p>`,
+        };
 
-        const data = await response.json();
+        const info = await transport.sendMail(mailOptions);
 
-        if (!response.ok) {
-            throw new Error(`Resend API error: ${data.message || response.statusText}`);
-        }
-
-        console.log("✅ Bulk email sent via Resend:", data.id);
-        return { success: true, messageId: data.id, provider: "resend" };
+        console.log("✅ Bulk email sent successfully:", info.messageId);
+        return {
+            success: true,
+            messageId: info.messageId,
+            provider: "smtp",
+            recipientCount: emails.length
+        };
     } catch (error) {
-        console.error("❌ Resend bulk email error:", error.message);
+        console.error("❌ SMTP bulk email error:", error.message);
         throw new Error(`Bulk email sending failed: ${error.message}`);
     }
 }
@@ -158,4 +173,20 @@ async function sendBookingEmails(bookingType, customerData, expertData, bookingD
     }
 }
 
-export { sendEmail, sendBookingEmails, sendBulkEmail };
+/**
+ * Verify email configuration
+ * @returns {Promise<boolean>} True if configuration is valid
+ */
+async function verifyEmailConfig() {
+    try {
+        const transport = getTransporter();
+        await transport.verify();
+        console.log("✅ Email server is ready to send messages");
+        return true;
+    } catch (error) {
+        console.error("❌ Email configuration verification failed:", error.message);
+        return false;
+    }
+}
+
+export { sendEmail, sendBookingEmails, sendBulkEmail, verifyEmailConfig };
