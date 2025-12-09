@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import User from '../models/expertInformation.js';
 import Institution from '../models/institution.js';
+import { getMarketingEmailTemplate } from './emailTemplates.js';
 
 dotenv.config();
 
@@ -83,11 +84,10 @@ async function sendEmailNow(userId, emailId) {
         return emailObj;
     }
 
-    // Prepare email body with placeholders replaced
-    let body = emailObj.body;
-    const expertName = `${user.information.name} ${user.information.surname}`;
-    body = body.replace(/\{\{expert_name\}\}/g, expertName);
+    // Get expert name
+    const expertName = `${user.information.name || ''} ${user.information.surname || ''}`.trim();
 
+    // Get company name if available
     let companyName = '';
     if (user.subscription.plantype === 'institutional' && user.subscription.institutionId) {
         const institution = await Institution.findById(user.subscription.institutionId);
@@ -95,7 +95,14 @@ async function sendEmailNow(userId, emailId) {
             companyName = institution.name;
         }
     }
-    body = body.replace(/\{\{company_name\}\}/g, companyName);
+
+    // Generate HTML email using template
+    const emailTemplate = getMarketingEmailTemplate({
+        subject: emailObj.subject,
+        body: emailObj.body,
+        expertName: expertName,
+        companyName: companyName
+    });
 
     const recipients = emailObj.recipientType === 'all' ? (user.customers?.map(c => c.email) || []) : emailObj.recipients;
     let sentCount = 0;
@@ -106,8 +113,8 @@ async function sendEmailNow(userId, emailId) {
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: r,
-            subject: emailObj.subject,
-            text: body
+            subject: emailTemplate.subject,
+            html: emailTemplate.html
         };
         try {
             await transporter.sendMail(mailOptions);

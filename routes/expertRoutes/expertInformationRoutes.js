@@ -13,12 +13,20 @@ import { sendBulkEmail, sendEmail } from "../../services/email.js";
 import { Parser } from "json2csv";
 import {
   getExpertEventCreatedTemplate, getClient11SessionTemplate,
-  getClientGroupSessionTemplate, getClientPackageSessionTemplate
+  getClientGroupSessionTemplate, getClientPackageSessionTemplate,
+  getGroupSessionConfirmationTemplate, getClientAppointmentCreatedTemplate,
+  getEventUpdatedTemplate
 } from "../../services/eventEmailTemplates.js";
+import {
+  getCancellationEmailTemplate,
+  getAppointmentApprovedBireyselTemplate,
+  getGroupSessionApprovedTemplate
+} from "../../services/emailTemplates.js";
 import { sendSms } from "../../services/netgsmService.js";
 import agenda from "../../services/agendaService.js";
 import Order from "../../models/orders.js";
 import { scheduleRepeatedEvents } from "../../services/repetitionAgendaService.js";
+import expertEventController from "../../controllers/expertEventController.js";
 const router = express.Router();
 
 // Get __dirname equivalent
@@ -1395,6 +1403,7 @@ router.post("/:userId/events", async (req, res) => {
     for (const client of inputClients) {
       let customerId = client._id || client.id;
       let customerName = client.name;
+      let customerSurname = client.surname;
       let customerEmail = client.email;
 
       // Check if ID is a valid ObjectId. If not (e.g. timestamp), treat as new/unknown.
@@ -1406,13 +1415,13 @@ router.post("/:userId/events", async (req, res) => {
 
         if (!existingCustomer) {
           // Create new customer
-          const nameParts = customerName.trim().split(' ');
-          const firstName = nameParts[0];
-          const lastName = nameParts.slice(1).join(' ') || '';
+          // const nameParts = customerName.trim().split(' ');
+          // const firstName = nameParts[0];
+          // const lastName = nameParts.slice(1).join(' ') || '';
 
           existingCustomer = await Customer.create({
-            name: firstName,
-            surname: lastName,
+            name: customerName,
+            surname: customerSurname,
             email: customerEmail,
             phone: client.phone || "",
             status: "active",
@@ -1703,102 +1712,151 @@ router.post("/:userId/events", async (req, res) => {
       console.log("Event is service");
 
       if (eventData.meetingType === '1-1') {
-        //sending email to the customer
-        const singleusertemplate = getClient11SessionTemplate({
-          participantName: formattedClients[0].name,
-          expertName: user.information.name,
-          sessionName: eventData.serviceName,
-          sessionDate: eventData.date,
-          sessionTime: eventData.time,
-          sessionDuration: eventData.duration,
-        });
-        const htmlTemplate = `
-        <p>Merhaba ${formattedClients[0].name},</p>
-        <p>${user.information.name} senin için ${eventData.serviceName} randevusu oluşturdu.</p>
-        <p>Tarih: ${eventData.date} ${eventData.time}</p>
-        <p>Katılım linki: <a href="${eventData.platform || 'Link will be shared soon'}">Randevuya Katıl</a></p>
-      `;
-        await sendBulkEmail(clientEmails, "Danışan Randevu Oluşturdu", "Randevu oluşturuldu", htmlTemplate);
-
-        //sending email to the Expert
-        const template = getExpertEventCreatedTemplate({
-          expertName: user.information.name,
-          clientName: formattedClients[0].name,
-          eventDate: eventData.date,
-          eventTime: eventData.time,
-          eventLocation: eventData.location,
-          serviceName: eventData.serviceName
-        });
-        sendEmail(user.information.email, {
-          subject: "Danışan Randevu Oluşturdu",
-          body: "Danışan için yeni bir randevu oluşturuldu.",
-          html: template
-        });
-      }
-
-      else {
-        //sending email to the customers one by one
-        formattedClients.map(client => {
-          const groupusertemplate = getClientGroupSessionTemplate({
+        // Bireysel (1-1): Send appointment created email to customer
+        for (const client of formattedClients) {
+          const clientTemplate = getClient11SessionTemplate({
             participantName: client.name,
             expertName: user.information.name,
             sessionName: eventData.serviceName,
             sessionDate: eventData.date,
             sessionTime: eventData.time,
             sessionDuration: eventData.duration,
+            videoLink: eventData.platform || ''
           });
-          sendEmail(client.email, {
-            subject: "Group event created",
-            body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
-            html: groupusertemplate.html
-          });
-        });
 
-        //sending email to the Expert
-        const template = getExpertEventCreatedTemplate({
+          await sendEmail(client.email, {
+            subject: clientTemplate.subject,
+            html: clientTemplate.html
+          });
+          console.log(`✅ Bireysel appointment email sent to: ${client.email}`);
+        }
+
+        // Send email to Expert
+        const expertTemplate = getExpertEventCreatedTemplate({
           expertName: user.information.name,
-          clientName: formattedClients[0].name,
+          clientName: formattedClients[0]?.name || 'Danışan',
           eventDate: eventData.date,
           eventTime: eventData.time,
           eventLocation: eventData.location,
-          serviceName: eventData.serviceName
+          serviceName: eventData.serviceName,
+          videoLink: eventData.platform || ''
         });
-        sendEmail(user.information.email, {
-          subject: "Group event created",
-          body: "Grup Seansı Oluşturuldu & Grup Seansına Katılım",
-          html: template.html
+
+        await sendEmail(user.information.email, {
+          subject: expertTemplate.subject,
+          html: expertTemplate.html
         });
+        console.log(`✅ Expert notification email sent to: ${user.information.email}`);
+      }
+      else {
+        // Grup: Send BOTH Grup Seansı Daveti AND Grup Seansına Katılım emails to customers
+        for (const client of formattedClients) {
+          // Email 1: Group Session Invite (Grup Seansı Daveti)
+          const inviteTemplate = getClientGroupSessionTemplate({
+            participantName: client.name,
+            expertName: user.information.name,
+            sessionName: eventData.serviceName,
+            sessionDate: eventData.date,
+            sessionTime: eventData.time,
+            sessionDuration: eventData.duration,
+            videoLink: eventData.platform || ''
+          });
+
+          await sendEmail(client.email, {
+            subject: inviteTemplate.subject,
+            html: inviteTemplate.html
+          });
+          console.log(`✅ Group session invite email sent to: ${client.email}`);
+
+          // Email 2: Group Session Confirmation (Grup Seansına Katılım)
+          const confirmationTemplate = getGroupSessionConfirmationTemplate({
+            participantName: client.name,
+            sessionName: eventData.serviceName,
+            sessionDate: eventData.date,
+            sessionTime: eventData.time,
+            videoLink: eventData.platform || ''
+          });
+
+          await sendEmail(client.email, {
+            subject: confirmationTemplate.subject,
+            html: confirmationTemplate.html
+          });
+          console.log(`✅ Group session confirmation email sent to: ${client.email}`);
+        }
+
+        // Send email to Expert
+        const expertTemplate = getExpertEventCreatedTemplate({
+          expertName: user.information.name,
+          clientName: formattedClients.map(c => c.name).join(', '),
+          eventDate: eventData.date,
+          eventTime: eventData.time,
+          eventLocation: eventData.location,
+          serviceName: eventData.serviceName,
+          videoLink: eventData.platform || ''
+        });
+
+        await sendEmail(user.information.email, {
+          subject: expertTemplate.subject,
+          html: expertTemplate.html
+        });
+        console.log(`✅ Expert notification email sent to: ${user.information.email}`);
       }
 
-      //Else Send the package emails
+      // Else Send the package emails
     } else {
-      //sending email to the customer
-      const packageTemplate = formattedClients.map(client => {
-        const packagetemplate = getClientPackageSessionTemplate({
+      // Paket: Send BOTH Paketten Seans Hakkı Kullanıldı AND Randevu Oluşturdu emails
+      for (const client of formattedClients) {
+        // Email 1: Package Session Usage (Paketten Seans Hakkı Kullanıldı)
+        const packageUsageTemplate = getClientPackageSessionTemplate({
           participantName: client.name,
           expertName: user.information.name,
+          packageName: eventData.serviceName,
           sessionName: eventData.serviceName,
           sessionDate: eventData.date,
           sessionTime: eventData.time,
           sessionDuration: eventData.duration,
+          videoLink: eventData.platform || ''
         });
-        console.log("Event is not service , sending package email to customers and user");
-        sendEmail(client.email, "Package Event Created", "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu", packagetemplate.html);
-      });
-      //sending email to the Expert
-      const template = getExpertEventCreatedTemplate({
+
+        await sendEmail(client.email, {
+          subject: packageUsageTemplate.subject,
+          html: packageUsageTemplate.html
+        });
+        console.log(`✅ Package usage email sent to: ${client.email}`);
+
+        // Email 2: Appointment Created (Danışan Randevu Oluşturdu)
+        const appointmentTemplate = getClientAppointmentCreatedTemplate({
+          clientName: client.name,
+          expertName: user.information.name,
+          appointmentDate: eventData.date,
+          appointmentTime: eventData.time,
+          appointmentLocation: eventData.location || 'Online',
+          videoLink: eventData.platform || ''
+        });
+
+        await sendEmail(client.email, {
+          subject: appointmentTemplate.subject,
+          html: appointmentTemplate.html
+        });
+        console.log(`✅ Package appointment email sent to: ${client.email}`);
+      }
+
+      // Send email to Expert
+      const expertTemplate = getExpertEventCreatedTemplate({
         expertName: user.information.name,
-        clientName: formattedClients[0].name,
+        clientName: formattedClients[0]?.name || 'Danışan',
         eventDate: eventData.date,
         eventTime: eventData.time,
         eventLocation: eventData.location,
-        serviceName: eventData.serviceName
+        serviceName: eventData.serviceName,
+        videoLink: eventData.platform || ''
       });
-      sendEmail(user.information.email, {
-        subject: "Package Event Created",
-        body: "Paketten Seans Hakkı Kullanıldı, Danışan Randevu Oluşturdu",
-        html: template
+
+      await sendEmail(user.information.email, {
+        subject: expertTemplate.subject,
+        html: expertTemplate.html
       });
+      console.log(`✅ Expert notification email sent to: ${user.information.email}`);
     }
 
     if (user.calendarProviders && user.calendarProviders.length > 0) {
@@ -2042,70 +2100,21 @@ router.put("/:userId/events/:eventId", async (req, res) => {
           console.log("Sending date/time update emails to:", recipients.length, "recipients");
 
           for (const recipient of recipients) {
-            const clientName = recipient.name;
-            const customerEmailBody =
-              `Merhaba ${clientName}, ${expertName} ile ${serviceName} randevunun zamanı güncellendi. ` +
-              `Yeni tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
-
-            const customerEmailHTML = `
-              <!DOCTYPE html>
-              <html lang="tr">
-              <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <style>
-                      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
-                      .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
-                      .header { background: #DBEAFE; padding: 40px 30px; text-align: center; color: #1f2937; }
-                      .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
-                      .content { padding: 40px 30px; }
-                      .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #2563EB; }
-                      .detail-item { margin: 12px 0; font-size: 15px; }
-                      .detail-label { font-weight: 500; color: #374151; }
-                      .detail-value { color: #1f2937; }
-                      .join-link { background: #2563EB; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
-                      .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
-                  </style>
-              </head>
-              <body>
-                  <div class="container">
-                      <div class="header">
-                          <h1>⏰ Randevu Zamanı Güncellendi</h1>
-                          <p>Randevunuzun tarihi ve/veya saati değiştirildi</p>
-                      </div>
-                      <div class="content">
-                          <p>Merhaba <strong>${clientName}</strong>,</p>
-                          <p><strong>${expertName}</strong> ile <strong>${serviceName}</strong> randevunun zamanı güncellendi.</p>
-                          <div class="appointment-card">
-                              <div class="detail-item">
-                                  <span class="detail-label">Yeni Tarih:</span>
-                                  <span class="detail-value">${date}</span>
-                              </div>
-                              <div class="detail-item">
-                                  <span class="detail-label">Yeni Saat:</span>
-                                  <span class="detail-value">${time}</span>
-                              </div>
-                              <div class="detail-item">
-                                  <span class="detail-label">Katılım Linki:</span>
-                                  <span class="detail-value">${joinLink}</span>
-                              </div>
-                          </div>
-                      </div>
-                      <div class="footer">
-                          <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
-                      </div>
-                  </div>
-              </body>
-              </html>
-            `;
-
-            await sendEmail(recipient.email, {
-              subject: "Randevu Zamanı Güncellendi",
-              body: customerEmailBody,
-              html: customerEmailHTML,
+            const updateTemplate = getEventUpdatedTemplate({
+              clientName: recipient.name,
+              expertName: expertName,
+              newDate: date,
+              newTime: time,
+              appointmentLocation: event.location || 'Online',
+              videoLink: joinLink
             });
 
-            console.log(`✅ Date/time update email sent to customer: ${recipient.email}`);
+            await sendEmail(recipient.email, {
+              subject: updateTemplate.subject,
+              html: updateTemplate.html
+            });
+
+            console.log(`✅ Event update email sent to customer: ${recipient.email}`);
           }
         } catch (emailError) {
           console.error("Error sending date/time update emails:", emailError);
@@ -2196,74 +2205,43 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
 
         console.log("Sending approval emails to:", recipients.length, "recipients");
 
-        // // Send email to each customer
-        // for (const recipient of recipients) {
-        //   const clientName = recipient.name;
-        //   const customerEmailBody = `Merhaba ${clientName}, ${expertName} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+        // Determine event/meeting type
+        const meetingType = event.meetingType;
 
+        // Send email to each customer based on meeting type
+        for (const recipient of recipients) {
+          const clientName = recipient.name;
+          let emailTemplate;
 
+          if (meetingType === 'grup') {
+            // Group session approval email
+            emailTemplate = getGroupSessionApprovedTemplate({
+              participantName: clientName,
+              sessionName: serviceName,
+              sessionDate: date,
+              sessionTime: time,
+              videoLink: joinLink !== 'Link will be shared soon' ? joinLink : ''
+            });
+          } else {
+            // 1-1 bireysel appointment approval email
+            emailTemplate = getAppointmentApprovedBireyselTemplate({
+              customerName: clientName,
+              expertName: expertName,
+              appointmentDate: date,
+              appointmentTime: time,
+              appointmentLocation: event.location || 'Online',
+              videoLink: joinLink !== 'Link will be shared soon' ? joinLink : ''
+            });
+          }
 
-        //   // Enhanced HTML template for customer
-        //   const customerEmailHTML = `
-        //     <!DOCTYPE html>
-        //     <html lang="tr">
-        //     <head>
-        //         <meta charset="UTF-8">
-        //         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        //         <style>
-        //             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
-        //             .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
-        //             .header { background: #CDFA89; padding: 40px 30px; text-align: center; color: #1f2937; }
-        //             .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
-        //             .content { padding: 40px 30px; }
-        //             .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #009743; }
-        //             .detail-item { margin: 12px 0; font-size: 15px; }
-        //             .detail-label { font-weight: 500; color: #374151; }
-        //             .detail-value { color: #1f2937; }
-        //             .join-link { background: #009743; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
-        //             .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
-        //         </style>
-        //     </head>
-        //     <body>
-        //         <div class="container">
-        //             <div class="header">
-        //                 <h1>✅ Randevu Onaylandı</h1>
-        //                 <p>Randevu talebiniz onaylandı</p>
-        //             </div>
-        //             <div class="content">
-        //                 <p>Merhaba <strong>${clientName}</strong>,</p>
-        //                 <p><strong>${expertName}</strong> ile <strong>${serviceName}</strong> randevu talebiniz onaylandı.</p>
-        //                 <div class="appointment-card">
-        //                     <div class="detail-item">
-        //                         <span class="detail-label">Tarih:</span>
-        //                         <span class="detail-value">${date}</span>
-        //                     </div>
-        //                     <div class="detail-item">
-        //                         <span class="detail-label">Saat:</span>
-        //                         <span class="detail-value">${time}</span>
-        //                     </div>
-        //                     <div class="detail-item">
-        //                         <span class="detail-label">Katılım Linki:</span>
-        //                         <span class="detail-value">${joinLink}</span>
-        //                     </div>
-        //                 </div>
-        //             </div>
-        //             <div class="footer">
-        //                 <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
-        //             </div>
-        //         </div>
-        //     </body>
-        //     </html>
-        //   `;
+          await sendEmail(recipient.email, {
+            subject: emailTemplate.subject,
+            html: emailTemplate.html
+          });
 
-        //   await sendEmail(recipient.email, {
-        //     subject: 'Randevu Onaylandı',
-        //     body: customerEmailBody,
-        //     html: customerEmailHTML
-        //   });
+          console.log(`✅ Approval email sent to customer: ${recipient.email} (type: ${meetingType})`);
+        }
 
-        //   console.log(`✅ Approval email sent to customer: ${recipient.email}`);
-        // }
 
         // Send SMS notifications to customers
         console.log('📱 Sending SMS notifications to customers...');
@@ -2391,6 +2369,10 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
 
         // Prepare event details
         const serviceName = event.serviceName || event.title;
+        const meetingType = event.meetingType;
+        const originalDate = event.date ? new Date(event.date).toLocaleDateString('tr-TR') : 'Belirtilmedi';
+        const serviceType = meetingType === 'grup' ? 'Grup Seansı' : 'Bireysel Randevu';
+        const refundAmount = event.price ? `${event.price} TL` : '0 TL';
 
         // Get customer information from selectedClients
         let recipients = [];
@@ -2408,78 +2390,30 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
           }));
         }
 
-        console.log("Sending rejection/cancellation emails to:", recipients.length, "recipients");
+        console.log("Sending cancellation emails to:", recipients.length, "recipients");
 
-        // Send email to each customer
+        // Send cancellation email to each customer using the new template
         for (const recipient of recipients) {
-          const clientName = recipient.name;
-          const customerEmailBody = `Merhaba ${clientName}, ${serviceName} randevu talebin ${expertName} tarafından reddedildi. Detaylar için Uzmanlio hesabını kontrol edebilirsin.`;
-
-          // Enhanced HTML template for customer rejection
-          const customerEmailHTML = `
-            <!DOCTYPE html>
-            <html lang="tr">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
-                    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
-                    .header { background: #fef3c7; padding: 40px 30px; text-align: center; color: #1f2937; }
-                    .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
-                    .content { padding: 40px 30px; }
-                    .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #dc3545; }
-                    .detail-item { margin: 12px 0; font-size: 15px; }
-                    .detail-label { font-weight: 500; color: #374151; }
-                    .detail-value { color: #1f2937; }
-                    .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
-                    .info-box { background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 15px; margin: 20px 0; border-radius: 5px; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>❌ Randevu Reddedildi</h1>
-                        <p>Randevu talebiniz reddedildi</p>
-                    </div>
-                    <div class="content">
-                        <p>Merhaba <strong>${clientName}</strong>,</p>
-                        <p><strong>${serviceName}</strong> randevu talebin <strong>${expertName}</strong> tarafından reddedildi.</p>
-                        <div class="appointment-card">
-                            <div class="detail-item">
-                                <span class="detail-label">Hizmet:</span>
-                                <span class="detail-value">${serviceName}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Uzman:</span>
-                                <span class="detail-value">${expertName}</span>
-                            </div>
-                        </div>
-                        <div class="info-box">
-                            <p style="margin: 0; color: #004085;">
-                                <strong>ℹ️ Bilgi:</strong> Detaylar için Uzmanlio hesabını kontrol edebilirsin.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="footer">
-                        <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-          `;
-
-          await sendEmail(recipient.email, {
-            subject: 'Randevu Reddedildi',
-            body: customerEmailBody,
-            html: customerEmailHTML
+          const cancellationTemplate = getCancellationEmailTemplate({
+            customerName: recipient.name,
+            expertName: expertName,
+            serviceName: serviceName,
+            originalDate: originalDate,
+            serviceType: serviceType,
+            refundAmount: refundAmount,
+            refundProcessDays: '3-5'
           });
 
-          console.log(`✅ Rejection email sent to customer: ${recipient.email}`);
+          await sendEmail(recipient.email, {
+            subject: cancellationTemplate.subject,
+            html: cancellationTemplate.html
+          });
+
+          console.log(`✅ Cancellation email sent to customer: ${recipient.email}`);
         }
 
       } catch (emailError) {
-        console.error("Error sending rejection emails:", emailError);
+        console.error("Error sending cancellation emails:", emailError);
         // Don't fail the request if email fails
       }
     }

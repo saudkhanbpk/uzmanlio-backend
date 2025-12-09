@@ -4,6 +4,7 @@ import User from "../models/expertInformation.js";
 import Customer from "../models/customer.js";
 import { sendEmail, sendBulkEmail } from "./email.js";
 import { sendSms } from "./netgsmService.js";
+import { getReminderEmailTemplate } from "./eventEmailTemplates.js";
 
 // Read Mongo connection from env (support both MONGO_URL and MONGO_URI)
 let mongoAddress = process.env.MONGO_URL || process.env.MONGO_URI || process.env.MONGO;
@@ -120,181 +121,36 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
 
     // Send email to expert
     if (expertEmail) {
-      const expertEmailTemplate = {
-        to: expertEmail,
-        subject: `Hatırlatma: ${event.title || event.serviceName} - 2 Saat Kaldı`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background-color: #3B82F6; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-              .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-              .event-details { background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-              .detail-row { padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
-              .detail-row:last-child { border-bottom: none; }
-              .label { font-weight: bold; color: #6b7280; }
-              .value { color: #1f2937; }
-              .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>⏰ Etkinlik Hatırlatması</h1>
-              </div>
-              <div class="content">
-                <p>Merhaba ${expertName},</p>
-                <p>Yaklaşan etkinliğiniz için bir hatırlatma:</p>
-                
-                <div class="event-details">
-                  <div class="detail-row">
-                    <span class="label">Etkinlik:</span>
-                    <span class="value">${event.title || event.serviceName}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Tarih:</span>
-                    <span class="value">${event.date || data.eventDate || ''}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Saat:</span>
-                    <span class="value">${event.time || data.eventTime || ''}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Süre:</span>
-                    <span class="value">${event.duration || 60} dakika</span>
-                  </div>
-                  ${event.location ? `
-                  <div class="detail-row">
-                    <span class="label">Konum:</span>
-                    <span class="value">${event.location}</span>
-                  </div>
-                  ` : ''}
-                  ${event.platform ? `
-                  <div class="detail-row">
-                    <span class="label">Platform:</span>
-                    <span class="value">${event.platform}</span>
-                  </div>
-                  ` : ''}
-                  ${selectedClients.length > 0 ? `
-                  <div class="detail-row">
-                    <span class="label">Katılımcılar:</span>
-                    <span class="value">${selectedClients.map(c => c.name).join(', ')}</span>
-                  </div>
-                  ` : ''}
-                  ${event.appointmentNotes ? `
-                  <div class="detail-row">
-                    <span class="label">Notlar:</span>
-                    <span class="value">${event.appointmentNotes}</span>
-                  </div>
-                  ` : ''}
-                </div>
-                
-                <p><strong>Etkinliğinize 2 saat kaldı!</strong> Lütfen hazırlıklarınızı tamamlayın.</p>
-                
-                <div class="footer">
-                  <p>Bu otomatik bir hatırlatma mesajıdır.</p>
-                  <p>Uzmanlio - Danışmanlık Platformu</p>
-                </div>
-              </div>
-            </div>
-          </body>
-          </html>
-        `,
-      };
+      const clientNames = selectedClients.map(c => c.name).join(', ') || 'Danışanlar';
+      const expertReminderTemplate = getReminderEmailTemplate({
+        recipientName: expertName,
+        otherPerson: clientNames,
+        appointmentTime: event.time || data.eventTime || '',
+        appointmentLocation: event.location || 'Online',
+        videoLink: event.platform || ''
+      });
 
-      await sendEmail(expertEmailTemplate);
+      await sendEmail(expertEmail, {
+        subject: expertReminderTemplate.subject,
+        html: expertReminderTemplate.html
+      });
       console.log(`✅ Reminder email sent to expert: ${expertEmail}`);
     }
 
     // Send email to each client
     for (const client of selectedClients) {
-      const clientEmailTemplate = {
-        to: client.email,
-        subject: `Hatırlatma: ${event.title || event.serviceName} - 2 Saat Kaldı`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background-color: #3B82F6; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-              .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-              .event-details { background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-              .detail-row { padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
-              .detail-row:last-child { border-bottom: none; }
-              .label { font-weight: bold; color: #6b7280; }
-              .value { color: #1f2937; }
-              .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 14px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>⏰ Etkinlik Hatırlatması</h1>
-              </div>
-              <div class="content">
-                <p>Merhaba ${client.name},</p>
-                <p>Yaklaşan randevunuz için bir hatırlatma:</p>
-                
-                <div class="event-details">
-                  <div class="detail-row">
-                    <span class="label">Danışman:</span>
-                    <span class="value">${expertName}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Etkinlik:</span>
-                    <span class="value">${event.title || event.serviceName}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Tarih:</span>
-                    <span class="value">${event.date || data.eventDate || ''}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Saat:</span>
-                    <span class="value">${event.time || data.eventTime || ''}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Süre:</span>
-                    <span class="value">${event.duration || 60} dakika</span>
-                  </div>
-                  ${event.location ? `
-                  <div class="detail-row">
-                    <span class="label">Konum:</span>
-                    <span class="value">${event.location}</span>
-                  </div>
-                  ` : ''}
-                  ${event.platform ? `
-                  <div class="detail-row">
-                    <span class="label">Katılım Linki:</span>
-                    <span class="value"><a href="${event.platform}">${event.platform}</a></span>
-                  </div>
-                  ` : ''}
-                  ${event.appointmentNotes ? `
-                  <div class="detail-row">
-                    <span class="label">Notlar:</span>
-                    <span class="value">${event.appointmentNotes}</span>
-                  </div>
-                  ` : ''}
-                </div>
-                
-                <p><strong>Randevunuza 2 saat kaldı!</strong> Lütfen zamanında katılmayı unutmayın.</p>
-                
-                <div class="footer">
-                  <p>Bu otomatik bir hatırlatma mesajıdır.</p>
-                  <p>Uzmanlio - Danışmanlık Platformu</p>
-                </div>
-              </div>
-            </div>
-          </body>
-          </html>
-        `,
-      };
+      const clientReminderTemplate = getReminderEmailTemplate({
+        recipientName: client.name,
+        otherPerson: expertName,
+        appointmentTime: event.time || data.eventTime || '',
+        appointmentLocation: event.location || 'Online',
+        videoLink: event.platform || ''
+      });
 
-      await sendEmail(clientEmailTemplate);
+      await sendEmail(client.email, {
+        subject: clientReminderTemplate.subject,
+        html: clientReminderTemplate.html
+      });
       console.log(`✅ Reminder email sent to client: ${client.email}`);
     }
 

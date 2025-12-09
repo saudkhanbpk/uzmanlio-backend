@@ -204,6 +204,7 @@ const BlogSchema = new Schema({
 // ---------------- Events System ----------------
 const EventSchema = new Schema({
   id: { type: String, default: uuidv4 },
+  expertId: { type: Schema.Types.ObjectId, ref: "User" }, // Track which expert created this event
   title: { type: String, required: true },
   description: { type: String },
   serviceId: { type: String },
@@ -309,6 +310,7 @@ const ExpertPaymentInfoSchema = new Schema({
 // Services Schema
 const ServiceSchema = new Schema({
   id: { type: String, required: true },
+  expertId: { type: Schema.Types.ObjectId, ref: "User" }, // Track which expert created this service
   title: { type: String, required: true },
   description: { type: String },
   icon: { type: String },
@@ -348,6 +350,7 @@ const ServiceSchema = new Schema({
 //  packages Schema
 const PackageSchema = new Schema({
   id: { type: String, required: true },
+  expertId: { type: Schema.Types.ObjectId, ref: "User" }, // Track which expert created this package
   title: { type: String, required: true },
   description: { type: String, default: '' },
   price: { type: Number, default: 0 },

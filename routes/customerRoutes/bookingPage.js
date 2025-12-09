@@ -549,6 +549,7 @@ router.post(
               price: total,
               date: normalizedDate,
               time: normalizedTime,
+              sessionsIncluded: selectedOffering.sessionsIncluded || selectedOffering.sessions,
             }
           );
 

@@ -4,6 +4,15 @@ import Order from "../models/orders.js";
 import { v4 as uuidv4 } from "uuid";
 import Customer from "../models/customer.js";
 import EventRepetitionWarning from "../models/eventRepetitionWarnings.js";
+import { sendEmail } from "./email.js";
+import {
+    getExpertEventCreatedTemplate,
+    getClient11SessionTemplate,
+    getClientGroupSessionTemplate,
+    getClientPackageSessionTemplate,
+    getGroupSessionConfirmationTemplate,
+    getClientAppointmentCreatedTemplate
+} from "./eventEmailTemplates.js";
 
 // Read Mongo connection from env (same logic as first Agenda)
 let mongoAddress = process.env.MONGO_URL || process.env.MONGO_URI || process.env.MONGO;
@@ -288,6 +297,144 @@ agenda.define("create-repeated-event", async (job) => {
         }
 
         console.log(`✅ Repetition ${currentRepetition}/${totalRepetitions} created successfully`);
+
+        // === SEND EMAIL NOTIFICATIONS FOR REPEATED EVENT ===
+        try {
+            const expertName = user.information?.name || 'Uzman';
+            const expertEmail = user.information?.email;
+            const selectedClients = originalEvent.selectedClients || [];
+            const meetingType = originalEvent.meetingType;
+            const serviceType = originalEvent.serviceType;
+
+            console.log(`📧 Sending emails for repetition - MeetingType: ${meetingType}, ServiceType: ${serviceType}`);
+
+            // Send emails to customers based on event type
+            if (serviceType === 'service') {
+                if (meetingType === '1-1') {
+                    // Bireysel: Send appointment created email to each customer
+                    for (const client of selectedClients) {
+                        const clientEmail = client.email;
+                        if (!clientEmail) continue;
+
+                        const clientTemplate = getClient11SessionTemplate({
+                            participantName: client.name,
+                            expertName: expertName,
+                            sessionName: originalEvent.serviceName,
+                            sessionDate: eventData.date,
+                            sessionTime: eventData.time,
+                            sessionDuration: originalEvent.duration,
+                            videoLink: originalEvent.platform || ''
+                        });
+
+                        await sendEmail(clientEmail, {
+                            subject: clientTemplate.subject,
+                            html: clientTemplate.html
+                        });
+                        console.log(`✅ Bireysel repetition email sent to: ${clientEmail}`);
+                    }
+                } else {
+                    // Grup: Send BOTH invite AND confirmation emails
+                    for (const client of selectedClients) {
+                        const clientEmail = client.email;
+                        if (!clientEmail) continue;
+
+                        // Email 1: Group Session Invite
+                        const inviteTemplate = getClientGroupSessionTemplate({
+                            participantName: client.name,
+                            expertName: expertName,
+                            sessionName: originalEvent.serviceName,
+                            sessionDate: eventData.date,
+                            sessionTime: eventData.time,
+                            sessionDuration: originalEvent.duration,
+                            videoLink: originalEvent.platform || ''
+                        });
+
+                        await sendEmail(clientEmail, {
+                            subject: inviteTemplate.subject,
+                            html: inviteTemplate.html
+                        });
+                        console.log(`✅ Group invite email sent to: ${clientEmail}`);
+
+                        // Email 2: Group Session Confirmation
+                        const confirmationTemplate = getGroupSessionConfirmationTemplate({
+                            participantName: client.name,
+                            sessionName: originalEvent.serviceName,
+                            sessionDate: eventData.date,
+                            sessionTime: eventData.time,
+                            videoLink: originalEvent.platform || ''
+                        });
+
+                        await sendEmail(clientEmail, {
+                            subject: confirmationTemplate.subject,
+                            html: confirmationTemplate.html
+                        });
+                        console.log(`✅ Group confirmation email sent to: ${clientEmail}`);
+                    }
+                }
+            } else {
+                // Package: Send BOTH usage AND appointment emails
+                for (const client of selectedClients) {
+                    const clientEmail = client.email;
+                    if (!clientEmail) continue;
+
+                    // Email 1: Package Session Usage
+                    const packageUsageTemplate = getClientPackageSessionTemplate({
+                        participantName: client.name,
+                        expertName: expertName,
+                        packageName: originalEvent.serviceName,
+                        sessionName: originalEvent.serviceName,
+                        sessionDate: eventData.date,
+                        sessionTime: eventData.time,
+                        sessionDuration: originalEvent.duration,
+                        videoLink: originalEvent.platform || ''
+                    });
+
+                    await sendEmail(clientEmail, {
+                        subject: packageUsageTemplate.subject,
+                        html: packageUsageTemplate.html
+                    });
+                    console.log(`✅ Package usage email sent to: ${clientEmail}`);
+
+                    // Email 2: Appointment Created
+                    const appointmentTemplate = getClientAppointmentCreatedTemplate({
+                        clientName: client.name,
+                        expertName: expertName,
+                        appointmentDate: eventData.date,
+                        appointmentTime: eventData.time,
+                        appointmentLocation: originalEvent.location || 'Online',
+                        videoLink: originalEvent.platform || ''
+                    });
+
+                    await sendEmail(clientEmail, {
+                        subject: appointmentTemplate.subject,
+                        html: appointmentTemplate.html
+                    });
+                    console.log(`✅ Package appointment email sent to: ${clientEmail}`);
+                }
+            }
+
+            // Send email to Expert
+            if (expertEmail) {
+                const expertTemplate = getExpertEventCreatedTemplate({
+                    expertName: expertName,
+                    clientName: selectedClients.map(c => c.name).join(', ') || 'Danışan',
+                    eventDate: eventData.date,
+                    eventTime: eventData.time,
+                    eventLocation: originalEvent.location,
+                    serviceName: originalEvent.serviceName,
+                    videoLink: originalEvent.platform || ''
+                });
+
+                await sendEmail(expertEmail, {
+                    subject: expertTemplate.subject,
+                    html: expertTemplate.html
+                });
+                console.log(`✅ Expert repetition email sent to: ${expertEmail}`);
+            }
+        } catch (emailError) {
+            console.error(`❌ Error sending repetition emails:`, emailError);
+            // Don't fail the repetition process if emails fail
+        }
 
         // Log summary of issues
         if (insufficientSessionsCustomers.length > 0) {

@@ -23,6 +23,7 @@ import authRoutes from "./routes/expertRoutes/authRoutes.js";
 import purchaseRoutes from "./routes/expertRoutes/purchaseRoutes.js";
 import paymentRoutes from "./routes/expertRoutes/paymentRoutes.js";
 import reportsRoutes from "./routes/expertRoutes/reportsRoutes.js";
+import institutionDataRoutes from "./routes/expertRoutes/institutionDataRoutes.js";
 import fs from "fs";
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
@@ -139,6 +140,7 @@ app.use("/api/expert", institutionRoutes);
 app.use("/api/expert", purchaseRoutes);
 app.use("/api/expert", paymentRoutes);
 app.use("/api/expert", reportsRoutes);
+app.use("/api/expert", institutionDataRoutes); // Institution-wide data aggregation
 
 // Calendar integration routes
 app.use("/api/calendar/auth", calendarAuthRoutes);
