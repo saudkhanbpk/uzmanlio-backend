@@ -79,6 +79,7 @@ async function sendEmailNow(userId, emailId) {
     if (!emailObj) throw new Error('Email not found');
 
     // Prevent re-sending
+
     if (emailObj.status === 'sent') {
         console.log(`Email ${emailId} already sent.`);
         return emailObj;
