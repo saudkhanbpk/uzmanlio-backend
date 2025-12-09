@@ -12,7 +12,8 @@ app.use(cors({
     origin: true,
     credentials: true
 }));
-app.use('./uploads', express.static(path.join(__dirname, 'uploads')));
+// app.use('./uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
 // Add headers middleware

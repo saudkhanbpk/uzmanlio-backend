@@ -39,7 +39,7 @@ export const createMulterUpload = (options = {}) => {
   } = options;
 
   // Create upload directory
-  const uploadDir = path.join(__dirname, "..", ...uploadPath.split("/"));
+  const uploadDir = path.join(__dirname, "..", "..", ...uploadPath.split("/"));
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
     console.log("Created upload directory:", uploadDir);

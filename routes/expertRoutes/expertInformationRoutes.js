@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
 import User from "../../models/expertInformation.js";
+import CustomerNote from "../../models/customerNotes.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
 import Customer from "../../models/customer.js";
 import CustomerAppointments from "../../models/customerAppointment.js";
@@ -187,6 +188,22 @@ const expertProfileUpload = createMulterUpload({
   }
 });
 
+// Create customer notes file upload configuration
+const customerNoteUpload = createMulterUpload({
+  uploadPath: "uploads/Experts_Files/customer_notes",
+  fieldName: "file",
+  maxFiles: 1,
+  maxFileSize: 10, // 10MB
+  allowedExtensions: ["jpg", "jpeg", "png", "gif", "pdf", "doc", "docx"],
+  fileNameGenerator: (req, file) => {
+    const customerId = req.params.customerId || 'unknown';
+    const timestamp = Date.now();
+    const randomId = uuidv4();
+    const extension = path.extname(file.originalname).toLowerCase();
+    return `${customerId}-${timestamp}-${randomId}${extension}`;
+  }
+});
+
 // ==================== DEBUG ROUTES ====================
 
 // Debug route to list all users (for development only)
@@ -284,7 +301,7 @@ router.post("/:userId/upload",
 
       // Generate URLs for the uploaded file
       const relativePath = `/uploads/Experts_Files/Expert-Users/${req.file.filename}`;
-      const fileUrl = `${req.protocol}://${req.get("host")}${relativePath}`;
+      const fileUrl = `${process.env.BASE_URL || `${req.protocol}://${req.get("host")}`}${relativePath}`;
 
       console.log("Generated URLs:", {
         relativePath,
@@ -3621,8 +3638,8 @@ router.get("/:userId/customers/:customerId/notes", async (req, res) => {
     const belongsToUser = user.customers.some(c => c.customerId.toString() === customerId);
     if (!belongsToUser) return res.status(404).json({ error: "Customer not found for this user" });
 
-    // Fetch customer
-    const customer = await Customer.findById(customerId).lean();
+    // Fetch customer with populated notes
+    const customer = await Customer.findById(customerId).populate('notes').lean();
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     // Sort notes by newest first
@@ -3647,43 +3664,73 @@ router.get("/:userId/customers/:customerId/notes", async (req, res) => {
 
 
 // Add customer note
-router.post("/:userId/customers/:customerId/notes", async (req, res) => {
-  try {
-    const { userId, customerId } = req.params;
-    const noteData = req.body;
+router.post("/:userId/customers/:customerId/notes",
+  customerNoteUpload.single('file'),
+  handleMulterError,
+  async (req, res) => {
+    try {
+      const { userId, customerId } = req.params;
+      const noteData = req.body;
 
-    const user = await findUserById(userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
+      const user = await findUserById(userId);
+      if (!user) return res.status(404).json({ error: "User not found" });
 
-    const belongsToUser = user.customers.some(c => c.customerId.toString() === customerId);
-    if (!belongsToUser) return res.status(404).json({ error: "Customer not found for this user" });
+      const belongsToUser = user.customers.some(c => c.customerId.toString() === customerId);
+      if (!belongsToUser) return res.status(404).json({ error: "Customer not found for this user" });
 
-    const customer = await Customer.findById(customerId);
-    if (!customer) return res.status(404).json({ error: "Customer not found" });
+      const customer = await Customer.findById(customerId);
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
 
-    const noteId = uuidv4();
-    const newNote = {
-      id: noteId,
-      content: noteData.content,
-      author: noteData.author || 'expert',
-      authorName: noteData.authorName || user.information?.name || 'Expert',
-      files: noteData.files || [],
-      isPrivate: noteData.isPrivate || false,
-      tags: noteData.tags || [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+      const noteId = uuidv4();
 
-    customer.notes.push(newNote);
-    customer.lastContact = new Date();
-    customer.updatedAt = new Date();
-    await customer.save();
+      // Handle file upload if present
+      const files = [];
+      if (req.file) {
+        const file = req.file;
+        const relativePath = `/uploads/Experts_Files/customer_notes/${file.filename}`;
+        const fileUrl = `${req.protocol}://${req.get("host")}${relativePath}`;
 
-    res.status(201).json({ note: newNote, message: "Not başarıyla eklendi" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+        // Determine file type
+        let fileType = 'document';
+        if (file.mimetype.startsWith('image/')) {
+          fileType = 'image';
+        } else if (file.mimetype === 'application/pdf') {
+          fileType = 'pdf';
+        }
+
+        files.push({
+          name: file.originalname,
+          type: fileType,
+          size: `${(file.size / 1024).toFixed(1)} KB`,
+          url: fileUrl,
+          uploadedAt: new Date()
+        });
+      }
+
+      const newNote = new CustomerNote({
+        id: noteId,
+        content: noteData.content || '',
+        author: noteData.author || 'expert',
+        authorName: noteData.authorName || user.information?.name || 'Expert',
+        files: files,
+        isPrivate: noteData.isPrivate === 'true' || noteData.isPrivate === true,
+        tags: noteData.tags ? (Array.isArray(noteData.tags) ? noteData.tags : [noteData.tags]) : [],
+      });
+
+      await newNote.save();
+
+      customer.notes.push(newNote._id);
+      customer.lastContact = new Date();
+      customer.updatedAt = new Date();
+      await customer.save();
+
+      res.status(201).json({ note: newNote, message: "Not başarıyla eklendi" });
+    } catch (error) {
+      console.error('Error adding customer note:', error);
+      res.status(500).json({ error: error.message });
+    }
   }
-});
+);
 
 
 // Update customer note
