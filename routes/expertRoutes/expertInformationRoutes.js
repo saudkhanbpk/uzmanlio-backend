@@ -293,7 +293,7 @@ router.post("/:userId/upload",
 
       // Generate URLs for the uploaded file
       const relativePath = `/uploads/Experts_Files/Expert-Users/${req.file.filename}`;
-      const fileUrl = `${req.protocol}://${req.get("host")}${relativePath}`;
+      const fileUrl = `${process.env.BASE_URL || `${req.protocol}://${req.get("host")}`}${relativePath}`;
 
       console.log("Generated URLs:", {
         relativePath,
