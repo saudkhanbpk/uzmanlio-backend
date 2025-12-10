@@ -3797,20 +3797,14 @@ router.post("/:userId/customers/:customerId/notes",
 
       const noteId = uuidv4();
 
-      // Handle file upload if present
+      // Handle file upload
       const files = [];
       if (req.file) {
         const file = req.file;
-        const relativePath = `/uploads/Experts_Files/customer_notes/${file.filename}`;
-        const fileUrl = `${req.protocol}://${req.get("host")}${relativePath}`;
-
-        // Determine file type
+        const fileUrl = `/uploads/Experts_Files/customer_notes/${file.filename}`;
         let fileType = 'document';
-        if (file.mimetype.startsWith('image/')) {
-          fileType = 'image';
-        } else if (file.mimetype === 'application/pdf') {
-          fileType = 'pdf';
-        }
+        if (file.mimetype.startsWith('image/')) fileType = 'image';
+        else if (file.mimetype === 'application/pdf') fileType = 'pdf';
 
         files.push({
           name: file.originalname,

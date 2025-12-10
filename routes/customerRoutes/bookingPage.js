@@ -284,6 +284,24 @@ router.post(
         }
       );
 
+      // --- Step 6.5: Link Customer to Expert if not already linked ---
+      if (!Expert.customers) {
+        Expert.customers = [];
+      }
+
+      const isCustomerLinked = Expert.customers.some(
+        c => c.customerId && c.customerId.toString() === customer._id.toString()
+      );
+
+      if (!isCustomerLinked) {
+        Expert.customers.push({
+          customerId: customer._id,
+          isArchived: false,
+          addedAt: new Date()
+        });
+        console.log(`Linked new customer ${customer._id} to Expert ${Expert._id}`);
+      }
+
       // --- Step 7: Create appointment record (only for services) ---
       let appointment = null;
 
@@ -345,7 +363,7 @@ router.post(
             type: f.mimetype,
             size: f.size,
             uploadDate: new Date(),
-            url: f.path,
+            url: `/uploads/CustomerFiles/NotesFormsFiles/${f.filename}`,
           })) || [],
           selectedClients: [{
             id: customer._id,
@@ -377,7 +395,7 @@ router.post(
                 name: f.originalname,
                 type: f.mimetype,
                 size: f.size,
-                url: f.path,
+                url: `/uploads/CustomerFiles/NotesFormsFiles/${f.filename}`,
               })) || [],
           }],
           { session }

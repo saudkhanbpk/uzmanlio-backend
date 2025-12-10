@@ -870,7 +870,7 @@ class ParasutApiService {
                     type: 'sales_invoices',
                     attributes: {
                         item_type: 'invoice',
-                        description: invoiceDetails.description || 'Video İçerik',
+                        description: invoiceDetails.description || 'Expert subscription',
                         issue_date: invoiceDetails.issueDate || new Date().toISOString().split('T')[0],
                         due_date: invoiceDetails.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                         invoice_series: invoiceDetails.invoiceSeries || '',
@@ -1385,7 +1385,7 @@ class ParasutApiService {
                     type: 'products',
                     attributes: {
                         code: `PROD_${Date.now()}`,
-                        name: itemData.title || 'Video Content',
+                        name: itemData.title || '',
                         unit: 'adet',
                         vat_rate: 20,
                         sales_excise_duty_type: 'percentage',

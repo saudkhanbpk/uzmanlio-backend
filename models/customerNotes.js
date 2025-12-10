@@ -28,7 +28,7 @@ export const CustomerNoteSchema = new Schema({
     tags: [{ type: String }],
 }, {
     // Use Mongoose's built-in timestamps for createdAt and updatedAt
-    timestamps: true 
+    timestamps: true
 });
 
 // The model is created but not the primary export if the schema is needed elsewhere

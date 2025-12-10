@@ -198,6 +198,7 @@ router.post("/:userId/new-subscription", async (req, res) => {
         console.log("Data Received For Card", req.body);
 
         const user = await findUserById(userId);
+        const existingInstitutionId = user.subscription?.institutionId || null;
 
         // Initialize cards array if it doesn't exist
         if (!user.cards) {
@@ -256,7 +257,8 @@ router.post("/:userId/new-subscription", async (req, res) => {
             price: price,
             duration: duration,
             startDate: startDate,
-            endDate: endDate
+            endDate: endDate,
+            institutionId: existingInstitutionId,
         };
 
         await user.save();
