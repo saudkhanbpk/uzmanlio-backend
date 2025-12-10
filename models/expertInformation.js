@@ -518,6 +518,15 @@ const cardSchema = new Schema({
   cardHolderName: { type: String, required: true },
   cardExpiry: { type: String, required: true },
   cardCvv: { type: String, required: true },
+  billingInfo: {
+    companyName: { type: String },
+    taxNumber: { type: String },
+    taxOffice: { type: String },
+    address: { type: String },
+    city: { type: String },
+    district: { type: String },
+    phoneNumber: { type: String }
+  }
 });
 
 // const CustomerSchema = new Schema({

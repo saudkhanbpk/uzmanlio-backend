@@ -24,6 +24,7 @@ import purchaseRoutes from "./routes/expertRoutes/purchaseRoutes.js";
 import paymentRoutes from "./routes/expertRoutes/paymentRoutes.js";
 import reportsRoutes from "./routes/expertRoutes/reportsRoutes.js";
 import institutionDataRoutes from "./routes/expertRoutes/institutionDataRoutes.js";
+import parasutRoute from "./routes/customerRoutes/parasut.routes.js";
 import fs from "fs";
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
@@ -126,6 +127,12 @@ app.get("/api/status", async (req, res) => {
   }
 });
 
+// Express route
+app.get('/test', async (_req, res) => {
+  console.log("Received request at /test endpoint");
+});
+
+
 
 
 
@@ -142,6 +149,9 @@ app.use("/api/expert", paymentRoutes);
 app.use("/api/expert", reportsRoutes);
 app.use("/api/expert", institutionDataRoutes); // Institution-wide data aggregation
 
+// parasut route
+app.use("/api/v1/parasut", parasutRoute);
+
 // Calendar integration routes
 app.use("/api/calendar/auth", calendarAuthRoutes);
 app.use("/api/calendar/sync", calendarSyncRoutes);
@@ -151,61 +161,16 @@ app.use("/api/expert/:userId/coupons", userCouponsRoutes);
 // Emails per user
 app.use("/api/expert/:userId/emails", userEmailsRoutes);
 
-// app.post("/send-sms", async (req, res) => {
-//   try {
-//     const { message, phone } = req.body;
 
-//     if (!message || !phone) {
-//       return res.status(400).json({ error: "Message and phone are required" });
-//     }
 
-//     const url = "https://api.netgsm.com.tr/sms/send/xml";
 
-//     // IMPORTANT: XML must NOT contain any leading spaces or indentation!
-//     const xmlData =
-//       `<?xml version="1.0" encoding="UTF-8"?>
-// <mainbody>
-//   <header>
-//     <usercode>${process.env.NETGSM_USERNAME}</usercode>
-//     <password>${process.env.NETGSM_PASSWORD}</password>
-//     <msgheader>${process.env.NETGSM_MSGHEADER}</msgheader>
-//   </header>
-//   <body>
-//     <msg><![CDATA[${message}]]></msg>
-//     <no>${phone}</no>
-//   </body>
-// </mainbody>`;
-
-//     const response = await axios.post(url, xmlData, {
-//       headers: {
-//         "Content-Type": "application/xml",
-//       },
-//       timeout: 15000,
-//     });
-
-//     res.json({
-//       success: true,
-//       xml_sent: xmlData,
-//       response_raw: response.data,
-//     });
-
-//   } catch (error) {
-//     res.status(500).json({
-//       success: false,
-//       message: "SMS send failed",
-//       error: error.message,
-//     });
-//   }
-// });
-
-// Configure Netgsm client
-const netgsm = new Netgsm({
-  username: "8503091122",
-  password: "Uzmanlio_1807*",
-  appname: "Uzmanlio" // optional
-});
 
 app.post("/send-sms", async (req, res) => {
+  const netgsm = new Netgsm({
+    username: "8503091122",
+    password: "Uzmanlio_1807*",
+    appname: "Uzmanlio" // optional
+  });
   const { phone, message } = req.body;
 
   if (!phone || !message) {

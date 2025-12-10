@@ -1404,6 +1404,8 @@ router.get("/:userId/events/status/:status", async (req, res) => {
 
 
 
+//==============Create New Event================//
+
 router.post("/:userId/events", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
@@ -1423,19 +1425,16 @@ router.post("/:userId/events", async (req, res) => {
       let customerSurname = client.surname;
       let customerEmail = client.email;
 
-      // Check if ID is a valid ObjectId. If not (e.g. timestamp), treat as new/unknown.
-      const isValidId = mongoose.Types.ObjectId.isValid(customerId) && String(customerId).length === 24;
+      // Check if ID is a valid ObjectId
+      const isValidId =
+        mongoose.Types.ObjectId.isValid(customerId) &&
+        String(customerId).length === 24;
 
       if (!isValidId) {
         // Try to find by email
         let existingCustomer = await Customer.findOne({ email: customerEmail });
 
         if (!existingCustomer) {
-          // Create new customer
-          // const nameParts = customerName.trim().split(' ');
-          // const firstName = nameParts[0];
-          // const lastName = nameParts.slice(1).join(' ') || '';
-
           existingCustomer = await Customer.create({
             name: customerName,
             surname: customerSurname,
@@ -1444,11 +1443,15 @@ router.post("/:userId/events", async (req, res) => {
             status: "active",
             source: "website",
             createdAt: new Date(),
-            updatedAt: new Date()
+            updatedAt: new Date(),
           });
-          console.log(`Created new customer: ${customerEmail} (${existingCustomer._id})`);
+          console.log(
+            `Created new customer: ${customerEmail} (${existingCustomer._id})`
+          );
         } else {
-          console.log(`Found existing customer by email: ${customerEmail} (${existingCustomer._id})`);
+          console.log(
+            `Found existing customer by email: ${customerEmail} (${existingCustomer._id})`
+          );
         }
         customerId = existingCustomer._id;
       }
@@ -1458,15 +1461,16 @@ router.post("/:userId/events", async (req, res) => {
         user.customers = [];
       }
 
-      const isLinked = user.customers.some(c =>
-        c.customerId && c.customerId.toString() === customerId.toString()
+      const isLinked = user.customers.some(
+        (c) =>
+          c.customerId && c.customerId.toString() === customerId.toString()
       );
 
       if (!isLinked) {
         user.customers.push({
           customerId: customerId,
           isArchived: false,
-          addedAt: new Date()
+          addedAt: new Date(),
         });
         console.log(`Linked customer ${customerId} to expert`);
       }
@@ -1475,11 +1479,36 @@ router.post("/:userId/events", async (req, res) => {
         id: customerId,
         name: customerName,
         email: customerEmail,
-        packages: client.packages || []
+        packages: client.packages || [],
       });
     }
 
     const formattedClients = resolvedClients;
+
+    // ===========================================================
+    // 🚀 FIX: CLEAN paymentType CUSTOMER IDs BEFORE SAVING
+    // ===========================================================
+    if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
+      for (const p of eventData.paymentType) {
+        const resolved = resolvedClients.find(
+          (c) => c.email === p.email // match only by email
+        );
+
+        if (resolved) {
+          // Replace invalid ID with real MongoId
+          p.customerId = resolved.id.toString();
+        } else {
+          // If still invalid or missing → remove ID fully to avoid Cast Error
+          if (
+            !mongoose.Types.ObjectId.isValid(p.customerId) ||
+            String(p.customerId).length !== 24
+          ) {
+            p.customerId = undefined;
+          }
+        }
+      }
+    }
+    // ===========================================================
 
     const newEvent = {
       id: eventId,
@@ -1499,15 +1528,15 @@ router.post("/:userId/events", async (req, res) => {
       maxAttendees: eventData.maxAttendees,
       attendees: eventData.attendees || 0,
       category: eventData.category,
-      status: eventData.status || 'pending',
-      paymentType: eventData.paymentType || 'online',
+      status: eventData.status || "pending",
+      paymentType: eventData.paymentType || [],
       isRecurring: eventData.isRecurring || false,
       recurringType: eventData.recurringType,
       selectedClients: formattedClients || [],
       appointmentNotes: eventData.appointmentNotes,
       files: eventData.files || [],
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
     if (!user.events) {
@@ -1515,25 +1544,43 @@ router.post("/:userId/events", async (req, res) => {
     }
     user.events.push(newEvent);
 
+    // --- REST OF YOUR CODE (UNCHANGED) ---
 
-
-    user.packages.find(pkg => {
-      if (pkg.id === eventData.service) {
-        pkg.selectedClients.push({
-          id: customerId,
-          name: customerName,
-          email: customerEmail
-        });
+    // Update package selectedClients with resolved customers
+    if (eventData.serviceType === "package") {
+      const pkg = user.packages.find((pkg) => pkg.id === eventData.service);
+      if (pkg) {
+        for (const client of resolvedClients) {
+          const alreadyAdded = pkg.selectedClients?.some(
+            (sc) =>
+              sc.id?.toString() === client.id?.toString() ||
+              sc.email === client.email
+          );
+          if (!alreadyAdded) {
+            if (!pkg.selectedClients) pkg.selectedClients = [];
+            pkg.selectedClients.push({
+              id: client.id,
+              name: client.name,
+              email: client.email,
+            });
+          }
+        }
       }
-    });
+    }
 
     // === Process package-based payments ===
     if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
       console.log("Processing payment types:", eventData.paymentType);
 
       for (const payment of eventData.paymentType) {
-        if (payment.paymentMethod === 'paketten-tahsil' && payment.orderId && payment.packageId) {
-          console.log(`Incrementing session for order: ${payment.orderId}, package: ${payment.packageId}`);
+        if (
+          payment.paymentMethod === "paketten-tahsil" &&
+          payment.orderId &&
+          payment.packageId
+        ) {
+          console.log(
+            `Incrementing session for order: ${payment.orderId}, package: ${payment.packageId}`
+          );
 
           try {
             const order = await Order.findById(payment.orderId);
@@ -1541,23 +1588,32 @@ router.post("/:userId/events", async (req, res) => {
             if (order && order.orderDetails?.events) {
               for (let event of order.orderDetails.events) {
                 if (
-                  event.eventType === 'package' &&
+                  event.eventType === "package" &&
                   event.package &&
-                  event.package.packageId?.toString() === payment.packageId.toString()
+                  event.package.packageId?.toString() ===
+                  payment.packageId.toString()
                 ) {
-                  event.package.completedSessions = (event.package.completedSessions || 0) + 1;
-                  console.log(`✅ Incremented completedSessions to ${event.package.completedSessions} for package ${payment.packageId}`);
+                  event.package.completedSessions =
+                    (event.package.completedSessions || 0) + 1;
+                  console.log(
+                    `Incremented completedSessions to ${event.package.completedSessions} for package ${payment.packageId}`
+                  );
                   break;
                 }
               }
 
               await order.save();
-              console.log(`✅ Order ${payment.orderId} updated successfully`);
+              console.log(`Order ${payment.orderId} updated successfully`);
             } else {
-              console.warn(`⚠️ Order ${payment.orderId} not found or has no events`);
+              console.warn(
+                `Order ${payment.orderId} not found or has no events`
+              );
             }
           } catch (orderError) {
-            console.error(`❌ Error updating order ${payment.orderId}:`, orderError);
+            console.error(
+              `Error updating order ${payment.orderId}:`,
+              orderError
+            );
           }
         }
       }
@@ -1566,330 +1622,471 @@ router.post("/:userId/events", async (req, res) => {
     await user.save();
 
     const savedUser = await User.findById(req.params.userId);
-    const savedEvent = savedUser.events.find(e => e.id === newEvent.id);
+    const savedEvent = savedUser.events.find((e) => e.id === newEvent.id);
 
-    // === NEW: Create orders for customers without packages ===
+    // === Create orders for customers without packages ===
     if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
-      console.log("📦 Creating orders for customers without packages...");
+      console.log("Creating orders for customers without packages...");
 
       for (const payment of eventData.paymentType) {
-        // Only process customers who are NOT using package payment
-        if (payment.paymentMethod !== 'paketten-tahsil' && !payment.orderId) {
+        if (payment.paymentMethod !== "paketten-tahsil" && !payment.orderId) {
           const customerId = payment.customerId;
-          const customer = formattedClients.find(c => c.id.toString() === customerId.toString());
+          if (!customerId) continue; // skip invalid entries
+
+          const customer = formattedClients.find(
+            (c) => c.id.toString() === customerId.toString()
+          );
 
           if (customer && eventData.price) {
             try {
-              console.log(`💰 Creating order for ${customer.name} - Price: ${eventData.price}`);
+              console.log(
+                `Creating order for ${customer.name} - Price: ${eventData.price}`
+              );
 
-              // Fetch customer details
               const customerDoc = await Customer.findById(customerId);
 
-              // Create new order for this customer
               const newOrder = await Order.create({
                 userInfo: {
                   userId: customerId,
                   name: customer.name,
                   email: customer.email,
-                  phone: customerDoc?.phone || ''
+                  phone: customerDoc?.phone || "",
                 },
                 expertInfo: {
                   expertId: req.params.userId,
-                  name: user.information?.name || 'Expert',
-                  accountNo: user.information?.accountNo || 'N/A',
-                  email: user.information?.email || ''
+                  name: user.information?.name || "Expert",
+                  accountNo: user.information?.accountNo || "N/A",
+                  email: user.information?.email || "",
                 },
                 orderDetails: {
                   events: [
                     {
-                      eventType: 'service',
+                      eventType: "service",
                       service: {
                         name: eventData.serviceName,
-                        description: eventData.description || '',
+                        description: eventData.description || "",
                         price: parseFloat(eventData.price),
                         duration: parseInt(eventData.duration) || 0,
-                        meetingType: eventData.meetingType || '1-1'
-                      }
-                    }
+                        meetingType: eventData.meetingType || "1-1",
+                      },
+                    },
                   ],
-                  totalAmount: parseFloat(eventData.price)
+                  totalAmount: parseFloat(eventData.price),
                 },
                 paymentInfo: {
                   method: payment.paymentMethod,
-                  status: 'pending'
+                  status: "pending",
                 },
-                status: 'pending',
-                orderSource: 'expert-created-event'
+                status: "pending",
+                orderSource: "expert-created-event",
               });
 
-              console.log(`✅ Created order ${newOrder._id} for customer ${customer.name}`);
+              console.log(
+                `Created order ${newOrder._id} for customer ${customer.name}`
+              );
 
-
-              // Update customer's orders and appointments arrays
               if (customerDoc) {
-                if (!customerDoc.orders) {
-                  customerDoc.orders = [];
-                }
-                if (!customerDoc.appointments) {
-                  customerDoc.appointments = [];
-                }
+                if (!customerDoc.orders) customerDoc.orders = [];
+                if (!customerDoc.appointments) customerDoc.appointments = [];
 
-                // Add order ID to customer's orders
                 customerDoc.orders.push(newOrder._id);
-
-                // Add event ID to customer's appointments (using the event's MongoDB _id)
                 customerDoc.appointments.push(savedEvent._id);
 
                 await customerDoc.save();
-                console.log(`✅ Updated customer ${customer.name} - Added order and appointment`);
               }
-              // Update the payment type with the new order ID
+
               const paymentIndex = eventData.paymentType.findIndex(
-                p => p.customerId.toString() === customerId.toString()
+                (p) => p.customerId.toString() === customerId.toString()
               );
               if (paymentIndex !== -1) {
                 savedEvent.paymentType[paymentIndex].orderId = newOrder._id;
                 await savedUser.save();
-                console.log(`✅ Updated event payment type with order ID ${newOrder._id}`);
               }
-
             } catch (orderError) {
-              console.error(`❌ Error creating order for customer ${customerId}:`, orderError);
-            }
-          } else {
-            if (!eventData.price) {
-              console.warn(`⚠️ No price set for event, skipping order creation for customer ${customerId}`);
+              console.error(
+                `Error creating order for customer ${customerId}:`,
+                orderError
+              );
             }
           }
         }
       }
     }
 
-    //Create the Agenda instance (Scheduling Emails before 2 hours Of Appointment)
+    //Create the Agenda instance
     try {
-      // const savedUser = await User.findById(req.params.userId);
-      // const savedEvent = savedUser.events.find(e => e.id === eventId);
-      console.log("Checking For the User and Event");
       if (savedEvent) {
         const jobId = await scheduleReminderForEvent(savedUser, savedEvent);
-        console.log("Job Id Created", jobId);
-
         if (jobId) {
           savedEvent.agendaJobId = jobId;
           await savedUser.save();
-          console.log("Agenda job scheduled for event", eventId, "jobId:", jobId);
         }
       }
     } catch (schedErr) {
       console.error("Error scheduling agenda job after event create:", schedErr);
     }
 
-    // === NEW: Schedule repetitions if enabled ===
+    // === Schedule repetitions ===
     let repetitionJobIds = null;
-    if (eventData.isRecurring && eventData.repetitions && eventData.repetitions.length > 0) {
-      console.log("📅 Scheduling event repetitions...");
-
+    if (
+      eventData.isRecurring &&
+      eventData.repetitions &&
+      eventData.repetitions.length > 0
+    ) {
       try {
         repetitionJobIds = await scheduleRepeatedEvents(
           savedUser._id,
           savedEvent._id,
           {
             ...eventData,
-            // Remove repetition data from repeated events to avoid infinite loop
             isRecurring: false,
-            repetitions: []
+            repetitions: [],
           },
           {
             isRecurring: eventData.isRecurring,
             recurringType: eventData.recurringType,
-            repetitions: eventData.repetitions
+            repetitions: eventData.repetitions,
           }
         );
 
         if (repetitionJobIds) {
-          // Store job IDs in the event for future cancellation
           if (savedEvent) {
             savedEvent.repetitionJobIds = repetitionJobIds;
             await savedUser.save();
           }
-          console.log(`✅ Scheduled ${eventData.repetitions[0].numberOfRepetitions} repetitions`);
         }
       } catch (repError) {
-        console.error("❌ Error scheduling repetitions:", repError);
-        // Don't fail the entire request if repetition scheduling fails
+        console.error("Error scheduling repetitions:", repError);
       }
     }
 
-    // Extract emails from selectedClients
-    const clientEmails = (formattedClients || []).map(c => c.email);
-    console.log("Client Emails:", clientEmails);
+    const clientEmails = (formattedClients || []).map((c) => c.email);
 
-    //if the Event is Service Event , then Send the Service Email to Expert and Customers Both
-    if (eventData.serviceType === 'service') {
-      console.log("Event is service");
+    // === EMAIL SENDING (UNCHANGED) ===
+    // === EMAIL SENDING (ASYNCHRONOUS) ===
+    const sendEmailsAsync = async () => {
+      try {
+        const emailPromises = [];
 
-      if (eventData.meetingType === '1-1') {
-        // Bireysel (1-1): Send appointment created email to customer
-        for (const client of formattedClients) {
-          const clientTemplate = getClient11SessionTemplate({
-            participantName: client.name,
+        if (eventData.serviceType === "service") {
+          if (eventData.meetingType === "1-1") {
+            // Individual 1-1 emails
+            for (const client of formattedClients) {
+              const clientTemplate = getClient11SessionTemplate({
+                participantName: client.name,
+                expertName: user.information.name,
+                sessionName: eventData.serviceName,
+                sessionDate: eventData.date,
+                sessionTime: eventData.time,
+                sessionDuration: eventData.duration,
+                videoLink: eventData.platform || "",
+              });
+
+              emailPromises.push(
+                sendEmail(client.email, {
+                  subject: clientTemplate.subject,
+                  html: clientTemplate.html,
+                })
+              );
+            }
+
+            const expertTemplate = getExpertEventCreatedTemplate({
+              expertName: user.information.name,
+              clientName: formattedClients[0]?.name || "Danışan",
+              eventDate: eventData.date,
+              eventTime: eventData.time,
+              eventLocation: eventData.location,
+              serviceName: eventData.serviceName,
+              videoLink: eventData.platform || "",
+            });
+
+            emailPromises.push(
+              sendEmail(user.information.email, {
+                subject: expertTemplate.subject,
+                html: expertTemplate.html,
+              })
+            );
+          } else {
+            // Group session emails
+            for (const client of formattedClients) {
+              const inviteTemplate = getClientGroupSessionTemplate({
+                participantName: client.name,
+                expertName: user.information.name,
+                sessionName: eventData.serviceName,
+                sessionDate: eventData.date,
+                sessionTime: eventData.time,
+                sessionDuration: eventData.duration,
+                videoLink: eventData.platform || "",
+              });
+
+              const confirmationTemplate = getGroupSessionConfirmationTemplate({
+                participantName: client.name,
+                sessionName: eventData.serviceName,
+                sessionDate: eventData.date,
+                sessionTime: eventData.time,
+                videoLink: eventData.platform || "",
+              });
+
+              emailPromises.push(
+                sendEmail(client.email, {
+                  subject: inviteTemplate.subject,
+                  html: inviteTemplate.html,
+                })
+              );
+              emailPromises.push(
+                sendEmail(client.email, {
+                  subject: confirmationTemplate.subject,
+                  html: confirmationTemplate.html,
+                })
+              );
+            }
+
+            const expertTemplate = getExpertEventCreatedTemplate({
+              expertName: user.information.name,
+              clientName: formattedClients.map((c) => c.name).join(", "),
+              eventDate: eventData.date,
+              eventTime: eventData.time,
+              eventLocation: eventData.location,
+              serviceName: eventData.serviceName,
+              videoLink: eventData.platform || "",
+            });
+
+            emailPromises.push(
+              sendEmail(user.information.email, {
+                subject: expertTemplate.subject,
+                html: expertTemplate.html,
+              })
+            );
+          }
+        } else {
+          // Package emails
+          for (const client of formattedClients) {
+            const packageUsageTemplate = getClientPackageSessionTemplate({
+              participantName: client.name,
+              expertName: user.information.name,
+              packageName: eventData.serviceName,
+              sessionName: eventData.serviceName,
+              sessionDate: eventData.date,
+              sessionTime: eventData.time,
+              sessionDuration: eventData.duration,
+              videoLink: eventData.platform || "",
+            });
+
+            const appointmentTemplate = getClientAppointmentCreatedTemplate({
+              clientName: client.name,
+              expertName: user.information.name,
+              appointmentDate: eventData.date,
+              appointmentTime: eventData.time,
+              appointmentLocation: eventData.location || "Online",
+              videoLink: eventData.platform || "",
+            });
+
+            emailPromises.push(
+              sendEmail(client.email, {
+                subject: packageUsageTemplate.subject,
+                html: packageUsageTemplate.html,
+              })
+            );
+
+            emailPromises.push(
+              sendEmail(client.email, {
+                subject: appointmentTemplate.subject,
+                html: appointmentTemplate.html,
+              })
+            );
+          }
+
+          const expertTemplate = getExpertEventCreatedTemplate({
             expertName: user.information.name,
-            sessionName: eventData.serviceName,
-            sessionDate: eventData.date,
-            sessionTime: eventData.time,
-            sessionDuration: eventData.duration,
-            videoLink: eventData.platform || ''
+            clientName: formattedClients[0]?.name || "Danışan",
+            eventDate: eventData.date,
+            eventTime: eventData.time,
+            eventLocation: eventData.location,
+            serviceName: eventData.serviceName,
+            videoLink: eventData.platform || "",
           });
 
-          await sendEmail(client.email, {
-            subject: clientTemplate.subject,
-            html: clientTemplate.html
-          });
-          console.log(`✅ Bireysel appointment email sent to: ${client.email}`);
+          emailPromises.push(
+            sendEmail(user.information.email, {
+              subject: expertTemplate.subject,
+              html: expertTemplate.html,
+            })
+          );
         }
 
-        // Send email to Expert
-        const expertTemplate = getExpertEventCreatedTemplate({
-          expertName: user.information.name,
-          clientName: formattedClients[0]?.name || 'Danışan',
-          eventDate: eventData.date,
-          eventTime: eventData.time,
-          eventLocation: eventData.location,
-          serviceName: eventData.serviceName,
-          videoLink: eventData.platform || ''
-        });
-
-        await sendEmail(user.information.email, {
-          subject: expertTemplate.subject,
-          html: expertTemplate.html
-        });
-        console.log(`✅ Expert notification email sent to: ${user.information.email}`);
+        // Fire emails asynchronously, don't block main flow
+        Promise.allSettled(emailPromises)
+          .then((results) => {
+            results.forEach((r, i) => {
+              if (r.status === "fulfilled") {
+                console.log(`✅ Email ${i + 1} sent successfully`);
+              } else {
+                console.error(`❌ Email ${i + 1} failed:`, r.reason);
+              }
+            });
+          })
+          .catch((err) => console.error("Error in sending emails:", err));
+      } catch (err) {
+        console.error("Error preparing emails:", err);
       }
-      else {
-        // Grup: Send BOTH Grup Seansı Daveti AND Grup Seansına Katılım emails to customers
-        for (const client of formattedClients) {
-          // Email 1: Group Session Invite (Grup Seansı Daveti)
-          const inviteTemplate = getClientGroupSessionTemplate({
-            participantName: client.name,
-            expertName: user.information.name,
-            sessionName: eventData.serviceName,
-            sessionDate: eventData.date,
-            sessionTime: eventData.time,
-            sessionDuration: eventData.duration,
-            videoLink: eventData.platform || ''
-          });
+    };
 
-          await sendEmail(client.email, {
-            subject: inviteTemplate.subject,
-            html: inviteTemplate.html
-          });
-          console.log(`✅ Group session invite email sent to: ${client.email}`);
+    // Fire email sending in background
+    sendEmailsAsync();
 
-          // Email 2: Group Session Confirmation (Grup Seansına Katılım)
-          const confirmationTemplate = getGroupSessionConfirmationTemplate({
-            participantName: client.name,
-            sessionName: eventData.serviceName,
-            sessionDate: eventData.date,
-            sessionTime: eventData.time,
-            videoLink: eventData.platform || ''
-          });
 
-          await sendEmail(client.email, {
-            subject: confirmationTemplate.subject,
-            html: confirmationTemplate.html
-          });
-          console.log(`✅ Group session confirmation email sent to: ${client.email}`);
-        }
+    // if (eventData.serviceType === "service") {
+    //   if (eventData.meetingType === "1-1") {
+    //     for (const client of formattedClients) {
+    //       const clientTemplate = getClient11SessionTemplate({
+    //         participantName: client.name,
+    //         expertName: user.information.name,
+    //         sessionName: eventData.serviceName,
+    //         sessionDate: eventData.date,
+    //         sessionTime: eventData.time,
+    //         sessionDuration: eventData.duration,
+    //         videoLink: eventData.platform || "",
+    //       });
 
-        // Send email to Expert
-        const expertTemplate = getExpertEventCreatedTemplate({
-          expertName: user.information.name,
-          clientName: formattedClients.map(c => c.name).join(', '),
-          eventDate: eventData.date,
-          eventTime: eventData.time,
-          eventLocation: eventData.location,
-          serviceName: eventData.serviceName,
-          videoLink: eventData.platform || ''
-        });
+    //       await sendEmail(client.email, {
+    //         subject: clientTemplate.subject,
+    //         html: clientTemplate.html,
+    //       });
+    //     }
 
-        await sendEmail(user.information.email, {
-          subject: expertTemplate.subject,
-          html: expertTemplate.html
-        });
-        console.log(`✅ Expert notification email sent to: ${user.information.email}`);
-      }
+    //     const expertTemplate = getExpertEventCreatedTemplate({
+    //       expertName: user.information.name,
+    //       clientName: formattedClients[0]?.name || "Danışan",
+    //       eventDate: eventData.date,
+    //       eventTime: eventData.time,
+    //       eventLocation: eventData.location,
+    //       serviceName: eventData.serviceName,
+    //       videoLink: eventData.platform || "",
+    //     });
 
-      // Else Send the package emails
-    } else {
-      // Paket: Send BOTH Paketten Seans Hakkı Kullanıldı AND Randevu Oluşturdu emails
-      for (const client of formattedClients) {
-        // Email 1: Package Session Usage (Paketten Seans Hakkı Kullanıldı)
-        const packageUsageTemplate = getClientPackageSessionTemplate({
-          participantName: client.name,
-          expertName: user.information.name,
-          packageName: eventData.serviceName,
-          sessionName: eventData.serviceName,
-          sessionDate: eventData.date,
-          sessionTime: eventData.time,
-          sessionDuration: eventData.duration,
-          videoLink: eventData.platform || ''
-        });
+    //     await sendEmail(user.information.email, {
+    //       subject: expertTemplate.subject,
+    //       html: expertTemplate.html,
+    //     });
+    //   } else {
+    //     for (const client of formattedClients) {
+    //       const inviteTemplate = getClientGroupSessionTemplate({
+    //         participantName: client.name,
+    //         expertName: user.information.name,
+    //         sessionName: eventData.serviceName,
+    //         sessionDate: eventData.date,
+    //         sessionTime: eventData.time,
+    //         sessionDuration: eventData.duration,
+    //         videoLink: eventData.platform || "",
+    //       });
 
-        await sendEmail(client.email, {
-          subject: packageUsageTemplate.subject,
-          html: packageUsageTemplate.html
-        });
-        console.log(`✅ Package usage email sent to: ${client.email}`);
+    //       await sendEmail(client.email, {
+    //         subject: inviteTemplate.subject,
+    //         html: inviteTemplate.html,
+    //       });
 
-        // Email 2: Appointment Created (Danışan Randevu Oluşturdu)
-        const appointmentTemplate = getClientAppointmentCreatedTemplate({
-          clientName: client.name,
-          expertName: user.information.name,
-          appointmentDate: eventData.date,
-          appointmentTime: eventData.time,
-          appointmentLocation: eventData.location || 'Online',
-          videoLink: eventData.platform || ''
-        });
+    //       const confirmationTemplate = getGroupSessionConfirmationTemplate({
+    //         participantName: client.name,
+    //         sessionName: eventData.serviceName,
+    //         sessionDate: eventData.date,
+    //         sessionTime: eventData.time,
+    //         videoLink: eventData.platform || "",
+    //       });
 
-        await sendEmail(client.email, {
-          subject: appointmentTemplate.subject,
-          html: appointmentTemplate.html
-        });
-        console.log(`✅ Package appointment email sent to: ${client.email}`);
-      }
+    //       await sendEmail(client.email, {
+    //         subject: confirmationTemplate.subject,
+    //         html: confirmationTemplate.html,
+    //       });
+    //     }
 
-      // Send email to Expert
-      const expertTemplate = getExpertEventCreatedTemplate({
-        expertName: user.information.name,
-        clientName: formattedClients[0]?.name || 'Danışan',
-        eventDate: eventData.date,
-        eventTime: eventData.time,
-        eventLocation: eventData.location,
-        serviceName: eventData.serviceName,
-        videoLink: eventData.platform || ''
-      });
+    //     const expertTemplate = getExpertEventCreatedTemplate({
+    //       expertName: user.information.name,
+    //       clientName: formattedClients.map((c) => c.name).join(", "),
+    //       eventDate: eventData.date,
+    //       eventTime: eventData.time,
+    //       eventLocation: eventData.location,
+    //       serviceName: eventData.serviceName,
+    //       videoLink: eventData.platform || "",
+    //     });
 
-      await sendEmail(user.information.email, {
-        subject: expertTemplate.subject,
-        html: expertTemplate.html
-      });
-      console.log(`✅ Expert notification email sent to: ${user.information.email}`);
-    }
+    //     await sendEmail(user.information.email, {
+    //       subject: expertTemplate.subject,
+    //       html: expertTemplate.html,
+    //     });
+    //   }
+    // } else {
+    //   for (const client of formattedClients) {
+    //     const packageUsageTemplate = getClientPackageSessionTemplate({
+    //       participantName: client.name,
+    //       expertName: user.information.name,
+    //       packageName: eventData.serviceName,
+    //       sessionName: eventData.serviceName,
+    //       sessionDate: eventData.date,
+    //       sessionTime: eventData.time,
+    //       sessionDuration: eventData.duration,
+    //       videoLink: eventData.platform || "",
+    //     });
+
+    //     await sendEmail(client.email, {
+    //       subject: packageUsageTemplate.subject,
+    //       html: packageUsageTemplate.html,
+    //     });
+
+    //     const appointmentTemplate = getClientAppointmentCreatedTemplate({
+    //       clientName: client.name,
+    //       expertName: user.information.name,
+    //       appointmentDate: eventData.date,
+    //       appointmentTime: eventData.time,
+    //       appointmentLocation: eventData.location || "Online",
+    //       videoLink: eventData.platform || "",
+    //     });
+
+    //     await sendEmail(client.email, {
+    //       subject: appointmentTemplate.subject,
+    //       html: appointmentTemplate.html,
+    //     });
+    //   }
+
+    //   const expertTemplate = getExpertEventCreatedTemplate({
+    //     expertName: user.information.name,
+    //     clientName: formattedClients[0]?.name || "Danışan",
+    //     eventDate: eventData.date,
+    //     eventTime: eventData.time,
+    //     eventLocation: eventData.location,
+    //     serviceName: eventData.serviceName,
+    //     videoLink: eventData.platform || "",
+    //   });
+
+    //   await sendEmail(user.information.email, {
+    //     subject: expertTemplate.subject,
+    //     html: expertTemplate.html,
+    //   });
+    // }
 
     if (user.calendarProviders && user.calendarProviders.length > 0) {
-      const activeProviders = user.calendarProviders.filter(cp => cp.isActive);
+      const activeProviders = user.calendarProviders.filter(
+        (cp) => cp.isActive
+      );
 
       if (activeProviders.length > 0) {
         for (const provider of activeProviders) {
           try {
-            const response = await calendarSyncService.syncAppointmentToProvider(req.params.userId, newEvent, provider);
+            const response =
+              await calendarSyncService.syncAppointmentToProvider(
+                req.params.userId,
+                newEvent,
+                provider
+              );
             if (response.success) {
               console.log("synced Event To Calendar Successfully");
             } else {
               console.log("Sync Failed to Calendar", error);
             }
           } catch (error) {
-            console.error(`❌ Failed to sync event to ${provider.provider}:`, error);
+            console.error(
+              `Failed to sync event to ${provider.provider}:`,
+              error
+            );
           }
         }
       }
@@ -1898,98 +2095,15 @@ router.post("/:userId/events", async (req, res) => {
     res.status(201).json({
       event: newEvent,
       message: "Event created successfully",
-      repetitionsScheduled: repetitionJobIds ? true : false
+      repetitionsScheduled: repetitionJobIds ? true : false,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// router.post("/:userId/events", async (req, res) => {
-//   try {
-//     const userId = req.params.userId;
-//     const eventData = req.body;
 
-//     console.log("Creating event for userId:", userId);
-//     console.log("Event data received:", eventData);
 
-//     const user = await User.findById(userId);
-//     if (!user) {
-//       return res.status(404).json({ error: "User not found" });
-//     }
-
-//     // Generate unique event ID
-//     const newEvent = {
-//       id: uuidv4(),
-//       ...eventData,
-//       createdAt: new Date()
-//     };
-
-//     // Add event to user's events array
-//     if (!user.events) {
-//       user.events = [];
-//     }
-//     user.events.push(newEvent);
-
-//     // === NEW: Process package-based payments ===
-//     if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
-//       console.log("Processing payment types:", eventData.paymentType);
-
-//       for (const payment of eventData.paymentType) {
-//         // Only process package-based payments
-//         if (payment.paymentMethod === 'paketten-tahsil' && payment.orderId && payment.packageId) {
-//           console.log(`Incrementing session for order: ${payment.orderId}, package: ${payment.packageId}`);
-
-//           try {
-//             // Find the order and increment completedSessions
-//             const order = await Order.findById(payment.orderId);
-
-//             if (order && order.orderDetails?.events) {
-//               // Find the specific package event in the order
-//               for (let event of order.orderDetails.events) {
-//                 if (
-//                   event.eventType === 'package' &&
-//                   event.package &&
-//                   event.package.packageId?.toString() === payment.packageId.toString()
-//                 ) {
-//                   // Increment completedSessions
-//                   event.package.completedSessions = (event.package.completedSessions || 0) + 1;
-//                   console.log(`✅ Incremented completedSessions to ${event.package.completedSessions} for package ${payment.packageId}`);
-//                   break;
-//                 }
-//               }
-
-//               // Save the updated order
-//               await order.save();
-//               console.log(`✅ Order ${payment.orderId} updated successfully`);
-//             } else {
-//               console.warn(`⚠️ Order ${payment.orderId} not found or has no events`);
-//             }
-//           } catch (orderError) {
-//             console.error(`❌ Error updating order ${payment.orderId}:`, orderError);
-//             // Continue processing other payments even if one fails
-//           }
-//         }
-//       }
-//     }
-
-//     await user.save();
-
-//     // Send email notifications (existing code continues...)
-//     // ... rest of your existing code
-
-//     res.status(201).json({
-//       message: "Event created successfully",
-//       event: newEvent
-//     });
-
-//   } catch (err) {
-//     console.error("Error creating event:", err);
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
-// Update event
 router.put("/:userId/events/:eventId", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);

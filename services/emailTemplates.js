@@ -4554,3 +4554,99 @@ export function getMarketingEmailTemplate(data) {
     `
     };
 }
+
+/**
+ * Subscription Invoice Email Template
+ * @param {object} data - { userName, email, planType, duration, price, seats, invoiceNumber, invoiceUrl, subscriptionStartDate, subscriptionEndDate }
+ * @returns {object} Email subject and HTML body
+ */
+export function getSubscriptionInvoiceEmailTemplate(data) {
+    const { userName, email, planType, duration, price, seats, invoiceNumber, invoiceUrl, subscriptionStartDate, subscriptionEndDate } = data;
+
+    return {
+        subject: `Fatura Oluşturuldu - ${invoiceNumber} | Uzmanlio`,
+        html: `
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fatura Bilgilendirmesi</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f7fa;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px 16px 0 0; padding: 40px 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">
+                🧾 Faturanız Hazır!
+            </h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 16px;">
+                Abonelik faturanız başarıyla oluşturuldu
+            </p>
+        </div>
+
+        <!-- Content -->
+        <div style="background: #ffffff; padding: 40px 30px; border-radius: 0 0 16px 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            
+            <p style="color: #374151; font-size: 16px; margin: 0 0 25px;">
+                Merhaba <strong>${userName}</strong>,
+            </p>
+            <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 0 0 30px;">
+                Uzmanlio aboneliğiniz için faturanız başarıyla oluşturulmuştur.
+            </p>
+
+            <!-- Invoice Details Box -->
+            <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 12px; padding: 25px; margin-bottom: 25px; border-left: 4px solid #22c55e;">
+                <h3 style="color: #166534; margin: 0 0 15px; font-size: 18px;">📋 Fatura Bilgileri</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="color: #6b7280; padding: 8px 0; font-size: 14px;">Fatura Numarası:</td>
+                        <td style="color: #111827; padding: 8px 0; font-size: 14px; text-align: right; font-weight: 600;">${invoiceNumber}</td>
+                    </tr>
+                    <tr>
+                        <td style="color: #6b7280; padding: 8px 0; font-size: 14px;">Tutar:</td>
+                        <td style="color: #22c55e; padding: 8px 0; font-size: 16px; text-align: right; font-weight: 700;">₺${price?.toLocaleString('tr-TR') || price}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Subscription Details Box -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 25px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
+                <h3 style="color: #1e293b; margin: 0 0 15px; font-size: 18px;">📦 Abonelik Detayları</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="color: #6b7280; padding: 8px 0; font-size: 14px;">Plan:</td>
+                        <td style="color: #111827; padding: 8px 0; font-size: 14px; text-align: right; font-weight: 500;">${planType}</td>
+                    </tr>
+                    <tr>
+                        <td style="color: #6b7280; padding: 8px 0; font-size: 14px;">Süre:</td>
+                        <td style="color: #111827; padding: 8px 0; font-size: 14px; text-align: right; font-weight: 500;">${duration}</td>
+                    </tr>
+                    ${seats > 0 ? `<tr><td style="color: #6b7280; padding: 8px 0; font-size: 14px;">Koltuk:</td><td style="color: #111827; padding: 8px 0; font-size: 14px; text-align: right; font-weight: 500;">${seats}</td></tr>` : ''}
+                    <tr>
+                        <td style="color: #6b7280; padding: 8px 0; font-size: 14px;">Başlangıç:</td>
+                        <td style="color: #111827; padding: 8px 0; font-size: 14px; text-align: right; font-weight: 500;">${subscriptionStartDate}</td>
+                    </tr>
+                    <tr>
+                        <td style="color: #6b7280; padding: 8px 0; font-size: 14px;">Bitiş:</td>
+                        <td style="color: #111827; padding: 8px 0; font-size: 14px; text-align: right; font-weight: 500;">${subscriptionEndDate}</td>
+                    </tr>
+                </table>
+            </div>
+
+            ${invoiceUrl ? `<div style="text-align: center; margin: 30px 0;"><a href="${invoiceUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 8px; font-size: 16px; font-weight: 600;">Faturayı Görüntüle</a></div>` : ''}
+
+            <p style="color: #6b7280; font-size: 15px; line-height: 1.6; margin: 25px 0 0;">
+                Bizi tercih ettiğiniz için teşekkür ederiz!<br><strong>Uzmanlio Ekibi</strong>
+            </p>
+        </div>
+
+        <div style="text-align: center; padding: 25px;">
+            <p style="color: #9ca3af; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} Uzmanlio. Tüm hakları saklıdır.</p>
+        </div>
+    </div>
+</body>
+</html>
+        `
+    };
+}
