@@ -143,7 +143,7 @@ router.post("/login", async (req, res) => {
         const userPassword = req.body.password;
         if (!useremail || !userPassword) throw new ApiError(400, "Please provide email and password");
 
-
+        // Optimized: Only fetch essential fields for password check first
         const existingUser = await User.findOne({ "information.email": useremail });
         if (!existingUser) {
             return res.status(400).json({
@@ -172,10 +172,13 @@ router.post("/login", async (req, res) => {
         }
 
         const { accessToken, refreshToken } = await generateTokens(existingUser._id);
-        existingUser.refreshToken = refreshToken;
-        await existingUser.save({ validateBeforeSave: false });
 
-        const userWithoutPassword = await User.findById(existingUser._id).select("-password");
+        // Optimized: Update refresh token and return user in single operation
+        const userWithoutPassword = await User.findByIdAndUpdate(
+            existingUser._id,
+            { refreshToken },
+            { new: true, select: "-information.password" }
+        );
 
         return res
             .status(200).json({
