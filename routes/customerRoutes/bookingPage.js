@@ -255,34 +255,40 @@ router.post(
         });
       }
 
-      // --- Step 6: Find or create customer (upsert by email) ---
-      // Add timeout and use session
-      const customer = await Customer.findOneAndUpdate(
-        { email: clientInfo.email },
-        {
-          $setOnInsert: {
-            name: clientInfo.firstName,
-            surname: clientInfo.lastName,
-            email: clientInfo.email,
-            phone: clientInfo.phone,
-            status: "active",
-            source: bookingData.source || "website",
-            firstAppointment: safeDate(date),
-            consentGiven: {
-              termsAcceptionStatus: !!termsAccepted,
-              dataProcessingTerms: !!termsAccepted,
-              marketingTerms: !!termsAccepted,
-              dateGiven: new Date(),
-            },
+      // --- Step 6: Find or create customer ---
+      // First, check if customer already exists by email
+      let customer = await Customer.findOne({ email: clientInfo.email }).session(session);
+
+      if (customer) {
+        console.log("✅ Existing customer found:", customer._id);
+      } else {
+        // Customer doesn't exist, create a new one
+        console.log("📝 Creating new customer for email:", clientInfo.email);
+
+        const newCustomer = new Customer({
+          name: clientInfo.firstName,
+          surname: clientInfo.lastName,
+          email: clientInfo.email,
+          phone: clientInfo.phone,
+          status: "active",
+          source: bookingData.source || "website",
+          firstAppointment: safeDate(date),
+          consentGiven: {
+            termsAcceptionStatus: !!termsAccepted,
+            dataProcessingTerms: !!termsAccepted,
+            marketingTerms: !!termsAccepted,
+            dateGiven: new Date(),
           },
-        },
-        {
-          new: true,
-          upsert: true,
-          session, // Use session for transaction
-          maxTimeMS: 5000 // 5 second timeout
-        }
-      );
+        });
+
+        // Save the new customer
+        await newCustomer.save({ session });
+
+        // Fetch the saved customer from database to ensure we have the complete document
+        customer = await Customer.findById(newCustomer._id).session(session);
+
+        console.log("✅ New customer created and saved:", customer._id);
+      }
 
       // --- Step 6.5: Link Customer to Expert if not already linked ---
       if (!Expert.customers) {
