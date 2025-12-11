@@ -249,4 +249,20 @@ app.listen(PORT, () => {
   console.log(`📅 Calendar webhooks available at:`);
   console.log(`   Google: ${process.env.BASE_URL || `http://localhost:${PORT}`}/api/calendar/webhooks/google`);
   console.log(`   Microsoft: ${process.env.BASE_URL || `http://localhost:${PORT}`}/api/calendar/webhooks/microsoft`);
+
+  // Keep-alive: Self-ping every 14 minutes to prevent cold starts
+  const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutes in milliseconds
+  const serverUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+
+  if (process.env.NODE_ENV === 'production') {
+    setInterval(async () => {
+      try {
+        const response = await axios.get(`${serverUrl}/api/`);
+        console.log(`🔄 Keep-alive ping successful at ${new Date().toISOString()}`);
+      } catch (error) {
+        console.error(`❌ Keep-alive ping failed:`, error.message);
+      }
+    }, KEEP_ALIVE_INTERVAL);
+    console.log(`⏰ Keep-alive ping scheduled every 14 minutes`);
+  }
 });
