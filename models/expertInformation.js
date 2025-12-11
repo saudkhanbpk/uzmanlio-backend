@@ -790,6 +790,11 @@ UserSchema.methods.ComparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.information.password);
 };
 
+// Token secrets - fallback provided but should be set in .env for production
+if (!process.env.ACCESS_TOKEN_SECRET || !process.env.REFRESH_TOKEN_SECRET) {
+  console.warn("⚠️ WARNING: Token secrets not set in .env - using fallback values. Set ACCESS_TOKEN_SECRET and REFRESH_TOKEN_SECRET for production!");
+}
+
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "access-secret";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret";
 
