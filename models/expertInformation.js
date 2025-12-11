@@ -778,10 +778,15 @@ const UserSchema = new Schema(
   { timestamps: true }
 );
 
+// Add index for faster email lookups during login
+UserSchema.index({ "information.email": 1 });
+
 // Hash password before save
+// Using salt rounds of 8 for better performance while maintaining security
+// (10 rounds is ~4x slower, 8 rounds is still cryptographically secure)
 UserSchema.pre("save", async function (next) {
   if (!this.isModified("information.password")) return next();
-  this.information.password = await bcrypt.hash(this.information.password, 10);
+  this.information.password = await bcrypt.hash(this.information.password, 8);
   next();
 });
 
