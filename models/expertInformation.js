@@ -800,12 +800,12 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret
 
 //Generate Access token
 UserSchema.methods.generateAccessToken = function () {
-  return jwt.sign({ id: this._id }, ACCESS_TOKEN_SECRET, { expiresIn: "45m" });
+  return jwt.sign({ id: this._id }, ACCESS_TOKEN_SECRET, { expiresIn: "10m" });
 };
 
 //Generate Refresh tokens
 UserSchema.methods.generateRefreshToken = function () {
-  return jwt.sign({ id: this._id }, REFRESH_TOKEN_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ id: this._id }, REFRESH_TOKEN_SECRET, { expiresIn: "2h" });
 };
 
 

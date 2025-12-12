@@ -5,9 +5,12 @@ import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import User from "../../models/expertInformation.js";
 import { sendEmail } from "../../services/email.js";
 import { getWelcomeEmailTemplate, getForgotPasswordOTPTemplate, getPasswordResetSuccessTemplate, getEmailVerificationTemplate } from "../../services/emailTemplates.js";
+
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret";
 
 const router = express.Router();
 
@@ -579,6 +582,107 @@ router.delete("/:userId", async (req, res) => {
         });
     }
 });
+
+
+////////////////////////   Refresh Token    //////////////////////////
+router.post("/refresh-token", async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(400).json({
+                success: false,
+                message: "Refresh token is required",
+                code: "NO_REFRESH_TOKEN"
+            });
+        }
+
+        // Verify refresh token
+        let decoded;
+        try {
+            decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
+        } catch (error) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid or expired refresh token",
+                code: "INVALID_REFRESH_TOKEN"
+            });
+        }
+
+        // Find user and verify stored refresh token matches
+        const user = await User.findById(decoded.id);
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "User not found",
+                code: "USER_NOT_FOUND"
+            });
+        }
+
+        // Verify stored refresh token matches
+        if (user.refreshToken !== refreshToken) {
+            return res.status(401).json({
+                success: false,
+                message: "Refresh token has been revoked",
+                code: "TOKEN_REVOKED"
+            });
+        }
+
+        // Generate new tokens
+        const { accessToken, refreshToken: newRefreshToken } = await generateTokens(user._id);
+
+        // Update stored refresh token
+        user.refreshToken = newRefreshToken;
+        await user.save({ validateBeforeSave: false });
+
+        console.log("✅ Tokens refreshed for user:", user._id);
+
+        return res.status(200).json({
+            success: true,
+            accessToken,
+            refreshToken: newRefreshToken,
+            user: {
+                _id: user._id,
+                name: user.information.name,
+                email: user.information.email
+            }
+        });
+
+    } catch (error) {
+        console.error("Refresh token error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error during token refresh"
+        });
+    }
+});
+
+
+////////////////////////   Logout    //////////////////////////
+router.post("/logout", async (req, res) => {
+    try {
+        const { userId } = req.body;
+
+        if (userId) {
+            // Clear the stored refresh token to invalidate it
+            await User.findByIdAndUpdate(userId, { refreshToken: null });
+            console.log("✅ User logged out:", userId);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Logged out successfully"
+        });
+    } catch (error) {
+        console.error("Logout error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error during logout"
+        });
+    }
+});
+
 
 export default router;
 
