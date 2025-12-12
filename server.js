@@ -25,6 +25,7 @@ import purchaseRoutes from "./routes/expertRoutes/purchaseRoutes.js";
 import paymentRoutes from "./routes/expertRoutes/paymentRoutes.js";
 import reportsRoutes from "./routes/expertRoutes/reportsRoutes.js";
 import institutionDataRoutes from "./routes/expertRoutes/institutionDataRoutes.js";
+import analyticsRoutes from "./routes/expertRoutes/analyticsRoutes.js";
 import parasutRoute from "./routes/customerRoutes/parasut.routes.js";
 import fs from "fs";
 import axios from "axios";
@@ -152,6 +153,7 @@ app.use("/api/expert", purchaseRoutes);
 app.use("/api/expert", paymentRoutes);
 app.use("/api/expert", reportsRoutes);
 app.use("/api/expert", institutionDataRoutes); // Institution-wide data aggregation
+app.use("/api/analytics", analyticsRoutes); // GA4 Analytics routes
 
 // parasut route
 app.use("/api/v1/parasut", parasutRoute);
