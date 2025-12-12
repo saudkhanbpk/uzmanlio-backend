@@ -494,14 +494,7 @@ router.post(
 
       Expert.orders.push(order._id);
 
-      // --- Step 12: Save all changes within transaction ---
-      await Promise.all([
-        customer.save({ session }),
-        Expert.save({ session })
-      ]);
-
-
-
+      // --- Step 11.5: Update purchasedBy for the service/package (BEFORE saving) ---
       if (CurrentService) {
         // Initialize arrays if they don't exist
         if (!CurrentService.selectedClients) {
@@ -527,7 +520,15 @@ router.post(
 
         // Mark the service/package as modified so Mongoose saves it
         Expert.markModified(mappedEventType === 'service' ? 'services' : 'packages');
+
+        console.log(`✅ Updated purchasedBy for ${mappedEventType}: ${CurrentService.title || CurrentService.name}`);
       }
+
+      // --- Step 12: Save all changes within transaction ---
+      await Promise.all([
+        customer.save({ session }),
+        Expert.save({ session })
+      ]);
 
       // Commit the transaction
       await session.commitTransaction();

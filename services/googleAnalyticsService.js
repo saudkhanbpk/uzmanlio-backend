@@ -113,6 +113,8 @@ export const getPageViews = async (startDate, endDate, pagePath = null) => {
             dimensionFilter,
         });
 
+        // console.log("response from Google analytics", response);
+
         // Process the response
         let totalViews = 0;
         const dailyViews = [];
@@ -155,9 +157,10 @@ export const getPageViews = async (startDate, endDate, pagePath = null) => {
  * Get page views aggregated by period
  * @param {String} period - 'daily', 'weekly', or 'monthly'
  * @param {Number} year - Year for monthly data
+ * @param {String} pagePath - Optional page path filter
  * @returns {Array} Aggregated page views
  */
-export const getPageViewsByPeriod = async (period = 'monthly', year = new Date().getFullYear()) => {
+export const getPageViewsByPeriod = async (period = 'monthly', year = new Date().getFullYear(), pagePath = null) => {
     try {
         let startDate, endDate;
         const today = new Date();
@@ -180,7 +183,7 @@ export const getPageViewsByPeriod = async (period = 'monthly', year = new Date()
             endDate = `${year}-12-31`;
         }
 
-        const result = await getPageViews(startDate, endDate);
+        const result = await getPageViews(startDate, endDate, pagePath);
 
         if (!result.success) {
             return [];
@@ -224,13 +227,318 @@ export const getPageViewsByPeriod = async (period = 'monthly', year = new Date()
  * @returns {Object} Page views for expert profile
  */
 export const getExpertProfileViews = async (expertId, startDate, endDate) => {
-    // Assuming expert profiles are at /expert/{expertId} or similar
+    // Expert profiles are tracked at /expert/{expertId}
     const pagePath = `/expert/${expertId}`;
     return await getPageViews(startDate, endDate, pagePath);
+};
+
+/**
+ * Get expert profile views by period
+ * @param {String} expertId - Expert user ID
+ * @param {String} period - 'daily', 'weekly', or 'monthly'
+ * @param {Number} year - Year for monthly data
+ * @returns {Array} Aggregated page views for expert
+ */
+export const getExpertProfileViewsByPeriod = async (expertId, period = 'monthly', year = new Date().getFullYear()) => {
+    const pagePath = `/expert/${expertId}`;
+    return await getPageViewsByPeriod(period, year, pagePath);
+};
+
+/**
+ * Get institution profile page views
+ * @param {String} institutionId - Institution ID
+ * @param {String} startDate - Start date
+ * @param {String} endDate - End date
+ * @returns {Object} Page views for institution profile
+ */
+export const getInstitutionProfileViews = async (institutionId, startDate, endDate) => {
+    const pagePath = `/institution/${institutionId}`;
+    return await getPageViews(startDate, endDate, pagePath);
+};
+
+/**
+ * Get institution profile views by period
+ * @param {String} institutionId - Institution ID
+ * @param {String} period - 'daily', 'weekly', or 'monthly'
+ * @param {Number} year - Year for monthly data
+ * @returns {Array} Aggregated page views for institution
+ */
+export const getInstitutionProfileViewsByPeriod = async (institutionId, period = 'monthly', year = new Date().getFullYear()) => {
+    const pagePath = `/institution/${institutionId}`;
+    return await getPageViewsByPeriod(period, year, pagePath);
+};
+
+/**
+ * Get aggregated analytics for multiple experts (admin view)
+ * @param {Array} expertIds - Array of expert IDs
+ * @param {String} startDate - Start date
+ * @param {String} endDate - End date
+ * @returns {Object} Aggregated analytics for all experts
+ */
+export const getAggregatedExpertAnalytics = async (expertIds, startDate, endDate) => {
+    try {
+        const client = initializeClient();
+
+        if (!client) {
+            return {
+                success: false,
+                error: 'Google Analytics not configured',
+                experts: []
+            };
+        }
+
+        const propertyId = process.env.GOOGLE_ANALYTICS_PROPERTY_ID;
+
+        if (!propertyId) {
+            return {
+                success: false,
+                error: 'Property ID not configured',
+                experts: []
+            };
+        }
+
+        // Get analytics for each expert
+        const expertsAnalytics = await Promise.all(
+            expertIds.map(async (expertId) => {
+                const result = await getExpertProfileViews(expertId, startDate, endDate);
+                return {
+                    expertId,
+                    totalViews: result.totalViews || 0,
+                    dailyViews: result.dailyViews || [],
+                    success: result.success
+                };
+            })
+        );
+
+        // Calculate totals
+        const totalViews = expertsAnalytics.reduce((sum, exp) => sum + exp.totalViews, 0);
+        const totalSessions = expertsAnalytics.reduce((sum, exp) => {
+            const sessions = exp.dailyViews.reduce((s, day) => s + (day.sessions || 0), 0);
+            return sum + sessions;
+        }, 0);
+
+        return {
+            success: true,
+            totalViews,
+            totalSessions,
+            experts: expertsAnalytics,
+            startDate,
+            endDate
+        };
+
+    } catch (error) {
+        console.error('Error getting aggregated expert analytics:', error);
+        return {
+            success: false,
+            error: error.message,
+            experts: []
+        };
+    }
+};
+
+/**
+ * Get detailed analytics with dimensions (traffic sources, devices, etc.)
+ * @param {String} startDate - Start date
+ * @param {String} endDate - End date
+ * @param {String} pagePath - Optional page path filter
+ * @returns {Object} Detailed analytics
+ */
+export const getDetailedAnalytics = async (startDate, endDate, pagePath = null) => {
+    try {
+        const client = initializeClient();
+
+        if (!client) {
+            return {
+                success: false,
+                error: 'Google Analytics not configured'
+            };
+        }
+
+        const propertyId = process.env.GOOGLE_ANALYTICS_PROPERTY_ID;
+
+        if (!propertyId) {
+            return {
+                success: false,
+                error: 'Property ID not configured'
+            };
+        }
+
+        const dimensionFilter = pagePath ? {
+            filter: {
+                fieldName: 'pagePath',
+                stringFilter: {
+                    matchType: 'CONTAINS',
+                    value: pagePath
+                }
+            }
+        } : undefined;
+
+        // Get traffic sources
+        const [trafficResponse] = await client.runReport({
+            property: `properties/${propertyId}`,
+            dateRanges: [{ startDate, endDate }],
+            dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+            metrics: [
+                { name: 'sessions' },
+                { name: 'screenPageViews' }
+            ],
+            dimensionFilter,
+            orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+            limit: 10
+        });
+
+        // Get device breakdown
+        const [deviceResponse] = await client.runReport({
+            property: `properties/${propertyId}`,
+            dateRanges: [{ startDate, endDate }],
+            dimensions: [{ name: 'deviceCategory' }],
+            metrics: [
+                { name: 'sessions' },
+                { name: 'screenPageViews' }
+            ],
+            dimensionFilter
+        });
+
+        // Get country breakdown
+        const [countryResponse] = await client.runReport({
+            property: `properties/${propertyId}`,
+            dateRanges: [{ startDate, endDate }],
+            dimensions: [{ name: 'country' }],
+            metrics: [
+                { name: 'sessions' },
+                { name: 'screenPageViews' }
+            ],
+            dimensionFilter,
+            orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+            limit: 10
+        });
+
+        // Process responses
+        const trafficSources = trafficResponse.rows?.map(row => ({
+            source: row.dimensionValues[0].value,
+            sessions: parseInt(row.metricValues[0].value),
+            pageViews: parseInt(row.metricValues[1].value)
+        })) || [];
+
+        const devices = deviceResponse.rows?.map(row => ({
+            device: row.dimensionValues[0].value,
+            sessions: parseInt(row.metricValues[0].value),
+            pageViews: parseInt(row.metricValues[1].value)
+        })) || [];
+
+        const countries = countryResponse.rows?.map(row => ({
+            country: row.dimensionValues[0].value,
+            sessions: parseInt(row.metricValues[0].value),
+            pageViews: parseInt(row.metricValues[1].value)
+        })) || [];
+
+        return {
+            success: true,
+            trafficSources,
+            devices,
+            countries,
+            startDate,
+            endDate
+        };
+
+    } catch (error) {
+        console.error('Error getting detailed analytics:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+};
+
+/**
+ * Get real-time visitor count (approximate)
+ * Note: GA4 Data API has limited real-time support
+ * This uses the last 30 minutes as an approximation
+ * @param {String} pagePath - Optional page path filter
+ * @returns {Object} Real-time visitor data
+ */
+export const getRealtimeVisitors = async (pagePath = null) => {
+    try {
+        const client = initializeClient();
+
+        if (!client) {
+            return {
+                success: false,
+                error: 'Google Analytics not configured',
+                activeUsers: 0
+            };
+        }
+
+        const propertyId = process.env.GOOGLE_ANALYTICS_PROPERTY_ID;
+
+        if (!propertyId) {
+            return {
+                success: false,
+                error: 'Property ID not configured',
+                activeUsers: 0
+            };
+        }
+
+        // Use last 30 minutes as approximation for real-time
+        const dimensionFilter = pagePath ? {
+            filter: {
+                fieldName: 'unifiedScreenName',
+                stringFilter: {
+                    matchType: 'CONTAINS',
+                    value: pagePath
+                }
+            }
+        } : undefined;
+
+        const [response] = await client.runRealtimeReport({
+            property: `properties/${propertyId}`,
+            dimensions: [{ name: 'unifiedScreenName' }],
+            metrics: [{ name: 'activeUsers' }],
+            dimensionFilter
+        });
+
+        let activeUsers = 0;
+        if (response.rows) {
+            activeUsers = response.rows.reduce((sum, row) => {
+                return sum + parseInt(row.metricValues[0].value);
+            }, 0);
+        }
+
+        return {
+            success: true,
+            activeUsers,
+            timestamp: new Date().toISOString()
+        };
+
+    } catch (error) {
+        console.error('Error getting real-time visitors:', error);
+        return {
+            success: false,
+            error: error.message,
+            activeUsers: 0
+        };
+    }
+};
+
+/**
+ * Get expert real-time visitors
+ * @param {String} expertId - Expert user ID
+ * @returns {Object} Real-time visitor data for expert
+ */
+export const getExpertRealtimeVisitors = async (expertId) => {
+    const pagePath = `/expert/${expertId}`;
+    return await getRealtimeVisitors(pagePath);
 };
 
 export default {
     getPageViews,
     getPageViewsByPeriod,
-    getExpertProfileViews
+    getExpertProfileViews,
+    getExpertProfileViewsByPeriod,
+    getInstitutionProfileViews,
+    getInstitutionProfileViewsByPeriod,
+    getAggregatedExpertAnalytics,
+    getDetailedAnalytics,
+    getRealtimeVisitors,
+    getExpertRealtimeVisitors
 };

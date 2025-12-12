@@ -1096,21 +1096,39 @@ router.get("/:userId/availability", async (req, res) => {
 router.put("/:userId/availability", async (req, res) => {
   try {
     const { alwaysAvailable, selectedSlots } = req.body;
+
+    console.log("📅 [Availability Update] Received request:");
+    console.log("   - alwaysAvailable:", alwaysAvailable);
+    console.log("   - selectedSlots count:", selectedSlots?.length || 0);
+    console.log("   - selectedSlots sample:", selectedSlots?.slice(0, 5));
+
     const user = await findUserById(req.params.userId);
 
+    // Create the availability object with proper array handling
     user.availability = {
-      alwaysAvailable: alwaysAvailable || false,
-      selectedSlots: selectedSlots || [],
+      alwaysAvailable: alwaysAvailable === true,
+      selectedSlots: Array.isArray(selectedSlots) ? [...selectedSlots] : [],
       lastUpdated: new Date()
     };
 
+    // Force Mongoose to detect the change on embedded document
+    user.markModified('availability');
+
     await user.save();
+
+    // Verify the save worked
     const updatedUser = await findUserById(req.params.userId);
+
+    console.log("✅ [Availability Update] Saved successfully:");
+    console.log("   - alwaysAvailable:", updatedUser.availability?.alwaysAvailable);
+    console.log("   - selectedSlots count:", updatedUser.availability?.selectedSlots?.length || 0);
+
     res.json({
       availability: updatedUser.availability,
       message: "Availability settings updated successfully"
     });
   } catch (error) {
+    console.error("❌ [Availability Update] Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -2281,6 +2299,50 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
     user.events[eventIndex].status = status;
     user.events[eventIndex].updatedAt = new Date();
 
+    // Get the updated event reference
+    const updatedEvent = user.events[eventIndex];
+
+    // === Update Order status based on event status ===
+    // Find order IDs from paymentType array in the event
+    const orderIdsToUpdate = [];
+    if (updatedEvent.paymentType && Array.isArray(updatedEvent.paymentType)) {
+      for (const payment of updatedEvent.paymentType) {
+        if (payment.orderId) {
+          orderIdsToUpdate.push(payment.orderId);
+        }
+      }
+    }
+
+    // Map event status to order status
+    let orderStatus = null;
+    if (status === 'approved') {
+      orderStatus = 'confirmed';
+    } else if (status === 'completed') {
+      orderStatus = 'completed';
+    } else if (status === 'cancelled') {
+      orderStatus = 'cancelled';
+    }
+
+    // Update orders asynchronously
+    if (orderIdsToUpdate.length > 0 && orderStatus) {
+      setImmediate(async () => {
+        try {
+          const Order = mongoose.model('Order');
+          for (const orderId of orderIdsToUpdate) {
+            await Order.findByIdAndUpdate(orderId, {
+              status: orderStatus,
+              'paymentInfo.status': orderStatus === 'completed' ? 'completed' :
+                orderStatus === 'cancelled' ? 'refunded' : 'pending',
+              updatedAt: new Date()
+            });
+            console.log(`✅ Updated order ${orderId} status to ${orderStatus}`);
+          }
+        } catch (orderError) {
+          console.error("Error updating order status:", orderError);
+        }
+      });
+    }
+
     await user.save();
 
     // Sync to connected calendars in background
@@ -2306,274 +2368,280 @@ router.patch("/:userId/events/:eventId/status", async (req, res) => {
     const customerIds = event.customers || [];
     const selectedClients = event.selectedClients || [];
 
-    // Send emails when status is approved
+    // Send emails when status is approved (ALL email/SMS in background)
     if (status === 'approved') {
-      try {
-        // Prepare expert information
-        const expertName = `${user.information.name} ${user.information.surname}`;
+      setImmediate(async () => {
+        try {
+          // Prepare expert information
+          const expertName = `${user.information.name} ${user.information.surname}`;
 
-        // Prepare event details
-        const serviceName = event.serviceName || event.title;
-        const date = event.date;
-        const time = event.time;
-        const joinLink = event.platform || 'Link will be shared soon';
+          // Prepare event details
+          const serviceName = event.serviceName || event.title;
+          const date = event.date;
+          const time = event.time;
+          const joinLink = event.platform || 'Link will be shared soon';
 
-        // Get customer information from selectedClients
-        let recipients = [];
+          // Get customer information from selectedClients
+          let recipients = [];
 
-        if (selectedClients && selectedClients.length > 0) {
-          recipients = selectedClients.map(client => ({
-            name: client.name,
-            email: client.email
-          }));
-        } else if (customerIds.length > 0) {
-          const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
-          recipients = customers.map(c => ({
-            name: c.name,
-            email: c.email
-          }));
-        }
-
-        console.log("Sending approval emails to:", recipients.length, "recipients");
-
-        // Determine event/meeting type
-        const meetingType = event.meetingType;
-
-        // Send email to each customer based on meeting type
-        for (const recipient of recipients) {
-          const clientName = recipient.name;
-          let emailTemplate;
-
-          if (meetingType === 'grup') {
-            // Group session approval email
-            emailTemplate = getGroupSessionApprovedTemplate({
-              participantName: clientName,
-              sessionName: serviceName,
-              sessionDate: date,
-              sessionTime: time,
-              videoLink: joinLink !== 'Link will be shared soon' ? joinLink : ''
-            });
-          } else {
-            // 1-1 bireysel appointment approval email
-            emailTemplate = getAppointmentApprovedBireyselTemplate({
-              customerName: clientName,
-              expertName: expertName,
-              appointmentDate: date,
-              appointmentTime: time,
-              appointmentLocation: event.location || 'Online',
-              videoLink: joinLink !== 'Link will be shared soon' ? joinLink : ''
-            });
+          if (selectedClients && selectedClients.length > 0) {
+            recipients = selectedClients.map(client => ({
+              name: client.name,
+              email: client.email
+            }));
+          } else if (customerIds.length > 0) {
+            const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
+            recipients = customers.map(c => ({
+              name: c.name,
+              email: c.email
+            }));
           }
 
-          await sendEmail(recipient.email, {
-            subject: emailTemplate.subject,
-            html: emailTemplate.html
-          });
+          console.log("Sending approval emails to:", recipients.length, "recipients");
 
-          console.log(`✅ Approval email sent to customer: ${recipient.email} (type: ${meetingType})`);
-        }
+          // Determine event/meeting type
+          const meetingType = event.meetingType;
 
+          // Send email to each customer based on meeting type
+          for (const recipient of recipients) {
+            const clientName = recipient.name;
+            let emailTemplate;
 
-        // Send SMS notifications to customers
-        console.log('📱 Sending SMS notifications to customers...');
-
-        // Fetch full customer data to get phone numbers
-        let customersWithPhones = [];
-
-        if (selectedClients && selectedClients.length > 0) {
-          // If selectedClients exist, we need to fetch their phone numbers from the Customer model
-          const customerEmails = selectedClients.map(c => c.email);
-          customersWithPhones = await Customer.find({ email: { $in: customerEmails } }).select('name email phone');
-        } else if (customerIds.length > 0) {
-          // Fetch customers by IDs
-          customersWithPhones = await Customer.find({ _id: { $in: customerIds } }).select('name email phone');
-        }
-
-        console.log(`📱 Found ${customersWithPhones.length} customers with potential phone numbers`);
-
-        // Send SMS to each customer with a valid phone number
-        for (const customer of customersWithPhones) {
-          if (customer.phone && customer.phone.trim() !== '') {
-            const smsMessage = `Merhaba ${customer.name}, ${expertName} ile ${serviceName} randevunuz onaylandı. Tarih: ${date} ${time}. İyi günler!`;
-
-            try {
-              const smsResult = await sendSms(customer.phone, smsMessage);
-
-              if (smsResult.success) {
-                console.log(`✅ SMS sent successfully to ${customer.name} (${customer.phone}), JobID: ${smsResult.jobID}`);
-              } else {
-                console.error(`❌ Failed to send SMS to ${customer.name} (${customer.phone}): ${smsResult.error}`);
-              }
-            } catch (smsError) {
-              console.error(`❌ Error sending SMS to ${customer.name} (${customer.phone}):`, smsError);
-              // Don't fail the request if SMS fails
+            if (meetingType === 'grup') {
+              // Group session approval email
+              emailTemplate = getGroupSessionApprovedTemplate({
+                participantName: clientName,
+                sessionName: serviceName,
+                sessionDate: date,
+                sessionTime: time,
+                videoLink: joinLink !== 'Link will be shared soon' ? joinLink : ''
+              });
+            } else {
+              // 1-1 bireysel appointment approval email
+              emailTemplate = getAppointmentApprovedBireyselTemplate({
+                customerName: clientName,
+                expertName: expertName,
+                appointmentDate: date,
+                appointmentTime: time,
+                appointmentLocation: event.location || 'Online',
+                videoLink: joinLink !== 'Link will be shared soon' ? joinLink : ''
+              });
             }
-          } else {
-            console.log(`⚠️ Customer ${customer.name} (${customer.email}) has no phone number, skipping SMS`);
+
+            await sendEmail(recipient.email, {
+              subject: emailTemplate.subject,
+              html: emailTemplate.html
+            });
+
+            console.log(`✅ Approval email sent to customer: ${recipient.email} (type: ${meetingType})`);
           }
+
+
+          // Send SMS notifications to customers
+          console.log('📱 Sending SMS notifications to customers...');
+
+          // Fetch full customer data to get phone numbers
+          let customersWithPhones = [];
+
+          if (selectedClients && selectedClients.length > 0) {
+            // If selectedClients exist, we need to fetch their phone numbers from the Customer model
+            const customerEmails = selectedClients.map(c => c.email);
+            customersWithPhones = await Customer.find({ email: { $in: customerEmails } }).select('name email phone');
+          } else if (customerIds.length > 0) {
+            // Fetch customers by IDs
+            customersWithPhones = await Customer.find({ _id: { $in: customerIds } }).select('name email phone');
+          }
+
+          console.log(`📱 Found ${customersWithPhones.length} customers with potential phone numbers`);
+
+          // Send SMS to each customer with a valid phone number
+          for (const customer of customersWithPhones) {
+            if (customer.phone && customer.phone.trim() !== '') {
+              const smsMessage = `Merhaba ${customer.name}, ${expertName} ile ${serviceName} randevunuz onaylandı. Tarih: ${date} ${time}. İyi günler!`;
+
+              try {
+                const smsResult = await sendSms(customer.phone, smsMessage);
+
+                if (smsResult.success) {
+                  console.log(`✅ SMS sent successfully to ${customer.name} (${customer.phone}), JobID: ${smsResult.jobID}`);
+                } else {
+                  console.error(`❌ Failed to send SMS to ${customer.name} (${customer.phone}): ${smsResult.error}`);
+                }
+              } catch (smsError) {
+                console.error(`❌ Error sending SMS to ${customer.name} (${customer.phone}):`, smsError);
+                // Don't fail the request if SMS fails
+              }
+            } else {
+              console.log(`⚠️ Customer ${customer.name} (${customer.email}) has no phone number, skipping SMS`);
+            }
+          }
+
+
+          // Send email to expert for each customer
+          for (const recipient of recipients) {
+            const expertEmailBody = `${recipient.name} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+
+            // Enhanced HTML template for expert
+            const expertEmailHTML = `
+              <!DOCTYPE html>
+              <html lang="tr">
+              <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <style>
+                      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
+                      .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+                      .header { background: #4CAF50; padding: 40px 30px; text-align: center; color: white; }
+                      .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+                      .content { padding: 40px 30px; }
+                      .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #4CAF50; }
+                      .detail-item { margin: 12px 0; font-size: 15px; }
+                      .detail-label { font-weight: 500; color: #374151; }
+                      .detail-value { color: #1f2937; }
+                      .join-link { background: #4CAF50; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
+                      .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
+                  </style>
+              </head>
+              <body>
+                  <div class="container">
+                      <div class="header">
+                          <h1>✅ Randevu Onaylandı</h1>
+                          <p>Randevu talebi onaylandı</p>
+                      </div>
+                      <div class="content">
+                          <p>Merhaba <strong>${expertName}</strong>,</p>
+                          <p><strong>${recipient.name}</strong> ile <strong>${serviceName}</strong> randevu talebiniz onaylandı.</p>
+                          <div class="appointment-card">
+                              <div class="detail-item">
+                                  <span class="detail-label">Danışan:</span>
+                                  <span class="detail-value">${recipient.name}</span>
+                              </div>
+                              <div class="detail-item">
+                                  <span class="detail-label">Tarih:</span>
+                                  <span class="detail-value">${date}</span>
+                              </div>
+                              <div class="detail-item">
+                                  <span class="detail-label">Saat:</span>
+                                  <span class="detail-value">${time}</span>
+                              </div>
+                              <div class="detail-item">
+                                  <span class="detail-label">Katılım Linki:</span>
+                                  <span class="detail-value">${joinLink}</span>
+                              </div>
+                          </div>
+                      </div>
+                      <div class="footer">
+                          <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
+                      </div>
+                  </div>
+              </body>
+              </html>
+            `;
+
+
+
+            await sendEmail(user.information.email, {
+              subject: 'Randevu Onaylandı',
+              body: expertEmailBody,
+              html: expertEmailHTML
+            });
+          }
+
+          console.log(`✅ Approval email sent to expert: ${user.information.email}`);
+
+        } catch (emailError) {
+          console.error("Error sending approval emails:", emailError);
+          // Don't fail the request if email fails
         }
-
-
-        // Send email to expert for each customer
-        for (const recipient of recipients) {
-          const expertEmailBody = `${recipient.name} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
-
-          // Enhanced HTML template for expert
-          const expertEmailHTML = `
-            <!DOCTYPE html>
-            <html lang="tr">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
-                    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
-                    .header { background: #4CAF50; padding: 40px 30px; text-align: center; color: white; }
-                    .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
-                    .content { padding: 40px 30px; }
-                    .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #4CAF50; }
-                    .detail-item { margin: 12px 0; font-size: 15px; }
-                    .detail-label { font-weight: 500; color: #374151; }
-                    .detail-value { color: #1f2937; }
-                    .join-link { background: #4CAF50; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
-                    .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>✅ Randevu Onaylandı</h1>
-                        <p>Randevu talebi onaylandı</p>
-                    </div>
-                    <div class="content">
-                        <p>Merhaba <strong>${expertName}</strong>,</p>
-                        <p><strong>${recipient.name}</strong> ile <strong>${serviceName}</strong> randevu talebiniz onaylandı.</p>
-                        <div class="appointment-card">
-                            <div class="detail-item">
-                                <span class="detail-label">Danışan:</span>
-                                <span class="detail-value">${recipient.name}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Tarih:</span>
-                                <span class="detail-value">${date}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Saat:</span>
-                                <span class="detail-value">${time}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Katılım Linki:</span>
-                                <span class="detail-value">${joinLink}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="footer">
-                        <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-          `;
-
-
-
-          await sendEmail(user.information.email, {
-            subject: 'Randevu Onaylandı',
-            body: expertEmailBody,
-            html: expertEmailHTML
-          });
-        }
-
-        console.log(`✅ Approval email sent to expert: ${user.information.email}`);
-
-      } catch (emailError) {
-        console.error("Error sending approval emails:", emailError);
-        // Don't fail the request if email fails
-      }
+      });
     }
 
-    // Send emails when status is cancelled/rejected
+    // Send emails when status is cancelled/rejected (ALL in background)
     else if (status === 'cancelled') {
-      try {
-        // Prepare expert information
-        const expertName = `${user.information.name} ${user.information.surname}`;
+      setImmediate(async () => {
+        try {
+          // Prepare expert information
+          const expertName = `${user.information.name} ${user.information.surname}`;
 
-        // Prepare event details
-        const serviceName = event.serviceName || event.title;
-        const meetingType = event.meetingType;
-        const originalDate = event.date ? new Date(event.date).toLocaleDateString('tr-TR') : 'Belirtilmedi';
-        const serviceType = meetingType === 'grup' ? 'Grup Seansı' : 'Bireysel Randevu';
-        const refundAmount = event.price ? `${event.price} TL` : '0 TL';
+          // Prepare event details
+          const serviceName = event.serviceName || event.title;
+          const meetingType = event.meetingType;
+          const originalDate = event.date ? new Date(event.date).toLocaleDateString('tr-TR') : 'Belirtilmedi';
+          const serviceType = meetingType === 'grup' ? 'Grup Seansı' : 'Bireysel Randevu';
+          const refundAmount = event.price ? `${event.price} TL` : '0 TL';
 
-        // Get customer information from selectedClients
-        let recipients = [];
+          // Get customer information from selectedClients
+          let recipients = [];
 
-        if (selectedClients && selectedClients.length > 0) {
-          recipients = selectedClients.map(client => ({
-            name: client.name,
-            email: client.email
-          }));
-        } else if (customerIds.length > 0) {
-          const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
-          recipients = customers.map(c => ({
-            name: c.name,
-            email: c.email
-          }));
+          if (selectedClients && selectedClients.length > 0) {
+            recipients = selectedClients.map(client => ({
+              name: client.name,
+              email: client.email
+            }));
+          } else if (customerIds.length > 0) {
+            const customers = await Customer.find({ _id: { $in: customerIds } }).select('email name');
+            recipients = customers.map(c => ({
+              name: c.name,
+              email: c.email
+            }));
+          }
+
+          console.log("Sending cancellation emails to:", recipients.length, "recipients");
+
+          // Send cancellation email to each customer using the new template
+          for (const recipient of recipients) {
+            const cancellationTemplate = getCancellationEmailTemplate({
+              customerName: recipient.name,
+              expertName: expertName,
+              serviceName: serviceName,
+              originalDate: originalDate,
+              serviceType: serviceType,
+              refundAmount: refundAmount,
+              refundProcessDays: '3-5'
+            });
+
+            await sendEmail(recipient.email, {
+              subject: cancellationTemplate.subject,
+              html: cancellationTemplate.html
+            });
+
+            console.log(`✅ Cancellation email sent to customer: ${recipient.email}`);
+          }
+
+        } catch (emailError) {
+          console.error("Error sending cancellation emails:", emailError);
+          // Don't fail the request if email fails
         }
-
-        console.log("Sending cancellation emails to:", recipients.length, "recipients");
-
-        // Send cancellation email to each customer using the new template
-        for (const recipient of recipients) {
-          const cancellationTemplate = getCancellationEmailTemplate({
-            customerName: recipient.name,
-            expertName: expertName,
-            serviceName: serviceName,
-            originalDate: originalDate,
-            serviceType: serviceType,
-            refundAmount: refundAmount,
-            refundProcessDays: '3-5'
-          });
-
-          await sendEmail(recipient.email, {
-            subject: cancellationTemplate.subject,
-            html: cancellationTemplate.html
-          });
-
-          console.log(`✅ Cancellation email sent to customer: ${recipient.email}`);
-        }
-
-      } catch (emailError) {
-        console.error("Error sending cancellation emails:", emailError);
-        // Don't fail the request if email fails
-      }
+      });
     }
 
-    // Send other status emails
+    // Send other status emails (ALL in background)
     else if (customerIds.length > 0 || (selectedClients && selectedClients.length > 0)) {
-      try {
-        let customerEmails = [];
+      setImmediate(async () => {
+        try {
+          let customerEmails = [];
 
-        if (selectedClients && selectedClients.length > 0) {
-          customerEmails = selectedClients.map(c => c.email).filter(Boolean);
-        } else {
-          const customers = await Customer.find({ _id: { $in: customerIds } }).select('email');
-          customerEmails = customers.map(c => c.email).filter(Boolean);
-        }
-
-        const meetingType = event.meetingType;
-
-        if (customerEmails.length > 0) {
-          if (meetingType === '1-1' && ['completed', 'pending'].includes(status)) {
-            await sendBulkEmail(customerEmails, "Event Status Updated", "Your event status has been updated to " + status);
-          } else if (meetingType === 'grup' && ['completed', 'pending'].includes(status)) {
-            await sendBulkEmail(customerEmails, "Event Status Updated", "Your group event status has been updated to " + status);
+          if (selectedClients && selectedClients.length > 0) {
+            customerEmails = selectedClients.map(c => c.email).filter(Boolean);
+          } else {
+            const customers = await Customer.find({ _id: { $in: customerIds } }).select('email');
+            customerEmails = customers.map(c => c.email).filter(Boolean);
           }
-          // Note: 'cancelled' status is now handled in the dedicated block above
+
+          const meetingType = event.meetingType;
+
+          if (customerEmails.length > 0) {
+            if (meetingType === '1-1' && ['completed', 'pending'].includes(status)) {
+              await sendBulkEmail(customerEmails, "Event Status Updated", "Your event status has been updated to " + status);
+            } else if (meetingType === 'grup' && ['completed', 'pending'].includes(status)) {
+              await sendBulkEmail(customerEmails, "Event Status Updated", "Your group event status has been updated to " + status);
+            }
+            // Note: 'cancelled' status is now handled in the dedicated block above
+          }
+        } catch (emailError) {
+          console.error("Error sending customer emails:", emailError);
         }
-      } catch (emailError) {
-        console.error("Error sending customer emails:", emailError);
-      }
+      });
     }
 
 
