@@ -585,11 +585,18 @@ router.delete("/:userId", async (req, res) => {
 
 
 ////////////////////////   Refresh Token    //////////////////////////
+////////////////////////   Refresh Token    //////////////////////////
 router.post("/refresh-token", async (req, res) => {
     try {
         const { refreshToken } = req.body;
 
+        // DEBUG LOGS
+        console.log("🔄 Refresh Token Request Initiated");
+        console.log("  - Secret exists:", !!REFRESH_TOKEN_SECRET);
+        console.log("  - Secret length:", REFRESH_TOKEN_SECRET ? REFRESH_TOKEN_SECRET.length : 0);
+
         if (!refreshToken) {
+            console.log("  ❌ No refresh token in body");
             return res.status(400).json({
                 success: false,
                 message: "Refresh token is required",
@@ -601,11 +608,14 @@ router.post("/refresh-token", async (req, res) => {
         let decoded;
         try {
             decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
+            console.log("  ✅ Token signature verified. User ID:", decoded.id);
         } catch (error) {
+            console.log("  ❌ Token verification failed:", error.message);
             return res.status(401).json({
                 success: false,
                 message: "Invalid or expired refresh token",
-                code: "INVALID_REFRESH_TOKEN"
+                code: "INVALID_REFRESH_TOKEN",
+                debug: error.message
             });
         }
 
@@ -613,6 +623,7 @@ router.post("/refresh-token", async (req, res) => {
         const user = await User.findById(decoded.id);
 
         if (!user) {
+            console.log("  ❌ User not found in DB:", decoded.id);
             return res.status(401).json({
                 success: false,
                 message: "User not found",
@@ -620,14 +631,20 @@ router.post("/refresh-token", async (req, res) => {
             });
         }
 
-        // Verify stored refresh token matches
+        // Compare with stored token
         if (user.refreshToken !== refreshToken) {
+            console.log("  ❌ Token mismatch!");
+            console.log("  - Incoming:", refreshToken.substring(0, 15) + "...");
+            console.log("  - Stored:  ", user.refreshToken ? user.refreshToken.substring(0, 15) + "..." : "NULL");
+
             return res.status(401).json({
                 success: false,
                 message: "Refresh token has been revoked",
                 code: "TOKEN_REVOKED"
             });
         }
+
+        console.log("  ✅ Token matches DB. Generating new pair...");
 
         // Generate new tokens
         const { accessToken, refreshToken: newRefreshToken } = await generateTokens(user._id);
@@ -636,7 +653,7 @@ router.post("/refresh-token", async (req, res) => {
         user.refreshToken = newRefreshToken;
         await user.save({ validateBeforeSave: false });
 
-        console.log("✅ Tokens refreshed for user:", user._id);
+        console.log("  ✅ Tokens refreshed for user:", user._id);
 
         return res.status(200).json({
             success: true,
