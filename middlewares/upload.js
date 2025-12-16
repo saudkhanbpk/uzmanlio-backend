@@ -136,18 +136,50 @@ export const createMulterUpload = (options = {}) => {
 
   // File filter
   const fileFilter = (req, file, cb) => {
-    const extension = path.extname(file.originalname).toLowerCase();
-    const hasValidExtension = extensionRegex.test(file.originalname);
-    const hasValidMimeType = mimeTypesArray.includes(file.mimetype);
+    const extension = path.extname(file.originalname).toLowerCase().replace('.', '');
+    const hasValidExtension = allowedExtensions.includes(extension);
+
+    // Strict MIME type checking
+    const allowedMimeForExtension = defaultMimeTypes[extension];
+    // If we have a known mime type for this extension, check it. 
+    // If not (e.g. custom extension not in default map), rely on allowedMimeTypes list if any.
+
+    let hasValidMimeType = false;
+
+    // 1. Check if the file's mimetype matches what we expect for its extension
+    if (allowedMimeForExtension) {
+      if (file.mimetype === allowedMimeForExtension) {
+        hasValidMimeType = true;
+      }
+    } else {
+      // Fallback: If extension is not in our default map, check if the mime type is explicitly allowed
+      if (mimeTypesArray.includes(file.mimetype)) {
+        hasValidMimeType = true;
+      }
+    }
+
+    // Special case for some types that might have multiple mimes (like JPG/JPEG)
+    if (!hasValidMimeType && (extension === 'jpg' || extension === 'jpeg')) {
+      if (file.mimetype === 'image/jpeg') hasValidMimeType = true;
+    }
+    if (!hasValidMimeType && (extension === 'doc')) {
+      if (file.mimetype === 'application/msword') hasValidMimeType = true;
+    }
+
 
     if (hasValidExtension && hasValidMimeType) {
       return cb(null, true);
     }
 
-    const errorMessage = `Invalid file type. Only ${allowedExtensions.join(
-      ", "
-    ).toUpperCase()} files are allowed.`;
-    cb(new Error(errorMessage));
+    if (!hasValidExtension) {
+      return cb(new Error(`Invalid file type. Only ${allowedExtensions.join(", ").toUpperCase()} files are allowed.`));
+    }
+
+    if (!hasValidMimeType) {
+      return cb(new Error(`File type mismatch. The extension .${extension} does not match the file content type ${file.mimetype}.`));
+    }
+
+    cb(new Error("Unknown validation error"));
   };
 
   // Create multer instance
@@ -225,14 +257,14 @@ export const handleMulterError = (error, req, res, next) => {
       return res.status(400).json({
         success: false,
         error: "File too large",
-        message: `File size should not exceed ${req.maxFileSize || 5}MB`,
+        message: `File size should not exceed ${req.maxFileSize || 'the limit'}.`, // req.maxFileSize is not standard multer property, simplified message
       });
     }
     if (error.code === "LIMIT_FILE_COUNT") {
       return res.status(400).json({
         success: false,
         error: "Too many files",
-        message: `Maximum ${req.maxFiles || 10} files allowed`,
+        message: `Too many files uploaded.`,
       });
     }
     if (error.code === "LIMIT_UNEXPECTED_FILE") {
@@ -243,6 +275,15 @@ export const handleMulterError = (error, req, res, next) => {
       });
     }
   } else if (error) {
+    // Handle custom errors from fileFilter
+    if (error.message.includes("Invalid file type") || error.message.includes("File type mismatch")) {
+      return res.status(400).json({
+        success: false,
+        error: "Validation Error",
+        message: error.message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       error: "Upload failed",
