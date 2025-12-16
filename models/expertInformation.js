@@ -2,7 +2,7 @@ import mongoose, { Mongoose } from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-
+import BlogSchema from "./Blog.js";
 
 
 const { Schema } = mongoose;
@@ -106,100 +106,7 @@ const AppointmentMappingSchema = new Schema({
   lastSynced: { type: Date, default: Date.now },
 });
 
-// ---------------- Forms System ----------------
-const FormFieldSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  type: {
-    type: String,
-    enum: [
-      "text",
-      "email",
-      "phone",
-      "single-choice",
-      "multiple-choice",
-      "ranking",
-      "file-upload",
-    ],
-    required: true,
-  },
-  label: { type: String, required: true },
-  required: { type: Boolean, default: false },
-  placeholder: { type: String },
-  options: [{ type: String }],
-  validation: {
-    minLength: { type: Number },
-    maxLength: { type: Number },
-    pattern: { type: String },
-  },
-});
 
-const FormResponseSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  respondentName: { type: String },
-  respondentEmail: { type: String },
-  respondentPhone: { type: String },
-  responses: [
-    {
-      fieldId: { type: String, required: true },
-      fieldLabel: { type: String, required: true },
-      fieldType: { type: String, required: true },
-      value: { type: Schema.Types.Mixed },
-      files: [{ type: String }],
-    },
-  ],
-  submittedAt: { type: Date, default: Date.now },
-  ipAddress: { type: String },
-  userAgent: { type: String },
-});
-
-const FormSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  title: { type: String, required: true },
-  description: { type: String },
-  status: {
-    type: String,
-    enum: ["draft", "active", "inactive", "archived"],
-    default: "draft",
-  },
-  fields: [FormFieldSchema],
-  responses: [FormResponseSchema],
-  participantCount: { type: Number, default: 0 },
-  settings: {
-    allowMultipleSubmissions: { type: Boolean, default: false },
-    requireLogin: { type: Boolean, default: false },
-    showProgressBar: { type: Boolean, default: true },
-    customTheme: {
-      primaryColor: { type: String, default: "#3B82F6" },
-      backgroundColor: { type: String, default: "#FFFFFF" },
-    },
-    notifications: {
-      emailOnSubmission: { type: Boolean, default: true },
-      emailAddress: { type: String },
-    },
-  },
-  analytics: {
-    views: { type: Number, default: 0 },
-    starts: { type: Number, default: 0 },
-    completions: { type: Number, default: 0 },
-    averageCompletionTime: { type: Number, default: 0 },
-  },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
-
-// ---------------- Blog System ----------------
-const BlogSchema = new Schema({
-  id: { type: String, default: () => uuidv4() },
-  title: { type: String, required: true },
-  content: { type: String, required: true },
-  category: { type: String, required: true },
-  keywords: [{ type: String }],
-  status: { type: String, enum: ["draft", "published"], default: "draft" },
-  slug: { type: String, required: true },
-  author: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
 
 // ---------------- Events System ----------------
 const EventSchema = new Schema({
@@ -711,15 +618,9 @@ const UserSchema = new Schema(
 
     // Events system
     events: [EventSchema],
-
-    // Blog system
-    blogs: [BlogSchema],
-
+    blogs: [{ type: mongoose.Schema.Types.ObjectId, ref: "Blog" }],
     // Forms system
-    forms: [FormSchema],
-
-    // Customers system
-    // customers: [CustomerSchema],
+    forms: [{ type: mongoose.Schema.Types.ObjectId, ref: "Form" }],
 
     vacationMode: { type: Boolean, default: false },
     expertType: { type: Boolean, default: false },
@@ -839,10 +740,6 @@ export {
   AvailabilitySchema,
   CalendarProviderSchema,
   AppointmentMappingSchema,
-  FormFieldSchema,
-  FormResponseSchema,
-  FormSchema,
-  BlogSchema,
   EventSchema,
   DiplomaSchema,
   LanguageSchema,
