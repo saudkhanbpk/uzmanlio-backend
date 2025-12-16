@@ -542,8 +542,9 @@ const UserSchema = new Schema(
     expertPackages: ExpertPackagesSchema,
 
     // New fields for services, packages, and gallery
-    services: [ServiceSchema],
-    packages: [PackageSchema],
+    // Services and Packages now stored in separate collections with ObjectId references
+    services: [{ type: Schema.Types.ObjectId, ref: "Service" }],
+    packages: [{ type: Schema.Types.ObjectId, ref: "Package" }],
     galleryFiles: [GalleryFileSchema],
     emails: [EmailSchema],
     // customers: [CustomerSchema],

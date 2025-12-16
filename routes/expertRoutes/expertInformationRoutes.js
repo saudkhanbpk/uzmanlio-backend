@@ -428,10 +428,20 @@ router.get("/:userId", async (req, res) => {
     console.log("Fetching profile for userId:", req.params.userId);
 
     const user = await User.findById(req.params.userId)
-      .populate([{
-        path: "customers.customerId",
-        model: "Customer"
-      }]);
+      .populate([
+        {
+          path: "customers.customerId",
+          model: "Customer"
+        },
+        {
+          path: "services",
+          model: "Service"
+        },
+        {
+          path: "packages",
+          model: "Package"
+        }
+      ]);
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });

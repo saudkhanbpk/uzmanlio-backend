@@ -1,10 +1,11 @@
 import express from "express";
-import { v4 as uuidv4 } from "uuid";
+import mongoose from "mongoose";
 import User from "../../models/expertInformation.js";
+import Service from "../../models/service.js";
 
 const router = express.Router();
 
-// Helper function to find user by ID
+// Helper function to find user by ID with populated services
 const findUserById = async (userId) => {
   const user = await User.findById(userId);
   if (!user) {
@@ -13,8 +14,18 @@ const findUserById = async (userId) => {
   return user;
 };
 
+// Helper function to find user with populated services
+const findUserWithServices = async (userId) => {
+  const user = await User.findById(userId).populate('services');
+  if (!user) {
+    throw new Error('User not found');
+  }
+  return user;
+};
+
 // ==================== SERVICES ROUTES ====================
-// Add service
+
+// Add service - Creates in Service collection and adds reference to User
 router.post("/:userId/services", async (req, res) => {
   try {
     console.log("Creating service for userId:", req.params.userId);
@@ -51,17 +62,18 @@ router.post("/:userId/services", async (req, res) => {
 
     const user = await findUserById(req.params.userId);
 
-    const newService = {
-      id: uuidv4(),
+    // Create new Service document in Service collection
+    const newService = new Service({
+      expertId: user._id,
       title,
       description: description || '',
-      icon: icon,
-      iconBg: iconBg,
-      price: price || 0,
-      duration: duration || 0,
+      icon: icon || '',
+      iconBg: iconBg || '',
+      price: price || '0',
+      duration: duration || '0',
       isActive: false,
       category,
-      discount,
+      discount: discount || 0,
       features: features || [],
       date: date || null,
       time: time || null,
@@ -72,20 +84,19 @@ router.post("/:userId/services", async (req, res) => {
       maxAttendees: maxAttendees || null,
       isOfflineEvent: isOfflineEvent || false,
       selectedClients: selectedClients || [],
-      status: status || 'active',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+      status: status || 'active'
+    });
 
-    // Initialize services array if it doesn't exist
+    await newService.save();
+
+    // Add service ObjectId reference to user's services array
     if (!user.services) {
       user.services = [];
     }
-
-    user.services.push(newService);
+    user.services.push(newService._id);
     await user.save();
 
-    console.log("Service created successfully:", newService.id);
+    console.log("Service created successfully:", newService._id);
     res.json({ service: newService, message: "Service added successfully" });
   } catch (error) {
     console.error("Error creating service:", error);
@@ -97,10 +108,10 @@ router.post("/:userId/services", async (req, res) => {
 });
 
 
-// Get active services (for booking page)
+// Get active services (for booking page) - Uses populate
 router.get("/:userId/services/active", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
+    const user = await findUserWithServices(req.params.userId);
     const activeServices = (user.services || []).filter(service => service.isActive);
     res.json({ services: activeServices });
   } catch (error) {
@@ -108,64 +119,62 @@ router.get("/:userId/services/active", async (req, res) => {
   }
 });
 
-// Update service
+// Update service - Updates directly in Service collection
 router.put("/:userId/services/:serviceId", async (req, res) => {
   try {
     console.log("Updating service:", req.params.serviceId);
     console.log("Update data received:", req.body);
 
+    // Verify user exists and owns this service
     const user = await findUserById(req.params.userId);
 
-    if (!user.services) {
-      return res.status(404).json({ error: "No services found" });
+    // Find service by ObjectId or legacy id
+    let service = await Service.findById(req.params.serviceId);
+
+    // If not found by ObjectId, try finding by legacyId
+    if (!service) {
+      service = await Service.findOne({ legacyId: req.params.serviceId, expertId: user._id });
     }
 
-    const serviceIndex = user.services.findIndex(
-      service => service.id === req.params.serviceId
-    );
-
-    if (serviceIndex === -1) {
+    if (!service) {
       return res.status(404).json({ error: "Service not found" });
     }
 
-    // Keep the original ID and timestamps
-    const originalService = user.services[serviceIndex];
+    // Verify ownership
+    if (service.expertId.toString() !== user._id.toString()) {
+      return res.status(403).json({ error: "Not authorized to update this service" });
+    }
 
-    // Update service with all fields
-    user.services[serviceIndex] = {
-      id: originalService.id, // original ID
-      createdAt: originalService.createdAt, //original creation date
-      title: req.body.title || originalService.title,
-      description: req.body.description || '',
-      price: req.body.price !== undefined ? req.body.price : originalService.price,
-      duration: req.body.duration !== undefined ? req.body.duration : originalService.duration,
-      category: req.body.category || originalService.category,
-      features: req.body.features || [],
-      icon: req.body.icon || '',
-      iconBg: req.body.iconBg || '',
-      eventType: req.body.eventType || 'online',
-      meetingType: req.body.meetingType || '',
-      platform: req.body.platform || '',
-      location: req.body.location || '',
-      maxAttendees: req.body.maxAttendees || null,
-      date: req.body.date || null,
-      time: req.body.time || null,
-      isOfflineEvent: req.body.isOfflineEvent || false,
-      selectedClients: req.body.selectedClients || [],
-      status: req.body.status || 'active',
-      isActive: req.body.isActive !== undefined ? req.body.isActive : true,
+    // Update service fields
+    Object.assign(service, {
+      title: req.body.title || service.title,
+      description: req.body.description ?? service.description,
+      price: req.body.price ?? service.price,
+      duration: req.body.duration ?? service.duration,
+      category: req.body.category || service.category,
+      features: req.body.features || service.features,
+      icon: req.body.icon ?? service.icon,
+      iconBg: req.body.iconBg ?? service.iconBg,
+      eventType: req.body.eventType || service.eventType,
+      meetingType: req.body.meetingType ?? service.meetingType,
+      platform: req.body.platform ?? service.platform,
+      location: req.body.location ?? service.location,
+      maxAttendees: req.body.maxAttendees ?? service.maxAttendees,
+      date: req.body.date ?? service.date,
+      time: req.body.time ?? service.time,
+      isOfflineEvent: req.body.isOfflineEvent ?? service.isOfflineEvent,
+      selectedClients: req.body.selectedClients ?? service.selectedClients,
+      status: req.body.status ?? service.status,
+      isActive: req.body.isActive ?? service.isActive,
+      discount: req.body.discount ?? service.discount,
       updatedAt: new Date()
-    };
+    });
 
-    // Mark the services array as modified
-    user.markModified('services');
-
-    await user.save();
+    await service.save();
 
     console.log("Service updated successfully");
-
     res.json({
-      service: user.services[serviceIndex],
+      service: service,
       message: "Service updated successfully"
     });
   } catch (error) {
@@ -178,55 +187,60 @@ router.put("/:userId/services/:serviceId", async (req, res) => {
 });
 
 
-// Get all services
+// Get all services - Uses populate to return full service objects
 router.get("/:userId/services", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
+    const user = await findUserWithServices(req.params.userId);
     res.json({ services: user.services || [] });
   } catch (error) {
     res.status(404).json({ error: error.message });
   }
 });
 
-// Get packages (if you have this endpoint)
+// Get packages (redirect to packages route for now)
 router.get("/:userId/packages", async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
+    const user = await User.findById(req.params.userId).populate('packages');
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
     res.json({ packages: user.packages || [] });
   } catch (error) {
     res.status(404).json({ error: error.message });
   }
 });
 
-// Delete service
+// Delete service - Removes from Service collection and User reference
 router.delete("/:userId/services/:serviceId", async (req, res) => {
   try {
     console.log("Deleting service:", req.params.serviceId, "for user:", req.params.userId);
 
     const user = await findUserById(req.params.userId);
 
-    if (!user.services || user.services.length === 0) {
-      return res.status(404).json({ error: "No services found" });
+    // Find service by ObjectId or legacy id
+    let service = await Service.findById(req.params.serviceId);
+
+    if (!service) {
+      service = await Service.findOne({ legacyId: req.params.serviceId, expertId: user._id });
     }
 
-    // Check if service exists
-    const serviceExists = user.services.some(
-      service => service.id === req.params.serviceId
-    );
-
-    if (!serviceExists) {
+    if (!service) {
       console.log("Service not found with ID:", req.params.serviceId);
       return res.status(404).json({ error: "Service not found" });
     }
 
-    // Filter out the service to delete
+    // Verify ownership
+    if (service.expertId.toString() !== user._id.toString()) {
+      return res.status(403).json({ error: "Not authorized to delete this service" });
+    }
+
+    // Remove from Service collection
+    await Service.findByIdAndDelete(service._id);
+
+    // Remove reference from user's services array
     user.services = user.services.filter(
-      service => service.id !== req.params.serviceId
+      serviceId => serviceId.toString() !== service._id.toString()
     );
-
-    // Mark as modified to ensure Mongoose saves the change
-    user.markModified('services');
-
     await user.save();
 
     console.log("Service deleted successfully");
