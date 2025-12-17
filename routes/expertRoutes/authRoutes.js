@@ -5,9 +5,13 @@ import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import User from "../../models/expertInformation.js";
+import Order from "../../models/orders.js";
 import { sendEmail } from "../../services/email.js";
 import { getWelcomeEmailTemplate, getForgotPasswordOTPTemplate, getPasswordResetSuccessTemplate, getEmailVerificationTemplate } from "../../services/emailTemplates.js";
+
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret";
 
 const router = express.Router();
 
@@ -173,16 +177,72 @@ router.post("/login", async (req, res) => {
 
         const { accessToken, refreshToken } = await generateTokens(existingUser._id);
 
-        // Optimized: Update refresh token and return user in single operation
-        const userWithoutPassword = await User.findByIdAndUpdate(
+        // Optimized: Update refresh token
+        await User.findByIdAndUpdate(
             existingUser._id,
             { refreshToken },
-            { new: true, select: "-information.password" }
+            { new: true }
         );
+
+        // Fetch complete user profile with populated fields
+        const user = await User.findById(existingUser._id)
+            .populate([
+                {
+                    path: "customers.customerId",
+                    model: "Customer"
+                },
+                {
+                    path: "services",
+                    model: "Service"
+                },
+                {
+                    path: "packages",
+                    model: "Package"
+                }
+            ])
+            .select("-information.password"); // Exclude password
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found after login" });
+        }
+
+        // Get all customer IDs from the user's customers array
+        const customerIds = user.customers
+            .map(c => c.customerId?._id || c.customerId)
+            .filter(id => id);
+
+        // Find all orders for these customers
+        const orders = await Order.find({
+            customerId: { $in: customerIds }
+        }).lean();
+        console.log("Customer IDS for package details:", customerIds);
+
+        // Filter orders to get only active package orders
+        const customersPackageDetails = [];
+
+        for (const order of orders) {
+            // Check each event in the order
+            if (order.orderDetails?.events) {
+                for (const event of order.orderDetails.events) {
+                    // Check if it's a package event with remaining sessions
+                    if (
+                        event.eventType === 'package' &&
+                        event.package &&
+                        event.package.sessions > (event.package.completedSessions || 0)
+                    ) {
+                        customersPackageDetails.push(order);
+                    }
+                }
+            }
+        }
+
+        // Return user object with customersPackageDetails
+        const userObject = user.toObject();
+        userObject.customersPackageDetails = customersPackageDetails;
 
         return res
             .status(200).json({
-                user: userWithoutPassword,
+                user: userObject,
                 accessToken,
                 refreshToken,
                 subscriptionExpired,
@@ -579,6 +639,124 @@ router.delete("/:userId", async (req, res) => {
         });
     }
 });
+
+
+////////////////////////   Refresh Token    //////////////////////////
+////////////////////////   Refresh Token    //////////////////////////
+router.post("/refresh-token", async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+
+        // DEBUG LOGS
+        console.log("🔄 Refresh Token Request Initiated");
+        console.log("  - Secret exists:", !!REFRESH_TOKEN_SECRET);
+        console.log("  - Secret length:", REFRESH_TOKEN_SECRET ? REFRESH_TOKEN_SECRET.length : 0);
+
+        if (!refreshToken) {
+            console.log("  ❌ No refresh token in body");
+            return res.status(400).json({
+                success: false,
+                message: "Refresh token is required",
+                code: "NO_REFRESH_TOKEN"
+            });
+        }
+
+        // Verify refresh token
+        let decoded;
+        try {
+            decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
+            console.log("  ✅ Token signature verified. User ID:", decoded.id);
+        } catch (error) {
+            console.log("  ❌ Token verification failed:", error.message);
+            return res.status(401).json({
+                success: false,
+                message: "Invalid or expired refresh token",
+                code: "INVALID_REFRESH_TOKEN",
+                debug: error.message
+            });
+        }
+
+        // Find user and verify stored refresh token matches
+        const user = await User.findById(decoded.id);
+
+        if (!user) {
+            console.log("  ❌ User not found in DB:", decoded.id);
+            return res.status(401).json({
+                success: false,
+                message: "User not found",
+                code: "USER_NOT_FOUND"
+            });
+        }
+
+        // Compare with stored token
+        if (user.refreshToken !== refreshToken) {
+            console.log("  ❌ Token mismatch!");
+            console.log("  - Incoming:", refreshToken.substring(0, 15) + "...");
+            console.log("  - Stored:  ", user.refreshToken ? user.refreshToken.substring(0, 15) + "..." : "NULL");
+
+            return res.status(401).json({
+                success: false,
+                message: "Refresh token has been revoked",
+                code: "TOKEN_REVOKED"
+            });
+        }
+
+        console.log("  ✅ Token matches DB. Generating new pair...");
+
+        // Generate new tokens
+        const { accessToken, refreshToken: newRefreshToken } = await generateTokens(user._id);
+
+        // Update stored refresh token
+        user.refreshToken = newRefreshToken;
+        await user.save({ validateBeforeSave: false });
+
+        console.log("  ✅ Tokens refreshed for user:", user._id);
+
+        return res.status(200).json({
+            success: true,
+            accessToken,
+            refreshToken: newRefreshToken,
+            user: {
+                _id: user._id,
+                name: user.information.name,
+                email: user.information.email
+            }
+        });
+
+    } catch (error) {
+        console.error("Refresh token error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error during token refresh"
+        });
+    }
+});
+
+
+////////////////////////   Logout    //////////////////////////
+router.post("/logout", async (req, res) => {
+    try {
+        const { userId } = req.body;
+
+        if (userId) {
+            // Clear the stored refresh token to invalidate it
+            await User.findByIdAndUpdate(userId, { refreshToken: null });
+            console.log("✅ User logged out:", userId);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Logged out successfully"
+        });
+    } catch (error) {
+        console.error("Logout error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error during logout"
+        });
+    }
+});
+
 
 export default router;
 

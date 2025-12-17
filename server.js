@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import "dotenv/config";
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -39,7 +39,6 @@ import { Netgsm } from "@netgsm/sms";
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config();
 
 const app = express();
 
@@ -143,9 +142,18 @@ app.get('/test', async (_req, res) => {
 
 
 
+// Import auth middleware
+import { verifyAccessToken, optionalAuth } from "./middlewares/auth.js";
 
 // Expert information routes
+// Auth routes (login, signup, forgot-password) - NO authentication required
 app.use("/api/expert", authRoutes);
+
+// Protected routes - require valid JWT token
+// Apply verifyAccessToken middleware to all routes that need authentication
+app.use("/api/expert/:userId", verifyAccessToken);
+
+// All these routes now require valid JWT token because of the middleware above
 app.use("/api/expert", profileRoutes);
 app.use("/api/expert", servicesRoutes);
 app.use("/api/expert", packagesRoutes);

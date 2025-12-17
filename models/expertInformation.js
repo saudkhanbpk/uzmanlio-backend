@@ -125,105 +125,8 @@ const ExpertPaymentInfoSchema = new Schema({
   taxOffice: { type: String },
 });
 
-// Services Schema
-const ServiceSchema = new Schema({
-  id: { type: String, required: true },
-  expertId: { type: Schema.Types.ObjectId, ref: "User" }, // Track which expert created this service
-  title: { type: String, required: true },
-  description: { type: String },
-  icon: { type: String },
-  iconBg: { type: String, default: '' },
-  price: { type: String, default: '0' },
-  discount: { type: Number, default: 0 },
-  duration: { type: String, default: '0' },
-  category: { type: String },
-  features: [{ type: String }],
-  date: { type: Date },
-  time: { type: String },
-  location: { type: String },
-  platform: { type: String },
-  eventType: {
-    type: String,
-    enum: ['online', 'offline', 'hybrid', ''],
-    default: 'online'
-  },
-  meetingType: {
-    type: String,
-    enum: ['1-1', 'grup', '']
-  },
-  maxAttendees: { type: Number },
-  isOfflineEvent: { type: Boolean, default: false },
-  selectedClients: [{
-    id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
-    name: { type: String },
-    email: { type: String }
-  }],
-  status: {
-    type: String, enum: ['active', 'inactive', 'onhold', ''], default: 'inactive'
-  },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
 
-//  packages Schema
-const PackageSchema = new Schema({
-  id: { type: String, required: true },
-  expertId: { type: Schema.Types.ObjectId, ref: "User" }, // Track which expert created this package
-  title: { type: String, required: true },
-  description: { type: String, default: '' },
-  price: { type: Number, default: 0 },
-  discount: { type: Number, default: 0 },
-  originalPrice: { type: Number },
-  duration: { type: Number, default: 0 }, // in minutes (for session duration)
-  appointmentCount: { type: Number, default: 1 }, // number of sessions/appointments
-  sessionsIncluded: { type: Number }, // legacy field, can be same as appointmentCount
-  category: {
-    type: String,
-    enum: ['egitim', 'danismanlik', 'workshop', 'mentorluk', ''],
-    default: ''
-  },
-  eventType: {
-    type: String,
-    enum: ['online', 'offline', 'hybrid'],
-    default: 'online'
-  },
-  meetingType: {
-    type: String,
-    enum: ['1-1', 'grup', ''],
-    default: ''
-  },
-  platform: { type: String, default: '' },
-  location: { type: String, default: '' },
-  date: { type: Date },
-  time: { type: String },
-  maxAttendees: { type: Number },
-  icon: { type: String, default: '📦' },
-  iconBg: { type: String, default: 'bg-primary-100' },
-  status: {
-    type: String,
-    enum: ['active', 'inactive', 'onhold'],
-    default: 'active'
-  },
-  isAvailable: { type: Boolean, default: true },
-  isPurchased: { type: Boolean, default: false },
-  isOfflineEvent: { type: Boolean, default: false },
-  selectedClients: [{
-    id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
-    name: { type: String },
-    email: { type: String }
-  }],
-  features: [{ type: String }],
-  validUntil: { type: Date },
-  purchasedBy: [{
-    userId: { type: Schema.Types.ObjectId, ref: "User" },
-    orderId: { type: Schema.Types.ObjectId, ref: "Order" },
-    purchaseDate: { type: Date, default: Date.now },
-    expiryDate: { type: Date },
-    sessionsUsed: { type: Number, default: 0 }
-  }],
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-})
+
 
 // Gallery Files Schema
 const GalleryFileSchema = new Schema({
@@ -328,7 +231,7 @@ const UserSchema = new Schema(
       district: { type: String }, // Added
       address: { type: String },
       email: { type: String, required: true, unique: true },
-      password: { type: String, required: true },
+      password: { type: String },
       phone: { type: String, required: true },
       about: { type: String },
       trailerUrl: { type: String },
@@ -379,8 +282,9 @@ const UserSchema = new Schema(
     expertPackages: ExpertPackagesSchema,
 
     // New fields for services, packages, and gallery
-    services: [ServiceSchema],
-    packages: [PackageSchema],
+    // Services and Packages now stored in separate collections with ObjectId references
+    services: [{ type: Schema.Types.ObjectId, ref: "Service" }],
+    packages: [{ type: Schema.Types.ObjectId, ref: "Package" }],
     galleryFiles: [GalleryFileSchema],
     emails: [EmailSchema],
     // customers: [CustomerSchema],
@@ -437,6 +341,7 @@ const UserSchema = new Schema(
     favorites: { type: Array, default: [] },
     lastLogin: { type: String },
     token: { type: String },
+    refreshToken: { type: String }, // Added for JWT refresh token flow
     is_waiting: { type: Number, default: 0 },
     agreement: {
       status: { type: Boolean, default: false },
@@ -492,12 +397,12 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret
 
 //Generate Access token
 UserSchema.methods.generateAccessToken = function () {
-  return jwt.sign({ id: this._id }, ACCESS_TOKEN_SECRET, { expiresIn: "45m" });
+  return jwt.sign({ id: this._id }, ACCESS_TOKEN_SECRET, { expiresIn: "10m" });
 };
 
 //Generate Refresh tokens
 UserSchema.methods.generateRefreshToken = function () {
-  return jwt.sign({ id: this._id }, REFRESH_TOKEN_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ id: this._id }, REFRESH_TOKEN_SECRET, { expiresIn: "2h" });
 };
 
 
@@ -530,8 +435,7 @@ export {
   SubCategorySchema,
   ExpertPackagesSchema,
   ExpertPaymentInfoSchema,
-  ServiceSchema,
-  PackageSchema,
+
   GalleryFileSchema,
   SocialMediaSchema,
   CustomerNoteSchema,
