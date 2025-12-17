@@ -2,7 +2,7 @@ import mongoose, { Mongoose } from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-
+import BlogSchema from "./Blog.js";
 
 
 const { Schema } = mongoose;
@@ -57,7 +57,6 @@ const SkillSchema = new Schema({
 
 
 
-
 const AvailabilitySchema = new Schema({
   alwaysAvailable: { type: Boolean, default: false },
   selectedSlots: [{ type: String }],
@@ -87,100 +86,7 @@ const AppointmentMappingSchema = new Schema({
   lastSynced: { type: Date, default: Date.now },
 });
 
-// ---------------- Forms System ----------------
-const FormFieldSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  type: {
-    type: String,
-    enum: [
-      "text",
-      "email",
-      "phone",
-      "single-choice",
-      "multiple-choice",
-      "ranking",
-      "file-upload",
-    ],
-    required: true,
-  },
-  label: { type: String, required: true },
-  required: { type: Boolean, default: false },
-  placeholder: { type: String },
-  options: [{ type: String }],
-  validation: {
-    minLength: { type: Number },
-    maxLength: { type: Number },
-    pattern: { type: String },
-  },
-});
 
-const FormResponseSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  respondentName: { type: String },
-  respondentEmail: { type: String },
-  respondentPhone: { type: String },
-  responses: [
-    {
-      fieldId: { type: String, required: true },
-      fieldLabel: { type: String, required: true },
-      fieldType: { type: String, required: true },
-      value: { type: Schema.Types.Mixed },
-      files: [{ type: String }],
-    },
-  ],
-  submittedAt: { type: Date, default: Date.now },
-  ipAddress: { type: String },
-  userAgent: { type: String },
-});
-
-const FormSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  title: { type: String, required: true },
-  description: { type: String },
-  status: {
-    type: String,
-    enum: ["draft", "active", "inactive", "archived"],
-    default: "draft",
-  },
-  fields: [FormFieldSchema],
-  responses: [FormResponseSchema],
-  participantCount: { type: Number, default: 0 },
-  settings: {
-    allowMultipleSubmissions: { type: Boolean, default: false },
-    requireLogin: { type: Boolean, default: false },
-    showProgressBar: { type: Boolean, default: true },
-    customTheme: {
-      primaryColor: { type: String, default: "#3B82F6" },
-      backgroundColor: { type: String, default: "#FFFFFF" },
-    },
-    notifications: {
-      emailOnSubmission: { type: Boolean, default: true },
-      emailAddress: { type: String },
-    },
-  },
-  analytics: {
-    views: { type: Number, default: 0 },
-    starts: { type: Number, default: 0 },
-    completions: { type: Number, default: 0 },
-    averageCompletionTime: { type: Number, default: 0 },
-  },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
-
-// ---------------- Blog System ----------------
-const BlogSchema = new Schema({
-  id: { type: String, default: () => uuidv4() },
-  title: { type: String, required: true },
-  content: { type: String, required: true },
-  category: { type: String, required: true },
-  keywords: [{ type: String }],
-  status: { type: String, enum: ["draft", "published"], default: "draft" },
-  slug: { type: String, required: true },
-  author: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
 
 // ---------------- Events System ----------------
 const EventSchema = new Schema({
@@ -288,105 +194,8 @@ const ExpertPaymentInfoSchema = new Schema({
   taxOffice: { type: String },
 });
 
-// Services Schema
-const ServiceSchema = new Schema({
-  id: { type: String, required: true },
-  expertId: { type: Schema.Types.ObjectId, ref: "User" }, // Track which expert created this service
-  title: { type: String, required: true },
-  description: { type: String },
-  icon: { type: String },
-  iconBg: { type: String, default: '' },
-  price: { type: String, default: '0' },
-  discount: { type: Number, default: 0 },
-  duration: { type: String, default: '0' },
-  category: { type: String },
-  features: [{ type: String }],
-  date: { type: Date },
-  time: { type: String },
-  location: { type: String },
-  platform: { type: String },
-  eventType: {
-    type: String,
-    enum: ['online', 'offline', 'hybrid', ''],
-    default: 'online'
-  },
-  meetingType: {
-    type: String,
-    enum: ['1-1', 'grup', '']
-  },
-  maxAttendees: { type: Number },
-  isOfflineEvent: { type: Boolean, default: false },
-  selectedClients: [{
-    id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
-    name: { type: String },
-    email: { type: String }
-  }],
-  status: {
-    type: String, enum: ['active', 'inactive', 'onhold', ''], default: 'inactive'
-  },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
 
-//  packages Schema
-const PackageSchema = new Schema({
-  id: { type: String, required: true },
-  expertId: { type: Schema.Types.ObjectId, ref: "User" }, // Track which expert created this package
-  title: { type: String, required: true },
-  description: { type: String, default: '' },
-  price: { type: Number, default: 0 },
-  discount: { type: Number, default: 0 },
-  originalPrice: { type: Number },
-  duration: { type: Number, default: 0 }, // in minutes (for session duration)
-  appointmentCount: { type: Number, default: 1 }, // number of sessions/appointments
-  sessionsIncluded: { type: Number }, // legacy field, can be same as appointmentCount
-  category: {
-    type: String,
-    enum: ['egitim', 'danismanlik', 'workshop', 'mentorluk', ''],
-    default: ''
-  },
-  eventType: {
-    type: String,
-    enum: ['online', 'offline', 'hybrid'],
-    default: 'online'
-  },
-  meetingType: {
-    type: String,
-    enum: ['1-1', 'grup', ''],
-    default: ''
-  },
-  platform: { type: String, default: '' },
-  location: { type: String, default: '' },
-  date: { type: Date },
-  time: { type: String },
-  maxAttendees: { type: Number },
-  icon: { type: String, default: '📦' },
-  iconBg: { type: String, default: 'bg-primary-100' },
-  status: {
-    type: String,
-    enum: ['active', 'inactive', 'onhold'],
-    default: 'active'
-  },
-  isAvailable: { type: Boolean, default: true },
-  isPurchased: { type: Boolean, default: false },
-  isOfflineEvent: { type: Boolean, default: false },
-  selectedClients: [{
-    id: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
-    name: { type: String },
-    email: { type: String }
-  }],
-  features: [{ type: String }],
-  validUntil: { type: Date },
-  purchasedBy: [{
-    userId: { type: Schema.Types.ObjectId, ref: "User" },
-    orderId: { type: Schema.Types.ObjectId, ref: "Order" },
-    purchaseDate: { type: Date, default: Date.now },
-    expiryDate: { type: Date },
-    sessionsUsed: { type: Number, default: 0 }
-  }],
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-})
+
 
 // Gallery Files Schema
 const GalleryFileSchema = new Schema({
@@ -567,15 +376,9 @@ const UserSchema = new Schema(
 
     // Events system
     events: [EventSchema],
-
-    // Blog system
-    blogs: [BlogSchema],
-
+    blogs: [{ type: mongoose.Schema.Types.ObjectId, ref: "Blog" }],
     // Forms system
-    forms: [FormSchema],
-
-    // Customers system
-    // customers: [CustomerSchema],
+    forms: [{ type: mongoose.Schema.Types.ObjectId, ref: "Form" }],
 
     vacationMode: { type: Boolean, default: false },
     expertType: { type: Boolean, default: false },
@@ -691,14 +494,9 @@ export {
   ExperienceSchema,
   CertificateSchema,
   SkillSchema,
-  // AppointmentSchema,
   AvailabilitySchema,
   CalendarProviderSchema,
   AppointmentMappingSchema,
-  FormFieldSchema,
-  FormResponseSchema,
-  FormSchema,
-  BlogSchema,
   EventSchema,
   DiplomaSchema,
   LanguageSchema,
@@ -708,9 +506,6 @@ export {
   ServiceSchema,
   PackageSchema,
   GalleryFileSchema,
-  // CustomerSchema,
   SocialMediaSchema,
   CustomerNoteSchema,
-  // CustomerAppointmentSchema,
-  // CustomerSchema,
 };
