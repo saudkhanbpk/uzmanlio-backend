@@ -503,8 +503,7 @@ export {
   SubCategorySchema,
   ExpertPackagesSchema,
   ExpertPaymentInfoSchema,
-  ServiceSchema,
-  PackageSchema,
+
   GalleryFileSchema,
   SocialMediaSchema,
   CustomerNoteSchema,
