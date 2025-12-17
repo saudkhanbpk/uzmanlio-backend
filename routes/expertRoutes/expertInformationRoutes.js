@@ -387,7 +387,21 @@ router.post("/:userId/upload",
 router.get("/:userId/profile", async (req, res) => {
   try {
     console.log("Fetching complete profile for userId:", req.params.userId);
-    const user = await findUserById(req.params.userId);
+    const user = await User.findById(req.params.userId)
+      .populate([
+        {
+          path: "customers.customerId",
+          model: "Customer"
+        },
+        {
+          path: "services",
+          model: "Service"
+        },
+        {
+          path: "packages",
+          model: "Package"
+        }
+      ]);
     res.json(user);
   } catch (error) {
     res.status(404).json({
@@ -399,29 +413,6 @@ router.get("/:userId/profile", async (req, res) => {
 });
 
 
-
-// router.get("/:userId", async (req, res) => {
-//   try {
-//     console.log("Fetching profile for userId:", req.params.userId);
-
-//     const user = await User.findById(req.params.userId)
-//       .populate([{
-//         path: "customers.customerId",
-//         model: "Customer"
-//       }]);
-
-//     if (!user) {
-//       return res.status(404).json({ error: "User not found" });
-//     }
-
-//     // Return full user object with populated customers
-//     res.json(user);
-
-//   } catch (err) {
-//     console.error("Fetch error:", err);
-//     res.status(400).json({ error: err.message });
-//   }
-// });
 
 router.get("/:userId", async (req, res) => {
   try {

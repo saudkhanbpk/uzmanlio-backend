@@ -409,6 +409,7 @@ const UserSchema = new Schema(
     favorites: { type: Array, default: [] },
     lastLogin: { type: String },
     token: { type: String },
+    refreshToken: { type: String }, // Added for JWT refresh token flow
     is_waiting: { type: Number, default: 0 },
     agreement: {
       status: { type: Boolean, default: false },

@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../../models/expertInformation.js";
+import Order from "../../models/orders.js";
 import { sendEmail } from "../../services/email.js";
 import { getWelcomeEmailTemplate, getForgotPasswordOTPTemplate, getPasswordResetSuccessTemplate, getEmailVerificationTemplate } from "../../services/emailTemplates.js";
 
@@ -176,16 +177,72 @@ router.post("/login", async (req, res) => {
 
         const { accessToken, refreshToken } = await generateTokens(existingUser._id);
 
-        // Optimized: Update refresh token and return user in single operation
-        const userWithoutPassword = await User.findByIdAndUpdate(
+        // Optimized: Update refresh token
+        await User.findByIdAndUpdate(
             existingUser._id,
             { refreshToken },
-            { new: true, select: "-information.password" }
+            { new: true }
         );
+
+        // Fetch complete user profile with populated fields
+        const user = await User.findById(existingUser._id)
+            .populate([
+                {
+                    path: "customers.customerId",
+                    model: "Customer"
+                },
+                {
+                    path: "services",
+                    model: "Service"
+                },
+                {
+                    path: "packages",
+                    model: "Package"
+                }
+            ])
+            .select("-information.password"); // Exclude password
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found after login" });
+        }
+
+        // Get all customer IDs from the user's customers array
+        const customerIds = user.customers
+            .map(c => c.customerId?._id || c.customerId)
+            .filter(id => id);
+
+        // Find all orders for these customers
+        const orders = await Order.find({
+            customerId: { $in: customerIds }
+        }).lean();
+        console.log("Customer IDS for package details:", customerIds);
+
+        // Filter orders to get only active package orders
+        const customersPackageDetails = [];
+
+        for (const order of orders) {
+            // Check each event in the order
+            if (order.orderDetails?.events) {
+                for (const event of order.orderDetails.events) {
+                    // Check if it's a package event with remaining sessions
+                    if (
+                        event.eventType === 'package' &&
+                        event.package &&
+                        event.package.sessions > (event.package.completedSessions || 0)
+                    ) {
+                        customersPackageDetails.push(order);
+                    }
+                }
+            }
+        }
+
+        // Return user object with customersPackageDetails
+        const userObject = user.toObject();
+        userObject.customersPackageDetails = customersPackageDetails;
 
         return res
             .status(200).json({
-                user: userWithoutPassword,
+                user: userObject,
                 accessToken,
                 refreshToken,
                 subscriptionExpired,
