@@ -12,5 +12,10 @@ router.put("/:userId/forms/:formId", formController.updateForm);
 router.delete("/:userId/forms/:formId", formController.deleteForm);
 router.post("/:userId/forms/:formId/duplicate", formController.duplicateForm);
 router.patch("/:userId/forms/:formId/status", formController.updateFormStatus);
+// ==================== FORM RESPONSES ROUTES ====================
+router.get("/:userId/forms/:formId/responses", formController.getFormResponses);
+router.post("/:userId/forms/:formId/submit", formController.submitFormResponse);
+router.get("/:userId/forms/:formId/analytics", formController.getFormAnalytics);
+router.get("/:userId/forms/stats", formController.getFormsStatistics);
 
 export default router;
