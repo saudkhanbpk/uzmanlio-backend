@@ -30,6 +30,7 @@ import reportsRoutes from "./routes/expertRoutes/reportsRoutes.js";
 import institutionDataRoutes from "./routes/expertRoutes/institutionDataRoutes.js";
 import analyticsRoutes from "./routes/expertRoutes/analyticsRoutes.js";
 import parasutRoute from "./routes/customerRoutes/parasut.routes.js";
+import customerRoutes from "./routes/expertRoutes/customerRoutes.js";
 import fs from "fs";
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
@@ -167,7 +168,9 @@ app.use("/api/expert", purchaseRoutes);
 app.use("/api/expert", paymentRoutes);
 app.use("/api/expert", reportsRoutes);
 app.use("/api/expert", institutionDataRoutes); // Institution-wide data aggregation
+app.use("/api/expert", customerRoutes);  // Customer Routes
 app.use("/api/analytics", analyticsRoutes); // GA4 Analytics routes
+
 
 // parasut route
 app.use("/api/v1/parasut", parasutRoute);
@@ -248,7 +251,6 @@ process.on("SIGTERM", async () => {
 if (process.env.NODE_ENV !== 'test') {
   backgroundJobService.init();
 }
-// Customer Routes
 // Booking Page Routes
 app.use("/api/booking/customers", bookingPage);
 
