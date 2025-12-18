@@ -1,6 +1,7 @@
 import Agenda from "agenda";
 import mongoose from "mongoose";
 import User from "../models/expertInformation.js";
+import Event from "../models/event.js"; // Import Event model
 import Customer from "../models/customer.js";
 import { sendEmail, sendBulkEmail } from "./email.js";
 import { sendSms } from "./netgsmService.js";
@@ -53,7 +54,10 @@ agenda.define("sendEventReminder", { priority: "high", concurrency: 3 }, async (
       return;
     }
 
-    const event = (user.events || []).find(e => String(e.id) === String(eventId) || String(e._id) === String(eventId));
+    // Refactored: Fetch event directly from Event collection
+    // Check if eventId is a valid ObjectId before querying (though findById handles string usually)
+    const event = await Event.findById(eventId).lean();
+
     if (!event) {
       console.warn("sendEventReminder: event not found", eventId, "for user", userId);
       return;

@@ -306,7 +306,6 @@ const UserSchema = new Schema(
     appointmentMappings: [AppointmentMappingSchema],
 
     // Events system
-    // events: [EventSchema],
     events: [{ type: mongoose.Schema.Types.ObjectId, ref: "Event" }],
     blogs: [{ type: mongoose.Schema.Types.ObjectId, ref: "Blog" }],
     // Forms system
