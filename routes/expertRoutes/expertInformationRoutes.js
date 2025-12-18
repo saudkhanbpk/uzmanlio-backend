@@ -60,9 +60,7 @@ const findUserById = async (userId) => {
   return user;
 };
 
-
 // =================== AGENDA HELPERS ===================
-
 const parseEventDateTime = (dateStr, timeStr) => {
   if (!dateStr) return null;
   const timePart = timeStr ? timeStr.trim() : "00:00";
@@ -93,8 +91,6 @@ const cancelAgendaJob = async (jobId) => {
     return false;
   }
 };
-
-
 const scheduleReminderForEvent = async (user, event) => {
   if (!agenda || !event || !event.date) return null;
 
@@ -148,8 +144,6 @@ const scheduleReminderForEvent = async (user, event) => {
     return null;
   }
 };
-
-
 const rescheduleReminderForEvent = async (user, event, oldJobId) => {
   try {
     if (oldJobId) {
@@ -161,12 +155,7 @@ const rescheduleReminderForEvent = async (user, event, oldJobId) => {
     return null;
   }
 };
-
-
-
-
 // ==================== PROFILE IMAGE UPLOAD ====================
-
 // Create expert profile upload configuration
 const expertProfileUpload = createMulterUpload({
   uploadPath: "uploads/Experts_Files/Expert-Users",
@@ -211,7 +200,6 @@ router.get("/debug/users", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 // Profile picture upload route
 router.post("/:userId/upload",
@@ -364,10 +352,7 @@ router.post("/:userId/upload",
     }
   }
 );
-
-
 // ==================== BASIC PROFILE ROUTES ====================
-
 // Get complete expert profile (specific route first)
 router.get("/:userId/profile", async (req, res) => {
   try {
@@ -408,8 +393,6 @@ router.get("/:userId/profile", async (req, res) => {
     });
   }
 });
-
-
 
 router.get("/:userId", async (req, res) => {
   try {
@@ -502,11 +485,6 @@ router.get("/:userId", async (req, res) => {
   }
 });
 
-
-
-
-
-
 router.put("/:userId", async (req, res) => {
   try {
     console.log("Updating profile for userId:", req.params.userId);
@@ -559,7 +537,6 @@ router.patch("/:userId", async (req, res) => {
     res.status(500).json({ error: "Error patching profile", details: err.message });
   }
 });
-
 
 // ==================== TITLE ROUTES ====================
 
@@ -653,7 +630,6 @@ router.delete("/:userId/titles/:titleId", async (req, res) => {
 });
 
 // ==================== CATEGORIES ROUTES ====================
-
 // Get expert categories
 router.get("/:userId/categories", async (req, res) => {
   try {
@@ -709,7 +685,6 @@ router.delete("/:userId/categories/:categoryId", async (req, res) => {
 });
 
 // ==================== EDUCATION ROUTES ====================
-
 // Get education
 router.get("/:userId/education", async (req, res) => {
   try {
@@ -806,7 +781,6 @@ router.delete("/:userId/education/:educationId", async (req, res) => {
 });
 
 // ==================== CERTIFICATES ROUTES ====================
-
 // Get certificates
 router.get("/:userId/certificates", async (req, res) => {
   try {
@@ -897,7 +871,6 @@ router.delete("/:userId/certificates/:certificateId", async (req, res) => {
 });
 
 // ==================== EXPERIENCE ROUTES ====================
-
 // Get experience
 router.get("/:userId/experience", async (req, res) => {
   try {
@@ -988,7 +961,6 @@ router.delete("/:userId/experience/:experienceId", async (req, res) => {
 });
 
 // ==================== SKILLS ROUTES ====================
-
 // Get skills
 router.get("/:userId/skills", async (req, res) => {
   try {
@@ -1076,7 +1048,6 @@ router.delete("/:userId/skills/:skillId", async (req, res) => {
 });
 
 // ==================== CALENDAR & AVAILABILITY ROUTES ====================
-
 // Get availability settings
 router.get("/:userId/availability", async (req, res) => {
   try {
