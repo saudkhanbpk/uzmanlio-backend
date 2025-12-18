@@ -1,6 +1,9 @@
 import Agenda from "agenda";
 import User from "../models/expertInformation.js";
 import Order from "../models/orders.js";
+import Event from "../models/event.js"; // Import Event model
+import Package from "../models/package.js"; // Import Package model
+import Service from "../models/service.js"; // Import Service model
 import { v4 as uuidv4 } from "uuid";
 import Customer from "../models/customer.js";
 import EventRepetitionWarning from "../models/eventRepetitionWarnings.js";
@@ -67,26 +70,30 @@ agenda.define("create-repeated-event", async (job) => {
     console.log(`🔄 Creating repetition ${currentRepetition}/${totalRepetitions} for event ${originalEventId}`);
 
     try {
-        // Fetch user from database
+        // Fetch user from database (still needed for expert info)
         const user = await User.findById(userId);
         if (!user) {
             console.error(`❌ User ${userId} not found for repetition`);
             return;
         }
 
-        // Fetch the ORIGINAL event from database using ObjectId
-        const originalEvent = user.events.find(e => e._id.toString() === originalEventId.toString());
+        // Fetch the ORIGINAL event from EVENT COLLECTION
+        const originalEvent = await Event.findById(originalEventId);
+
         if (!originalEvent) {
-            console.error(`❌ Original event ${originalEventId} not found in user's events`);
+            console.error(`❌ Original event ${originalEventId} not found in database`);
             return;
         }
 
         console.log(`✅ Found original event: ${originalEvent.title}`);
 
-        // Create new event based on ORIGINAL event data from database
+        // Create new event based on ORIGINAL event data
+        // Use separate Event model
         const newEventId = uuidv4();
-        const newEvent = {
+
+        const newEventData = {
             id: newEventId,
+            expertId: userId, // Ensure expertId is set
             title: originalEvent.title,
             description: originalEvent.description,
             serviceId: originalEvent.serviceId,
@@ -116,8 +123,11 @@ agenda.define("create-repeated-event", async (job) => {
             updatedAt: new Date(),
         };
 
-        // Add event to user's events
-        user.events.push(newEvent);
+        // Save new event to Event collection
+        const createdEvent = await Event.create(newEventData);
+        console.log(`✅ Created repeated event ${createdEvent._id}`);
+
+        // We DO NOT push to user.events anymore!
 
         // Arrays to track issues
         const insufficientSessionsCustomers = [];
@@ -186,7 +196,7 @@ agenda.define("create-repeated-event", async (job) => {
             }
         }
 
-        await user.save();
+        // Removed await user.save() since we are not updating user.events
 
         // === Create orders for customers without packages ===
         if (originalEvent.paymentType && Array.isArray(originalEvent.paymentType)) {
@@ -258,30 +268,23 @@ agenda.define("create-repeated-event", async (job) => {
                                 // Add order ID to customer's orders
                                 customerDoc.orders.push(newOrder._id);
 
-                                // Add event ID to customer's appointments (using the newly created event's MongoDB _id)
-                                // We need to get the saved event's _id
-                                const userWithNewEvent = await User.findById(userId);
-                                const createdEventDoc = userWithNewEvent.events.find(e => e.id === newEvent.id);
-                                if (createdEventDoc) {
-                                    customerDoc.appointments.push(createdEventDoc._id);
-                                }
+                                // Add event ID to customer's appointments
+                                customerDoc.appointments.push(createdEvent._id);
 
                                 await customerDoc.save();
                                 console.log(`✅ Updated customer ${customer.name} - Added order and appointment for repetition`);
                             }
-                            // Update the newly created event's payment type with the order ID
-                            const userToUpdate = await User.findById(userId);
-                            const createdEvent = userToUpdate.events.find(e => e.id === newEvent.id);
 
-                            if (createdEvent && createdEvent.paymentType) {
-                                const paymentIndex = createdEvent.paymentType.findIndex(
-                                    p => p.customerId?.toString() === customerId
-                                );
-                                if (paymentIndex !== -1) {
-                                    createdEvent.paymentType[paymentIndex].orderId = newOrder._id;
-                                    await userToUpdate.save();
-                                    console.log(`✅ Updated repetition event payment type with order ID ${newOrder._id}`);
-                                }
+                            // Update the newly created event's payment type with the order ID
+                            // DIRECTLY UPDATE EVENT DOCUMENT
+                            const paymentIndex = createdEvent.paymentType.findIndex(
+                                p => p.customerId?.toString() === customerId
+                            );
+
+                            if (paymentIndex !== -1) {
+                                createdEvent.paymentType[paymentIndex].orderId = newOrder._id;
+                                await createdEvent.save();
+                                console.log(`✅ Updated repetition event payment type with order ID ${newOrder._id}`);
                             }
 
                         } catch (orderError) {
@@ -472,7 +475,7 @@ agenda.define("create-repeated-event", async (job) => {
 
                 const warningDoc = await EventRepetitionWarning.create({
                     userId: userId,
-                    eventId: newEvent._id,
+                    eventId: createdEvent._id, // Use new created event ID
                     Details: warningDetails,
                     warningDate: new Date(),
                     warningStatus: "Pending"
@@ -493,19 +496,12 @@ agenda.define("create-repeated-event", async (job) => {
             }
         }
 
-        // Update completedRepetitions on the ORIGINAL event
+        // Update completedRepetitions on the ORIGINAL event document directly
         try {
-            const updatedUser = await User.findById(userId);
-            const originalEventToUpdate = updatedUser.events.find(
-                e => e._id.toString() === originalEventId.toString()
-            );
-
-            if (originalEventToUpdate) {
-                originalEventToUpdate.completedRepetitions =
-                    (originalEventToUpdate.completedRepetitions || 0) + 1;
-                await updatedUser.save();
-                console.log(`✅ Updated original event completedRepetitions to ${originalEventToUpdate.completedRepetitions}`);
-            }
+            await Event.findByIdAndUpdate(originalEventId, {
+                $inc: { completedRepetitions: 1 }
+            });
+            console.log(`✅ Updated original event completedRepetitions`);
         } catch (updateError) {
             console.error(`❌ Error updating completedRepetitions:`, updateError);
         }
@@ -517,6 +513,7 @@ agenda.define("create-repeated-event", async (job) => {
             const [year, month, day] = dateStr.split('-').map(Number);
             const [hours, minutes] = timeStr.split(':').map(Number);
 
+            // Note: Months are 0-indexed in JS Date
             const currentDate = new Date(year, month - 1, day, hours, minutes);
             let nextRepetitionDate = new Date(currentDate);
 
@@ -546,16 +543,11 @@ agenda.define("create-repeated-event", async (job) => {
             console.log(`🎉 All ${totalRepetitions} repetitions completed!`);
 
             try {
-                const finalUser = await User.findById(userId);
-                const finalOriginalEvent = finalUser.events.find(
-                    e => e._id.toString() === originalEventId.toString()
-                );
-
-                if (finalOriginalEvent) {
-                    finalOriginalEvent.completedRepetitions = totalRepetitions;
-                    await finalUser.save();
-                    console.log(`✅ Marked original event as fully completed (${totalRepetitions}/${totalRepetitions})`);
-                }
+                // Ensure final state is correct (redundant if increment worked, but good for safety)
+                await Event.findByIdAndUpdate(originalEventId, {
+                    completedRepetitions: totalRepetitions
+                });
+                console.log(`✅ Marked original event as fully completed (${totalRepetitions}/${totalRepetitions})`);
             } catch (finalError) {
                 console.error(`❌ Error marking event as completed:`, finalError);
             }

@@ -2,6 +2,19 @@ import Event from "../models/event.js";
 import User from "../models/expertInformation.js";
 import mongoose from "mongoose";
 import Customer from "../models/customer.js";
+import Order from "../models/orders.js";
+import { scheduleEventReminder as scheduleReminderForEvent, updateEventReminder as rescheduleReminderForEvent, cancelEventReminder } from "../services/agendaService.js";
+import { scheduleRepeatedEvents, cancelRepeatedEvents } from "../services/repetitionAgendaService.js";
+import { sendEmail } from "../services/email.js";
+import {
+    getExpertEventCreatedTemplate,
+    getClient11SessionTemplate,
+    getClientGroupSessionTemplate,
+    getClientPackageSessionTemplate,
+    getGroupSessionConfirmationTemplate,
+    getClientAppointmentCreatedTemplate
+} from "../services/eventEmailTemplates.js";
+import calendarSyncService from "../services/calendarSyncService.js";
 
 // Helper function to find user by ID
 const findUserById = async (userId) => {
@@ -244,7 +257,9 @@ export const createEvent = async (req, res) => {
         await user.save();
 
         const savedUser = await User.findById(req.params.userId);
-        const savedEvent = savedUser.events.find((e) => e.id === event.id);
+        // Fetch the saved event from the Event collection directly instead of from user.events
+        // (user.events only contains ObjectId references, not full Event documents)
+        const savedEvent = await Event.findById(event._id);
 
         // === Create orders for customers without packages ===
         if (eventData.paymentType && Array.isArray(eventData.paymentType)) {
@@ -338,7 +353,8 @@ export const createEvent = async (req, res) => {
         //Create the Agenda instance
         try {
             if (savedEvent) {
-                const jobId = await scheduleReminderForEvent(savedUser, savedEvent);
+                // Note: scheduleEventReminder expects (event, userId)
+                const jobId = await scheduleReminderForEvent(savedEvent, savedUser._id);
                 if (jobId) {
                     savedEvent.agendaJobId = jobId;
                     await savedUser.save();
@@ -780,10 +796,10 @@ export const updateEvent = async (req, res) => {
         // ===== Reschedule agenda job if date/time changed =====
         if (dateChanged || timeChanged) {
             try {
+                // Note: updateEventReminder expects (event, userId) and handles old job cancellation internally
                 const newJobId = await rescheduleReminderForEvent(
-                    user,
                     existingEvent,
-                    oldAgendaJobId
+                    user._id
                 );
 
                 existingEvent.agendaJobId = newJobId || undefined;
