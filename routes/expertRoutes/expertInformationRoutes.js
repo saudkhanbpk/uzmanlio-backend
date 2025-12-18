@@ -26,6 +26,7 @@ import {
 import { sendSms } from "../../services/netgsmService.js";
 import agenda from "../../services/agendaService.js";
 import Order from "../../models/orders.js";
+import Event from "../../models/event.js";
 import { scheduleRepeatedEvents } from "../../services/repetitionAgendaService.js";
 import expertEventController from "../../controllers/expertEventController.js";
 const router = express.Router();
@@ -402,7 +403,19 @@ router.get("/:userId/profile", async (req, res) => {
           model: "Package"
         }
       ]);
-    res.json(user);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Fetch events from the Event collection (since events are now a separate model)
+    const userEvents = await Event.find({ expertId: req.params.userId }).lean();
+
+    // Return user object with populated events
+    const userObject = user.toObject();
+    userObject.events = userEvents;
+
+    res.json(userObject);
   } catch (error) {
     res.status(404).json({
       error: error.message,
@@ -492,6 +505,10 @@ router.get("/:userId", async (req, res) => {
     // Return user object with customersPackageDetails
     const userObject = user.toObject();
     userObject.customersPackageDetails = customersPackageDetails;
+
+    // Fetch events from the Event collection (since events are now a separate model)
+    const userEvents = await Event.find({ expertId: req.params.userId }).lean();
+    userObject.events = userEvents;
 
     res.json(userObject);
 
