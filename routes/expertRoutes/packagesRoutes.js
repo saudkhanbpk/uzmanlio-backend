@@ -1,4 +1,5 @@
 import express from "express";
+import { checkInstitutionAdmin } from "../../middlewares/institutionAuth.js";
 import {
   getPackages,
   getActivePackages,
@@ -24,16 +25,16 @@ router.get("/:userId/packages/active", getActivePackages);
 router.get("/:userId/packages/available", getAvailablePackages);
 
 // Create package
-router.post("/:userId/packages", createPackage);
+router.post("/:userId/packages", checkInstitutionAdmin, createPackage);
 
 // Update package
-router.put("/:userId/packages/:packageId", updatePackage);
+router.put("/:userId/packages/:packageId", checkInstitutionAdmin, updatePackage);
 
 // Delete package
-router.delete("/:userId/packages/:packageId", deletePackage);
+router.delete("/:userId/packages/:packageId", checkInstitutionAdmin, deletePackage);
 
 // Toggle package availability
-router.patch("/:userId/packages/:packageId/toggle-available", togglePackageAvailable);
+router.patch("/:userId/packages/:packageId/toggle-available", checkInstitutionAdmin, togglePackageAvailable);
 
 // Get package purchase history
 router.get("/:userId/packages/:packageId/purchases", getPackagePurchases);
