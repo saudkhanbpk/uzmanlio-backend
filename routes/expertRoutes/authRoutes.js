@@ -146,6 +146,12 @@ router.post("/login", async (req, res) => {
     try {
         const useremail = req.body.email;
         const userPassword = req.body.password;
+
+        // Security: Ensure inputs are strings to prevent NoSQL injection via objects
+        if (typeof useremail !== 'string' || typeof userPassword !== 'string') {
+            return res.status(400).json({ message: "Invalid input format" });
+        }
+
         if (!useremail || !userPassword) throw new ApiError(400, "Please provide email and password");
 
         // Optimized: Only fetch essential fields for password check first

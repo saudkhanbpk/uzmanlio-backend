@@ -34,7 +34,7 @@ const EventSchema = new Schema({
         customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
         paymentMethod: {  // CHANGED from 'type' to 'paymentMethod'
             type: String,
-            enum: ["online", "havale-eft", "paketten-tahsil"],
+            enum: ["card", "online", "havale-eft", "paketten-tahsil"],
             default: "online"
         },
         packageId: { type: mongoose.Schema.Types.ObjectId, ref: "Package" },

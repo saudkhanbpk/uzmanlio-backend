@@ -6,6 +6,7 @@ import compression from "compression";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
+import mongoSanitize from "express-mongo-sanitize"; // Security: NoSQL Injection Prevention
 import profileRoutes from "./routes/expertRoutes/expertInformationRoutes.js";
 import servicesRoutes from "./routes/expertRoutes/servicesRoutes.js";
 import packagesRoutes from "./routes/expertRoutes/packagesRoutes.js";
@@ -45,6 +46,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Cors must be first
+app.use(cors());
+
 // Performance middleware - must be early in stack
 app.use(compression()); // Enable gzip compression for all responses
 app.use(express.json({ limit: '10mb' })); // Limit payload size
@@ -71,7 +75,13 @@ const {
   ignoredMethods: ["GET", "HEAD", "OPTIONS"],
   getTokenFromRequest: (req) => req.headers["x-csrf-token"],
 });
-
+// Custom middleware to sanitize inputs without reassigning read-only properties (fixes Express 5 issue)
+app.use((req, res, next) => {
+  if (req.body) mongoSanitize.sanitize(req.body);
+  if (req.params) mongoSanitize.sanitize(req.params);
+  if (req.query) mongoSanitize.sanitize(req.query);
+  next();
+});
 // CSRF Protection Endpoint
 app.get("/api/csrf-token", (req, res) => {
   const token = generateToken(req, res);
