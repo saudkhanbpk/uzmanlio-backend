@@ -10,6 +10,7 @@ import {
   togglePackageAvailable,
   getPackagePurchases,
 } from "../../controllers/packageController.js";
+import { verifyAccessToken } from "../../middlewares/auth.js";
 
 const router = express.Router();
 
@@ -25,16 +26,16 @@ router.get("/:userId/packages/active", getActivePackages);
 router.get("/:userId/packages/available", getAvailablePackages);
 
 // Create package
-router.post("/:userId/packages", checkInstitutionAdmin, createPackage);
+router.post("/:userId/packages", verifyAccessToken, checkInstitutionAdmin, createPackage);
 
 // Update package
-router.put("/:userId/packages/:packageId", checkInstitutionAdmin, updatePackage);
+router.put("/:userId/packages/:packageId", verifyAccessToken, checkInstitutionAdmin, updatePackage);
 
 // Delete package
-router.delete("/:userId/packages/:packageId", checkInstitutionAdmin, deletePackage);
+router.delete("/:userId/packages/:packageId", verifyAccessToken, checkInstitutionAdmin, deletePackage);
 
 // Toggle package availability
-router.patch("/:userId/packages/:packageId/toggle-available", checkInstitutionAdmin, togglePackageAvailable);
+router.patch("/:userId/packages/:packageId/toggle-available", verifyAccessToken, checkInstitutionAdmin, togglePackageAvailable);
 
 // Get package purchase history
 router.get("/:userId/packages/:packageId/purchases", getPackagePurchases);
