@@ -8,6 +8,7 @@ import { createMulterUpload, handleMulterError } from "../../middlewares/upload.
 import User from "../../models/expertInformation.js";
 import Institution from "../../models/institution.js";
 import { checkInstitutionAdmin } from "../../middlewares/institutionAuth.js";
+import { verifyAccessToken } from "../../middlewares/auth.js";
 
 const router = express.Router();
 
@@ -120,11 +121,15 @@ const institutionFilesUpload = createMulterUpload({
 });
 
 /////////Get Institution Profile/////////
-router.get("/:userId/institution", async (req, res) => {
+// /////////Get Institution Profile/////////
+// Protected: Only the Institution Admin can view the full profile including invited users
+// /////////Get Institution Profile/////////
+// Protected: Only the Institution Admin can view the full profile including invited users
+router.get("/:userId/institution", verifyAccessToken, checkInstitutionAdmin, async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const institution = await Institution.findOne({ Admin: user._id });
-    return res.json({ institution: institution || {} });
+    // Middleware already validated user and fetched institution
+    // req.institution is available
+    return res.json({ institution: req.institution });
   } catch (error) {
     console.error("Error fetching institution:", error);
     res.status(500).json({ error: error.message });
@@ -135,20 +140,22 @@ router.get("/:userId/institution", async (req, res) => {
 /////////Update Institution Profile/////////
 // Use multer middleware to handle multipart form data
 
-router.put("/:userId/institution/Update", institutionFilesUpload.fields([
+router.put("/:userId/institution/Update", verifyAccessToken, checkInstitutionAdmin, institutionFilesUpload.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'axe', maxCount: 1 }
-]), checkInstitutionAdmin, async (req, res) => {
+]), async (req, res) => {
   try {
     console.log("Updating institution:", req.params.userId);
 
     const { name, bio, about } = req.body;
-    const user = await findUserById(req.params.userId);
+    // req.user is already provided by checkInstitutionAdmin
+    const user = req.user;
 
     const logoPath = req.files?.logo?.[0]?.path || null;
     const axePath = req.files?.axe?.[0]?.path || null;
 
-    let institution = await Institution.findOne({ Admin: user._id });
+    // req.institution is provided by middleware (or null if creating)
+    let institution = req.institution;
 
     // 1️⃣ Create new institution if not found
     if (!institution) {
@@ -176,6 +183,7 @@ router.put("/:userId/institution/Update", institutionFilesUpload.fields([
     }
 
     // 2️⃣ Update Existing Institution
+    // User is authorized to update THEIR institution (guaranteed by middleware)
     if (name) institution.name = name;
     if (bio) institution.bio = bio;
     if (about) institution.about = about;
@@ -220,17 +228,12 @@ import { sendEmail } from '../../services/email.js';
 import { getSubUserInvitationTemplate } from '../../services/emailTemplates.js';
 import crypto from 'crypto';
 
-// ... (keep existing imports and setup)
-
-// ========== INVITED USERS ROUTES (Updated to use SubUserInvitation) ==========
-
-// ========== INVITED USERS ROUTES (Using Institution Model) ==========
-
-// Get invited users
-router.get("/:userId/institution/invited-users", async (req, res) => {
+// Protected: Only Admin can see invited users
+router.get("/:userId/institution/invited-users", verifyAccessToken, checkInstitutionAdmin, async (req, res) => {
   try {
-    const user = await findUserById(req.params.userId);
-    const institution = await Institution.findOne({ Admin: user._id }).populate('invitedUsers.acceptedByUserId', 'information');
+    // Middleware provided institution
+    await req.institution.populate('invitedUsers.acceptedByUserId', 'information');
+    const institution = req.institution;
 
     if (!institution) {
       return res.json({ invitedUsers: [] });
@@ -268,26 +271,26 @@ router.get("/:userId/institution/invited-users", async (req, res) => {
 });
 
 // Add invited user to institution (Send Email)
-router.post("/:userId/institution/invite-user", checkInstitutionAdmin, async (req, res) => {
+router.post("/:userId/institution/invite-user", verifyAccessToken, checkInstitutionAdmin, async (req, res) => {
   try {
     const { name, email } = req.body;
-    const inviterUserId = req.params.userId;
+    // req.user is set by middleware
+    const user = req.user;
+    // req.institution is set by middleware
+    const institution = req.institution;
 
     if (!email) {
       return res.status(400).json({ error: "Geçerli bir E-Posta Adresi Girin" });
     }
 
-    const user = await findUserById(inviterUserId);
-    const institution = await Institution.findOne({ Admin: user._id });
-
     if (!institution) {
-      return res.status(400).json({ error: "User has no institution" });
+      return res.status(400).json({ error: "Institution not found. Please create an institution profile first." });
     }
 
     // Check if user is already a sub-user in the system (optional, but good practice)
     const existingSubUser = await User.findOne({
       'information.email': email,
-      parentUserId: inviterUserId
+      parentUserId: user._id
     });
     if (existingSubUser) {
       // return res.status(400).json({ error: 'This email is already a sub-user in your team' });
@@ -356,13 +359,12 @@ router.post("/:userId/institution/invite-user", checkInstitutionAdmin, async (re
 });
 
 // Remove invited user
-router.delete("/:userId/institution/invited-users/:id", checkInstitutionAdmin, async (req, res) => {
+router.delete("/:userId/institution/invited-users/:id", verifyAccessToken, checkInstitutionAdmin, async (req, res) => {
   try {
     const invitationId = req.params.id;
-    const inviterUserId = req.params.userId;
-
-    const user = await findUserById(inviterUserId);
-    const institution = await Institution.findOne({ Admin: user._id });
+    // req.user provided by middleware
+    const user = req.user;
+    const institution = req.institution;
 
     if (!institution) {
       return res.status(404).json({ error: "Institution not found" });
@@ -377,7 +379,7 @@ router.delete("/:userId/institution/invited-users/:id", checkInstitutionAdmin, a
 
     // If accepted, unlink user
     if (invite.status === 'accepted' && invite.acceptedByUserId) {
-      await User.findByIdAndUpdate(inviterUserId, {
+      await User.findByIdAndUpdate(user._id, {
         $pull: { subUsers: invite.acceptedByUserId }
       });
       await User.findByIdAndUpdate(invite.acceptedByUserId, {
@@ -391,9 +393,7 @@ router.delete("/:userId/institution/invited-users/:id", checkInstitutionAdmin, a
     await institution.save();
 
     // Return updated list
-    // Re-fetch to populate if needed, or just filter memory
-    // Let's re-fetch to be safe and consistent
-    const updatedInstitution = await Institution.findOne({ Admin: user._id }).populate('invitedUsers.acceptedByUserId', 'information');
+    const updatedInstitution = await Institution.findById(institution._id).populate('invitedUsers.acceptedByUserId', 'information');
 
     const mappedInvitations = updatedInstitution.invitedUsers.map(inv => {
       let name = inv.name || inv.email.split('@')[0];
@@ -417,13 +417,12 @@ router.delete("/:userId/institution/invited-users/:id", checkInstitutionAdmin, a
 });
 
 // Resend invitation
-router.post("/:userId/institution/resend-invite/:email", checkInstitutionAdmin, async (req, res) => {
+router.post("/:userId/institution/resend-invite/:email", verifyAccessToken, checkInstitutionAdmin, async (req, res) => {
   try {
     const param = req.params.email; // Can be email or ID
-    const inviterUserId = req.params.userId;
-
-    const user = await findUserById(inviterUserId);
-    const institution = await Institution.findOne({ Admin: user._id });
+    // req.user provided by middleware
+    const user = req.user;
+    const institution = req.institution;
 
     if (!institution) {
       return res.status(404).json({ error: "Institution not found" });

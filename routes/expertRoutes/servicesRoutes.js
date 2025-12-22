@@ -9,6 +9,7 @@ import {
   deleteService,
   toggleServiceActive,
 } from "../../controllers/serviceController.js";
+import { verifyAccessToken } from "../../middlewares/auth.js";
 
 const router = express.Router();
 
@@ -24,15 +25,15 @@ router.get("/:userId/services/active", getActiveServices);
 router.get("/:userId/services/:serviceId", getServiceById);
 
 // Create service
-router.post("/:userId/services", checkInstitutionAdmin, createService);
+router.post("/:userId/services", verifyAccessToken, checkInstitutionAdmin, createService);
 
 // Update service
-router.put("/:userId/services/:serviceId", checkInstitutionAdmin, updateService);
+router.put("/:userId/services/:serviceId", verifyAccessToken, checkInstitutionAdmin, updateService);
 
 // Delete service
-router.delete("/:userId/services/:serviceId", checkInstitutionAdmin, deleteService);
+router.delete("/:userId/services/:serviceId", verifyAccessToken, checkInstitutionAdmin, deleteService);
 
 // Toggle service active status
-router.patch("/:userId/services/:serviceId/toggle-active", checkInstitutionAdmin, toggleServiceActive);
+router.patch("/:userId/services/:serviceId/toggle-active", verifyAccessToken, checkInstitutionAdmin, toggleServiceActive);
 
 export default router;

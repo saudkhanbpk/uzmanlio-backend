@@ -1,5 +1,6 @@
 import express from "express";
 import fs from "fs";
+import { verifyAccessToken } from "../../middlewares/auth.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import mongoose from "mongoose";
@@ -203,6 +204,7 @@ router.get("/debug/users", async (req, res) => {
 
 // Profile picture upload route
 router.post("/:userId/upload",
+  verifyAccessToken,
   // Validation and existing image check middleware
   async (req, res, next) => {
     try {
@@ -485,7 +487,7 @@ router.get("/:userId", async (req, res) => {
   }
 });
 
-router.put("/:userId", async (req, res) => {
+router.put("/:userId", verifyAccessToken, async (req, res) => {
   try {
     console.log("Updating profile for userId:", req.params.userId);
     const expertInformation = await User.findByIdAndUpdate(
@@ -513,7 +515,7 @@ router.put("/:userId", async (req, res) => {
   }
 });
 
-router.patch("/:userId", async (req, res) => {
+router.patch("/:userId", verifyAccessToken, async (req, res) => {
   try {
     console.log("Patching profile for userId:", req.params.userId);
     const expertInformation = await User.findByIdAndUpdate(
@@ -551,7 +553,7 @@ router.get("/:userId/titles", async (req, res) => {
 });
 
 // Add expert title
-router.post("/:userId/titles", async (req, res) => {
+router.post("/:userId/titles", verifyAccessToken, async (req, res) => {
   try {
     const { title, description } = req.body;
     const user = await findUserById(req.params.userId);
@@ -576,7 +578,7 @@ router.post("/:userId/titles", async (req, res) => {
 });
 
 // Update expert title
-router.put("/:userId/titles/:titleId", async (req, res) => {
+router.put("/:userId/titles/:titleId", verifyAccessToken, async (req, res) => {
   try {
     const { title, description } = req.body;
     const user = await findUserById(req.params.userId);
@@ -610,7 +612,7 @@ router.put("/:userId/titles/:titleId", async (req, res) => {
 });
 
 // Delete expert title
-router.delete("/:userId/titles/:titleId", async (req, res) => {
+router.delete("/:userId/titles/:titleId", verifyAccessToken, async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
 
@@ -641,7 +643,7 @@ router.get("/:userId/categories", async (req, res) => {
 });
 
 // Add expert category
-router.post("/:userId/categories", async (req, res) => {
+router.post("/:userId/categories", verifyAccessToken, async (req, res) => {
   try {
     const { subCategory } = req.body;
     const user = await findUserById(req.params.userId);
@@ -665,7 +667,7 @@ router.post("/:userId/categories", async (req, res) => {
 });
 
 // Remove expert category
-router.delete("/:userId/categories/:categoryId", async (req, res) => {
+router.delete("/:userId/categories/:categoryId", verifyAccessToken, async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
 
@@ -696,7 +698,7 @@ router.get("/:userId/education", async (req, res) => {
 });
 
 // Add education
-router.post("/:userId/education", async (req, res) => {
+router.post("/:userId/education", verifyAccessToken, async (req, res) => {
   try {
     const { level, university, name, department, graduationYear } = req.body;
     const user = await findUserById(req.params.userId);
@@ -724,7 +726,7 @@ router.post("/:userId/education", async (req, res) => {
 });
 
 // Update education
-router.put("/:userId/education/:educationId", async (req, res) => {
+router.put("/:userId/education/:educationId", verifyAccessToken, async (req, res) => {
   try {
     const { level, university, name, department, graduationYear } = req.body;
     const user = await findUserById(req.params.userId);
@@ -761,7 +763,7 @@ router.put("/:userId/education/:educationId", async (req, res) => {
 });
 
 // Delete education
-router.delete("/:userId/education/:educationId", async (req, res) => {
+router.delete("/:userId/education/:educationId", verifyAccessToken, async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
 
@@ -792,7 +794,7 @@ router.get("/:userId/certificates", async (req, res) => {
 });
 
 // Add certificate
-router.post("/:userId/certificates", async (req, res) => {
+router.post("/:userId/certificates", verifyAccessToken, async (req, res) => {
   try {
     const { name, company, country, city, issueDate, expiryDate, credentialId, credentialUrl } = req.body;
     const user = await findUserById(req.params.userId);

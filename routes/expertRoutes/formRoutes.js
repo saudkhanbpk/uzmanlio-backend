@@ -1,17 +1,18 @@
 import express from "express";
 import * as formController from "../../controllers/formController.js";
+import { verifyAccessToken } from "../../middlewares/auth.js";
 
 const router = express.Router();
 
 // Base route: /api/expert/:userId/forms
-router.post("/:userId/forms", formController.createForm);
+router.post("/:userId/forms", verifyAccessToken, formController.createForm);
 router.get("/:userId/forms", formController.getForms);
 router.get("/:userId/forms/status/:status", formController.getFormsByStatus);
 router.get("/:userId/forms/:formId", formController.getFormById);
-router.put("/:userId/forms/:formId", formController.updateForm);
-router.delete("/:userId/forms/:formId", formController.deleteForm);
-router.post("/:userId/forms/:formId/duplicate", formController.duplicateForm);
-router.patch("/:userId/forms/:formId/status", formController.updateFormStatus);
+router.put("/:userId/forms/:formId", verifyAccessToken, formController.updateForm);
+router.delete("/:userId/forms/:formId", verifyAccessToken, formController.deleteForm);
+router.post("/:userId/forms/:formId/duplicate", verifyAccessToken, formController.duplicateForm);
+router.patch("/:userId/forms/:formId/status", verifyAccessToken, formController.updateFormStatus);
 // ==================== FORM RESPONSES ROUTES ====================
 router.get("/:userId/forms/:formId/responses", formController.getFormResponses);
 router.post("/:userId/forms/:formId/submit", formController.submitFormResponse);
