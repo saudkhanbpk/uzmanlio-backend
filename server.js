@@ -36,7 +36,8 @@ import fs from "fs";
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
 import { Netgsm } from "@netgsm/sms";
-
+import cookieParser from "cookie-parser";
+import { doubleCsrf } from "csrf-csrf";
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -47,7 +48,35 @@ const app = express();
 // Performance middleware - must be early in stack
 app.use(compression()); // Enable gzip compression for all responses
 app.use(express.json({ limit: '10mb' })); // Limit payload size
-app.use(cors());
+app.use(cookieParser(process.env.COOKIE_SECRET || "uzmanlio-cookie-secret"));
+app.use(cors({
+  origin: process.env.FRONTEND_URL || true, // Reflect request origin or specific URL
+  credentials: true
+}));
+
+// CSRF Configuration
+const {
+  invalidCsrfTokenError,
+  generateToken,
+  doubleCsrfProtection,
+} = doubleCsrf({
+  getSecret: () => process.env.CSRF_SECRET || "uzmanlio-csrf-secret",
+  cookieName: "ps-csrf",
+  cookieOptions: {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  },
+  size: 64,
+  ignoredMethods: ["GET", "HEAD", "OPTIONS"],
+  getTokenFromRequest: (req) => req.headers["x-csrf-token"],
+});
+
+// CSRF Protection Endpoint
+app.get("/api/csrf-token", (req, res) => {
+  const token = generateToken(req, res);
+  res.json({ csrfToken: token });
+});
 
 // Serve static files from uploads directory - MUST be early in middleware stack
 const uploadsPath = path.join(__dirname, "uploads");
@@ -151,9 +180,12 @@ import { verifyAccessToken, optionalAuth } from "./middlewares/auth.js";
 // Auth routes (login, signup, forgot-password) - NO authentication required
 app.use("/api/expert", authRoutes);
 
-// Protected routes - require valid JWT token
+// Protected routes - require valid JWT token AND CSRF Protection
 // Apply verifyAccessToken middleware to all routes that need authentication
 app.use("/api/expert/:userId", verifyAccessToken);
+
+// Apply CSRF protection to all state-changing expert routes
+app.use("/api/expert", doubleCsrfProtection);
 
 // All these routes now require valid JWT token because of the middleware above
 app.use("/api/expert", profileRoutes);
@@ -175,16 +207,19 @@ app.use("/api/analytics", analyticsRoutes); // GA4 Analytics routes
 
 
 // parasut route
-app.use("/api/v1/parasut", parasutRoute);
+app.use("/api/v1/parasut", doubleCsrfProtection, parasutRoute);
 
-// Calendar integration routes
-app.use("/api/calendar/auth", calendarAuthRoutes);
-app.use("/api/calendar/sync", calendarSyncRoutes);
-app.use("/api/calendar/webhooks", calendarWebhookRoutes);
+// Calendar integration routes - Webhooks should be excluded from CSRF
+app.use("/api/calendar/auth", doubleCsrfProtection, calendarAuthRoutes);
+app.use("/api/calendar/sync", doubleCsrfProtection, calendarSyncRoutes);
+app.use("/api/calendar/webhooks", calendarWebhookRoutes); // WEBHOOKS EXCLUDED
 // Coupons per user
-app.use("/api/expert/:userId/coupons", userCouponsRoutes);
+app.use("/api/expert/:userId/coupons", doubleCsrfProtection, userCouponsRoutes);
 // Emails per user
-app.use("/api/expert/:userId/emails", userEmailsRoutes);
+app.use("/api/expert/:userId/emails", doubleCsrfProtection, userEmailsRoutes);
+
+// Booking Page Routes - CSRF protection
+app.use("/api/booking/customers", doubleCsrfProtection, bookingPage);
 
 
 
@@ -256,6 +291,17 @@ if (process.env.NODE_ENV !== 'test') {
 // Booking Page Routes
 app.use("/api/booking/customers", bookingPage);
 
+
+// Custom error handling for CSRF
+app.use((err, req, res, next) => {
+  if (err === invalidCsrfTokenError) {
+    res.status(403).json({
+      error: "Invalid CSRF token",
+    });
+  } else {
+    next(err);
+  }
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

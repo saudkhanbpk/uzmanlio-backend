@@ -1,6 +1,7 @@
 import Blog from "../models/Blog.js";
 import User from "../models/expertInformation.js";
 import mongoose from "mongoose";
+import xss from "xss";
 
 // Helper function to find user by ID
 const findUserById = async (userId) => {
@@ -57,13 +58,13 @@ export const createBlog = async (req, res) => {
 
     const blog = await Blog.create({
       user: user._id,
-      title: blogData.title,
-      content: blogData.content,
+      title: xss(blogData.title),
+      content: xss(blogData.content),
       category: blogData.category,
       keywords: blogData.keywords || [],
       status: blogData.status || "draft",
       slug,
-      author: blogData.author || user.information?.name || "Uzman"
+      author: xss(blogData.author || user.information?.name || "Uzman")
     });
 
     user.blogs.push(blog._id);
@@ -153,12 +154,12 @@ export const updateBlog = async (req, res) => {
         .replace(/^-+|-+$/g, "");
 
     const updateData = {
-      title: blogData.title,
-      content: blogData.content,
+      title: blogData.title ? xss(blogData.title) : undefined,
+      content: blogData.content ? xss(blogData.content) : undefined,
       category: blogData.category,
       keywords: blogData.keywords,
       status: blogData.status,
-      author: blogData.author
+      author: blogData.author ? xss(blogData.author) : undefined
     };
 
     if (blogData.title) {
