@@ -6,6 +6,7 @@ import Service from "../../models/service.js";
 import Package from "../../models/package.js";
 import Order from "../../models/orders.js";
 import { checkInstitutionAccess, getInstitutionUserIds } from "../../middlewares/accessControl.js";
+import mongoSanitize from "express-mongo-sanitize";
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ router.get("/:userId/institution/users", checkInstitutionAccess, async (req, res
         if (userContextRaw) {
             try {
                 clientContext = JSON.parse(userContextRaw);
+                mongoSanitize.sanitize(clientContext); // Security: Sanitize parsed header data
             } catch (e) {
                 console.error('Error parsing user-context header:', e);
             }
@@ -114,6 +116,7 @@ router.get("/:userId/institution/events", checkInstitutionAccess, async (req, re
         if (userContextRaw) {
             try {
                 clientContext = JSON.parse(userContextRaw);
+                mongoSanitize.sanitize(clientContext); // Security: Sanitize parsed header data
             } catch (e) {
                 console.error('Error parsing user-context header:', e);
             }
@@ -172,6 +175,7 @@ router.get("/:userId/institution/services", checkInstitutionAccess, async (req, 
         if (userContextRaw) {
             try {
                 clientContext = JSON.parse(userContextRaw);
+                mongoSanitize.sanitize(clientContext); // Security: Sanitize parsed header data
             } catch (e) {
                 console.error('Error parsing user-context header:', e);
             }
@@ -230,6 +234,7 @@ router.get("/:userId/institution/packages", checkInstitutionAccess, async (req, 
         if (userContextRaw) {
             try {
                 clientContext = JSON.parse(userContextRaw);
+                mongoSanitize.sanitize(clientContext); // Security: Sanitize parsed header data
             } catch (e) {
                 console.error('Error parsing user-context header:', e);
             }
@@ -284,6 +289,7 @@ router.get("/:userId/institution/customers", checkInstitutionAccess, async (req,
         if (userContextRaw) {
             try {
                 clientContext = JSON.parse(userContextRaw);
+                mongoSanitize.sanitize(clientContext); // Security: Sanitize parsed header data
             } catch (e) {
                 console.error('Error parsing user-context header:', e);
             }
@@ -342,6 +348,7 @@ router.get("/:userId/institution/orders", checkInstitutionAccess, async (req, re
         if (userContextRaw) {
             try {
                 clientContext = JSON.parse(userContextRaw);
+                mongoSanitize.sanitize(clientContext); // Security: Sanitize parsed header data
             } catch (e) {
                 console.error('Error parsing user-context header:', e);
             }
@@ -399,6 +406,7 @@ router.get("/:userId/institution/stats", checkInstitutionAccess, async (req, res
         if (userContextRaw) {
             try {
                 clientContext = JSON.parse(userContextRaw);
+                mongoSanitize.sanitize(clientContext); // Security: Sanitize parsed header data
             } catch (e) {
                 console.error('Error parsing user-context header:', e);
             }
