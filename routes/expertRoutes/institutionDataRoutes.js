@@ -1,6 +1,9 @@
 import express from "express";
 import User from "../../models/expertInformation.js";
 import Institution from "../../models/institution.js";
+import Event from "../../models/event.js";
+import Service from "../../models/service.js";
+import Package from "../../models/package.js";
 import { checkInstitutionAccess, getInstitutionUserIds } from "../../middlewares/accessControl.js";
 
 const router = express.Router();
@@ -58,37 +61,32 @@ router.get("/:userId/institution/users", checkInstitutionAccess, async (req, res
  */
 router.get("/:userId/institution/events", checkInstitutionAccess, async (req, res) => {
     try {
-        const { userContext } = req.headers['user-context'];
         const userId = req.params.userId;
-        let clientContext = {};
-
-        if (userContext) {
-            clientContext = JSON.parse(userContext);
-        }
-
-        // if (!clientContext.isAdmin) {
-        //     return res.status(403).json({ error: 'Only admins can access institution data' });
-        // }
 
         // Get all user IDs in the institution
         const userIds = await getInstitutionUserIds(userId);
 
-        // Fetch all users and their events
-        const users = await User.find({ _id: { $in: userIds } }).select('events information');
-
-        // Flatten all events and add expert info
-        const allEvents = [];
+        // Fetch users for expert info
+        const users = await User.find({ _id: { $in: userIds } }).select('information');
+        const userMap = new Map();
         users.forEach(user => {
-            if (user.events && user.events.length > 0) {
-                user.events.forEach(event => {
-                    allEvents.push({
-                        ...event.toObject(),
-                        expertId: event.expertId || user._id, // Use expertId if exists, fallback to user._id
-                        expertName: `${user.information.name} ${user.information.surname}`,
-                        expertEmail: user.information.email
-                    });
-                });
-            }
+            userMap.set(user._id.toString(), {
+                name: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
+                email: user.information?.email
+            });
+        });
+
+        // Query events from Event collection by expertId
+        const events = await Event.find({ expertId: { $in: userIds } }).lean();
+
+        // Add expert info to each event
+        const allEvents = events.map(event => {
+            const expertInfo = userMap.get(event.expertId?.toString()) || {};
+            return {
+                ...event,
+                expertName: expertInfo.name || 'Unknown',
+                expertEmail: expertInfo.email || ''
+            };
         });
 
         return res.json({
@@ -105,6 +103,9 @@ router.get("/:userId/institution/events", checkInstitutionAccess, async (req, re
 /**
  * GET all services from institution
  */
+/**
+ * GET all services from institution
+ */
 router.get("/:userId/institution/services", checkInstitutionAccess, async (req, res) => {
     try {
         const { userContext } = req;
@@ -114,20 +115,28 @@ router.get("/:userId/institution/services", checkInstitutionAccess, async (req, 
         }
 
         const userIds = await getInstitutionUserIds(userContext.userId);
-        const users = await User.find({ _id: { $in: userIds } }).select('services information');
 
-        const allServices = [];
+        // Fetch users for expert info
+        const users = await User.find({ _id: { $in: userIds } }).select('information');
+        const userMap = new Map();
         users.forEach(user => {
-            if (user.services && user.services.length > 0) {
-                user.services.forEach(service => {
-                    allServices.push({
-                        ...service.toObject(),
-                        expertId: service.expertId || user._id,
-                        expertName: `${user.information.name} ${user.information.surname}`,
-                        expertEmail: user.information.email
-                    });
-                });
-            }
+            userMap.set(user._id.toString(), {
+                name: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
+                email: user.information?.email
+            });
+        });
+
+        // Query services from Service collection by expertId
+        const services = await Service.find({ expertId: { $in: userIds } }).lean();
+
+        // Add expert info to each service
+        const allServices = services.map(service => {
+            const expertInfo = userMap.get(service.expertId?.toString()) || {};
+            return {
+                ...service,
+                expertName: expertInfo.name || 'Unknown',
+                expertEmail: expertInfo.email || ''
+            };
         });
 
         return res.json({
@@ -144,6 +153,9 @@ router.get("/:userId/institution/services", checkInstitutionAccess, async (req, 
 /**
  * GET all packages from institution
  */
+/**
+ * GET all packages from institution
+ */
 router.get("/:userId/institution/packages", checkInstitutionAccess, async (req, res) => {
     try {
         const { userContext } = req;
@@ -153,20 +165,28 @@ router.get("/:userId/institution/packages", checkInstitutionAccess, async (req, 
         }
 
         const userIds = await getInstitutionUserIds(userContext.userId);
-        const users = await User.find({ _id: { $in: userIds } }).select('packages information');
 
-        const allPackages = [];
+        // Fetch users for expert info
+        const users = await User.find({ _id: { $in: userIds } }).select('information');
+        const userMap = new Map();
         users.forEach(user => {
-            if (user.packages && user.packages.length > 0) {
-                user.packages.forEach(pkg => {
-                    allPackages.push({
-                        ...pkg.toObject(),
-                        expertId: pkg.expertId || user._id,
-                        expertName: `${user.information.name} ${user.information.surname}`,
-                        expertEmail: user.information.email
-                    });
-                });
-            }
+            userMap.set(user._id.toString(), {
+                name: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
+                email: user.information?.email
+            });
+        });
+
+        // Query packages from Package collection by expertId
+        const packages = await Package.find({ expertId: { $in: userIds } }).lean();
+
+        // Add expert info to each package
+        const allPackages = packages.map(pkg => {
+            const expertInfo = userMap.get(pkg.expertId?.toString()) || {};
+            return {
+                ...pkg,
+                expertName: expertInfo.name || 'Unknown',
+                expertEmail: expertInfo.email || ''
+            };
         });
 
         return res.json({

@@ -19,6 +19,7 @@ export const verifyAccessToken = async (req, res, next) => {
         console.log('🔐 Auth Middleware Check:');
         console.log('  - Route userId:', routeUserId);
         console.log('  - Has Auth Header:', !!authHeader);
+        console.log("Auth Header :", authHeader)
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             console.log('  ❌ No token provided');

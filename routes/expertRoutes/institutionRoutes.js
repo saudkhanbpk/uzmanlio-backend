@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
+import { verifyAccessToken } from "../../middlewares/auth.js";
 import User from "../../models/expertInformation.js";
 import Institution from "../../models/institution.js";
 
@@ -134,7 +135,7 @@ router.get("/:userId/institution", async (req, res) => {
 /////////Update Institution Profile/////////
 // Use multer middleware to handle multipart form data
 
-router.put("/:userId/institution/Update", institutionFilesUpload.fields([
+router.put("/:userId/institution/Update", verifyAccessToken, institutionFilesUpload.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'axe', maxCount: 1 }
 ]), async (req, res) => {
@@ -226,7 +227,7 @@ import crypto from 'crypto';
 // ========== INVITED USERS ROUTES (Using Institution Model) ==========
 
 // Get invited users
-router.get("/:userId/institution/invited-users", async (req, res) => {
+router.get("/:userId/institution/invited-users", verifyAccessToken, async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
     const institution = await Institution.findOne({ Admin: user._id }).populate('invitedUsers.acceptedByUserId', 'information');
@@ -267,7 +268,7 @@ router.get("/:userId/institution/invited-users", async (req, res) => {
 });
 
 // Add invited user to institution (Send Email)
-router.post("/:userId/institution/invite-user", async (req, res) => {
+router.post("/:userId/institution/invite-user", verifyAccessToken, async (req, res) => {
   try {
     const { name, email } = req.body;
     const inviterUserId = req.params.userId;
@@ -355,7 +356,7 @@ router.post("/:userId/institution/invite-user", async (req, res) => {
 });
 
 // Remove invited user
-router.delete("/:userId/institution/invited-users/:id", async (req, res) => {
+router.delete("/:userId/institution/invited-users/:id", verifyAccessToken, async (req, res) => {
   try {
     const invitationId = req.params.id;
     const inviterUserId = req.params.userId;
@@ -416,7 +417,7 @@ router.delete("/:userId/institution/invited-users/:id", async (req, res) => {
 });
 
 // Resend invitation
-router.post("/:userId/institution/resend-invite/:email", async (req, res) => {
+router.post("/:userId/institution/resend-invite/:email", verifyAccessToken, async (req, res) => {
   try {
     const param = req.params.email; // Can be email or ID
     const inviterUserId = req.params.userId;
