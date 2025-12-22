@@ -8,6 +8,7 @@ import { createMulterUpload, handleMulterError } from "../../middlewares/upload.
 import { verifyAccessToken } from "../../middlewares/auth.js";
 import User from "../../models/expertInformation.js";
 import Institution from "../../models/institution.js";
+import { checkInstitutionAdmin } from "../../middlewares/institutionAuth.js";
 
 const router = express.Router();
 
@@ -138,7 +139,7 @@ router.get("/:userId/institution", async (req, res) => {
 router.put("/:userId/institution/Update", verifyAccessToken, institutionFilesUpload.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'axe', maxCount: 1 }
-]), async (req, res) => {
+]), checkInstitutionAdmin, async (req, res) => {
   try {
     console.log("Updating institution:", req.params.userId);
 
@@ -268,7 +269,7 @@ router.get("/:userId/institution/invited-users", verifyAccessToken, async (req, 
 });
 
 // Add invited user to institution (Send Email)
-router.post("/:userId/institution/invite-user", verifyAccessToken, async (req, res) => {
+router.post("/:userId/institution/invite-user", checkInstitutionAdmin, async (req, res) => {
   try {
     const { name, email } = req.body;
     const inviterUserId = req.params.userId;
@@ -356,7 +357,7 @@ router.post("/:userId/institution/invite-user", verifyAccessToken, async (req, r
 });
 
 // Remove invited user
-router.delete("/:userId/institution/invited-users/:id", verifyAccessToken, async (req, res) => {
+router.delete("/:userId/institution/invited-users/:id", checkInstitutionAdmin, async (req, res) => {
   try {
     const invitationId = req.params.id;
     const inviterUserId = req.params.userId;
@@ -417,7 +418,7 @@ router.delete("/:userId/institution/invited-users/:id", verifyAccessToken, async
 });
 
 // Resend invitation
-router.post("/:userId/institution/resend-invite/:email", verifyAccessToken, async (req, res) => {
+router.post("/:userId/institution/resend-invite/:email", checkInstitutionAdmin, async (req, res) => {
   try {
     const param = req.params.email; // Can be email or ID
     const inviterUserId = req.params.userId;

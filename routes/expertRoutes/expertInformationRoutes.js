@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
 import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
-import CustomerAppointments from "../../models/customerAppointment.js";
+// Removed CustomerAppointments import
 import { sendBulkEmail, sendEmail } from "../../services/email.js";
 import { Parser } from "json2csv";
 import {
@@ -24,6 +24,7 @@ import {
 import { sendSms } from "../../services/netgsmService.js";
 import agenda from "../../services/agendaService.js";
 import Order from "../../models/orders.js";
+import Event from "../../models/event.js";
 import { scheduleRepeatedEvents } from "../../services/repetitionAgendaService.js";
 import expertEventController from "../../controllers/expertEventController.js";
 const router = express.Router();
@@ -59,9 +60,7 @@ const findUserById = async (userId) => {
   return user;
 };
 
-
 // =================== AGENDA HELPERS ===================
-
 const parseEventDateTime = (dateStr, timeStr) => {
   if (!dateStr) return null;
   const timePart = timeStr ? timeStr.trim() : "00:00";
@@ -92,8 +91,6 @@ const cancelAgendaJob = async (jobId) => {
     return false;
   }
 };
-
-
 const scheduleReminderForEvent = async (user, event) => {
   if (!agenda || !event || !event.date) return null;
 
@@ -147,8 +144,6 @@ const scheduleReminderForEvent = async (user, event) => {
     return null;
   }
 };
-
-
 const rescheduleReminderForEvent = async (user, event, oldJobId) => {
   try {
     if (oldJobId) {
@@ -160,12 +155,7 @@ const rescheduleReminderForEvent = async (user, event, oldJobId) => {
     return null;
   }
 };
-
-
-
-
 // ==================== PROFILE IMAGE UPLOAD ====================
-
 // Create expert profile upload configuration
 const expertProfileUpload = createMulterUpload({
   uploadPath: "uploads/Experts_Files/Expert-Users",
@@ -210,7 +200,6 @@ router.get("/debug/users", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 // Profile picture upload route
 router.post("/:userId/upload",
@@ -363,10 +352,7 @@ router.post("/:userId/upload",
     }
   }
 );
-
-
 // ==================== BASIC PROFILE ROUTES ====================
-
 // Get complete expert profile (specific route first)
 router.get("/:userId/profile", async (req, res) => {
   try {
@@ -386,7 +372,19 @@ router.get("/:userId/profile", async (req, res) => {
           model: "Package"
         }
       ]);
-    res.json(user);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Fetch events from the Event collection (since events are now a separate model)
+    const userEvents = await Event.find({ expertId: req.params.userId }).lean();
+
+    // Return user object with populated events
+    const userObject = user.toObject();
+    userObject.events = userEvents;
+
+    res.json(userObject);
   } catch (error) {
     res.status(404).json({
       error: error.message,
@@ -395,8 +393,6 @@ router.get("/:userId/profile", async (req, res) => {
     });
   }
 });
-
-
 
 router.get("/:userId", async (req, res) => {
   try {
@@ -477,6 +473,10 @@ router.get("/:userId", async (req, res) => {
     const userObject = user.toObject();
     userObject.customersPackageDetails = customersPackageDetails;
 
+    // Fetch events from the Event collection (since events are now a separate model)
+    const userEvents = await Event.find({ expertId: req.params.userId }).lean();
+    userObject.events = userEvents;
+
     res.json(userObject);
 
   } catch (err) {
@@ -484,11 +484,6 @@ router.get("/:userId", async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-
-
-
-
-
 
 router.put("/:userId", async (req, res) => {
   try {
@@ -542,7 +537,6 @@ router.patch("/:userId", async (req, res) => {
     res.status(500).json({ error: "Error patching profile", details: err.message });
   }
 });
-
 
 // ==================== TITLE ROUTES ====================
 
@@ -636,7 +630,6 @@ router.delete("/:userId/titles/:titleId", async (req, res) => {
 });
 
 // ==================== CATEGORIES ROUTES ====================
-
 // Get expert categories
 router.get("/:userId/categories", async (req, res) => {
   try {
@@ -692,7 +685,6 @@ router.delete("/:userId/categories/:categoryId", async (req, res) => {
 });
 
 // ==================== EDUCATION ROUTES ====================
-
 // Get education
 router.get("/:userId/education", async (req, res) => {
   try {
@@ -789,7 +781,6 @@ router.delete("/:userId/education/:educationId", async (req, res) => {
 });
 
 // ==================== CERTIFICATES ROUTES ====================
-
 // Get certificates
 router.get("/:userId/certificates", async (req, res) => {
   try {
@@ -880,7 +871,6 @@ router.delete("/:userId/certificates/:certificateId", async (req, res) => {
 });
 
 // ==================== EXPERIENCE ROUTES ====================
-
 // Get experience
 router.get("/:userId/experience", async (req, res) => {
   try {
@@ -971,7 +961,6 @@ router.delete("/:userId/experience/:experienceId", async (req, res) => {
 });
 
 // ==================== SKILLS ROUTES ====================
-
 // Get skills
 router.get("/:userId/skills", async (req, res) => {
   try {
@@ -1059,7 +1048,6 @@ router.delete("/:userId/skills/:skillId", async (req, res) => {
 });
 
 // ==================== CALENDAR & AVAILABILITY ROUTES ====================
-
 // Get availability settings
 router.get("/:userId/availability", async (req, res) => {
   try {
@@ -1117,170 +1105,6 @@ router.put("/:userId/availability", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// Get appointments
-router.get("/:userId/appointments", async (req, res) => {
-  try {
-    const user = await findUserById(req.params.userId);
-    const appointments = user.appointments || [];
-
-    res.json({ appointments });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Add appointment
-router.post("/:userId/appointments", async (req, res) => {
-  try {
-    const { title, date, time, duration, type, status, clientName, clientEmail, notes } = req.body;
-    const user = await findUserById(req.params.userId);
-
-    const newAppointment = {
-      id: uuidv4(),
-      title,
-      date,
-      time,
-      duration,
-      type,
-      status: status || 'pending',
-      clientName,
-      clientEmail,
-      notes,
-      createdAt: new Date()
-    };
-
-    if (!user.appointments) {
-      user.appointments = [];
-    }
-    user.appointments.push(newAppointment);
-    await user.save();
-
-    // Sync to connected calendars in background
-    const activeProviders = user.calendarProviders?.filter(cp => cp.isActive) || [];
-    if (activeProviders.length > 0) {
-      // Don't wait for sync to complete, run in background
-      setImmediate(async () => {
-        for (const provider of activeProviders) {
-          try {
-            await calendarSyncService.syncAppointmentToProvider(
-              req.params.userId,
-              newAppointment,
-              { id: provider._id }
-            );
-          } catch (error) {
-            console.error(`Failed to sync appointment to ${provider.provider}:`, error);
-          }
-        }
-      });
-    }
-
-    res.json({ appointment: newAppointment, message: "Appointment added successfully" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Update appointment
-router.put("/:userId/appointments/:appointmentId", async (req, res) => {
-  try {
-    const { title, date, time, duration, type, status, clientName, clientEmail, notes } = req.body;
-    const user = await findUserById(req.params.userId);
-
-    const appointmentIndex = user.appointments.findIndex(
-      apt => apt.id === req.params.appointmentId
-    );
-
-    if (appointmentIndex === -1) {
-      return res.status(404).json({ error: "Appointment not found" });
-    }
-
-    user.appointments[appointmentIndex] = {
-      ...user.appointments[appointmentIndex],
-      title,
-      date,
-      time,
-      duration,
-      type,
-      status,
-      clientName,
-      clientEmail,
-      notes
-    };
-
-    await user.save();
-
-    // Sync to connected calendars in background
-    const activeProviders = user.calendarProviders?.filter(cp => cp.isActive) || [];
-    if (activeProviders.length > 0) {
-      const updatedAppointment = user.appointments[appointmentIndex];
-      // Don't wait for sync to complete, run in background
-      setImmediate(async () => {
-        for (const provider of activeProviders) {
-          try {
-            await calendarSyncService.syncAppointmentToProvider(
-              req.params.userId,
-              updatedAppointment,
-              { id: provider._id }
-            );
-          } catch (error) {
-            console.error(`Failed to sync updated appointment to ${provider.provider}:`, error);
-          }
-        }
-      });
-    }
-
-    res.json({
-      appointment: user.appointments[appointmentIndex],
-      message: "Appointment updated successfully"
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Delete appointment
-router.delete("/:userId/appointments/:appointmentId", async (req, res) => {
-  try {
-    const user = await findUserById(req.params.userId);
-
-    const appointmentIndex = user.appointments.findIndex(
-      apt => apt.id === req.params.appointmentId
-    );
-
-    if (appointmentIndex === -1) {
-      return res.status(404).json({ error: "Appointment not found" });
-    }
-
-    // Sync deletion to connected calendars in background
-    const activeProviders = user.calendarProviders?.filter(cp => cp.isActive) || [];
-    if (activeProviders.length > 0) {
-      // Don't wait for sync to complete, run in background
-      setImmediate(async () => {
-        for (const provider of activeProviders) {
-          try {
-            await calendarSyncService.deleteAppointmentFromProvider(
-              req.params.userId,
-              req.params.appointmentId,
-              { id: provider._id }
-            );
-          } catch (error) {
-            console.error(`Failed to delete appointment from ${provider.provider}:`, error);
-          }
-        }
-      });
-    }
-
-    user.appointments.splice(appointmentIndex, 1);
-    await user.save();
-    res.json({ message: "Appointment deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-
 // Update complete expert profile
 router.put("/:userId/profile", async (req, res) => {
   try {
@@ -1355,153 +1179,6 @@ router.put("/:userId/profile", async (req, res) => {
     };
 
     res.json({ profile: updatedProfile, message: "Profile updated successfully" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== FORM RESPONSES ROUTES ====================
-
-// Get form responses
-router.get("/:userId/forms/:formId/responses", async (req, res) => {
-  try {
-    const user = await findUserById(req.params.userId);
-    const form = user.forms?.find(form => form.id === req.params.formId);
-
-    if (!form) {
-      return res.status(404).json({ error: "Form not found" });
-    }
-
-    res.json({
-      responses: form.responses || [],
-      totalResponses: form.responses?.length || 0,
-      form: {
-        id: form.id,
-        title: form.title,
-        fields: form.fields
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Submit form response (public endpoint)
-router.post("/:userId/forms/:formId/submit", async (req, res) => {
-  try {
-    const user = await findUserById(req.params.userId);
-    const formIndex = user.forms.findIndex(form => form.id === req.params.formId);
-
-    if (formIndex === -1) {
-      return res.status(404).json({ error: "Form not found" });
-    }
-
-    const form = user.forms[formIndex];
-
-    if (form.status !== 'active') {
-      return res.status(400).json({ error: "Form is not active" });
-    }
-
-    const responseData = req.body;
-    const responseId = uuidv4();
-
-    const newResponse = {
-      id: responseId,
-      respondentName: responseData.respondentName,
-      respondentEmail: responseData.respondentEmail,
-      respondentPhone: responseData.respondentPhone,
-      responses: responseData.responses || [],
-      submittedAt: new Date(),
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent')
-    };
-
-    // Add response to form
-    if (!form.responses) {
-      form.responses = [];
-    }
-    form.responses.push(newResponse);
-
-    // Update participant count and analytics
-    form.participantCount = form.responses.length;
-    form.analytics.completions += 1;
-    form.updatedAt = new Date();
-
-    await user.save();
-
-    res.status(201).json({
-      message: "Form yanıtı başarıyla kaydedildi",
-      responseId: responseId
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get form analytics
-router.get("/:userId/forms/:formId/analytics", async (req, res) => {
-  try {
-    const user = await findUserById(req.params.userId);
-    const form = user.forms?.find(form => form.id === req.params.formId);
-
-    if (!form) {
-      return res.status(404).json({ error: "Form not found" });
-    }
-
-    const responses = form.responses || [];
-    const analytics = {
-      ...form.analytics,
-      totalResponses: responses.length,
-      responseRate: form.analytics.starts > 0 ? (responses.length / form.analytics.starts * 100).toFixed(2) : 0,
-      recentResponses: responses
-        .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
-        .slice(0, 10),
-      responsesByDate: responses.reduce((acc, response) => {
-        const date = new Date(response.submittedAt).toISOString().split('T')[0];
-        acc[date] = (acc[date] || 0) + 1;
-        return acc;
-      }, {}),
-      fieldAnalytics: form.fields.map(field => {
-        const fieldResponses = responses
-          .map(r => r.responses.find(resp => resp.fieldId === field.id))
-          .filter(Boolean);
-
-        return {
-          fieldId: field.id,
-          fieldLabel: field.label,
-          fieldType: field.type,
-          responseCount: fieldResponses.length,
-          responses: fieldResponses.map(r => r.value)
-        };
-      })
-    };
-
-    res.json({ analytics });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get forms statistics
-router.get("/:userId/forms/stats", async (req, res) => {
-  try {
-    const user = await findUserById(req.params.userId);
-    const forms = user.forms || [];
-
-    const stats = {
-      total: forms.length,
-      active: forms.filter(f => f.status === 'active').length,
-      draft: forms.filter(f => f.status === 'draft').length,
-      inactive: forms.filter(f => f.status === 'inactive').length,
-      archived: forms.filter(f => f.status === 'archived').length,
-      totalResponses: forms.reduce((sum, f) => sum + (f.responses?.length || 0), 0),
-      totalViews: forms.reduce((sum, f) => sum + (f.analytics?.views || 0), 0),
-      recentForms: forms
-        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-        .slice(0, 5)
-    };
-
-    res.json({ stats });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

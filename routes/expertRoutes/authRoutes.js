@@ -8,6 +8,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../../models/expertInformation.js";
 import Order from "../../models/orders.js";
+import Event from "../../models/event.js";
 import { sendEmail } from "../../services/email.js";
 import { getWelcomeEmailTemplate, getForgotPasswordOTPTemplate, getPasswordResetSuccessTemplate, getEmailVerificationTemplate } from "../../services/emailTemplates.js";
 
@@ -239,6 +240,10 @@ router.post("/login", async (req, res) => {
         // Return user object with customersPackageDetails
         const userObject = user.toObject();
         userObject.customersPackageDetails = customersPackageDetails;
+
+        // Fetch events from the Event collection (since events are now a separate model)
+        const userEvents = await Event.find({ expertId: existingUser._id }).lean();
+        userObject.events = userEvents;
 
         return res
             .status(200).json({

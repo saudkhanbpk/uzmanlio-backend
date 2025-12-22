@@ -1,4 +1,5 @@
 import express from "express";
+import { checkInstitutionAdmin } from "../../middlewares/institutionAuth.js";
 import {
   createService,
   getServices,
@@ -23,15 +24,15 @@ router.get("/:userId/services/active", getActiveServices);
 router.get("/:userId/services/:serviceId", getServiceById);
 
 // Create service
-router.post("/:userId/services", createService);
+router.post("/:userId/services", checkInstitutionAdmin, createService);
 
 // Update service
-router.put("/:userId/services/:serviceId", updateService);
+router.put("/:userId/services/:serviceId", checkInstitutionAdmin, updateService);
 
 // Delete service
-router.delete("/:userId/services/:serviceId", deleteService);
+router.delete("/:userId/services/:serviceId", checkInstitutionAdmin, deleteService);
 
 // Toggle service active status
-router.patch("/:userId/services/:serviceId/toggle-active", toggleServiceActive);
+router.patch("/:userId/services/:serviceId/toggle-active", checkInstitutionAdmin, toggleServiceActive);
 
 export default router;

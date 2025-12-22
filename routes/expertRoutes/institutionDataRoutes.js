@@ -4,6 +4,7 @@ import Institution from "../../models/institution.js";
 import Event from "../../models/event.js";
 import Service from "../../models/service.js";
 import Package from "../../models/package.js";
+import Order from "../../models/orders.js";
 import { checkInstitutionAccess, getInstitutionUserIds } from "../../middlewares/accessControl.js";
 
 const router = express.Router();
@@ -11,6 +12,7 @@ const router = express.Router();
 /**
  * GET all institution users with full documents (for caching in frontend context)
  * This endpoint returns complete user documents for all members of the institution
+ * Includes populated events, services, and packages from separate collections
  */
 router.get("/:userId/institution/users", checkInstitutionAccess, async (req, res) => {
     try {
@@ -34,11 +36,54 @@ router.get("/:userId/institution/users", checkInstitutionAccess, async (req, res
             .select('-information.password -refreshToken -resetPasswordOTP -resetPasswordExpiry -emailVerificationToken -emailVerificationExpiry')
             .populate('customers.customerId');
 
-        // Add computed fields for each user
+        // Fetch events, services, and packages for all users in parallel
+        const [allEvents, allServices, allPackages] = await Promise.all([
+            Event.find({ expertId: { $in: userIds } }).lean(),
+            Service.find({ expertId: { $in: userIds } }).lean(),
+            Package.find({ expertId: { $in: userIds } }).lean()
+        ]);
+
+        // Create lookup maps by expertId for quick access
+        const eventsByExpert = new Map();
+        const servicesByExpert = new Map();
+        const packagesByExpert = new Map();
+
+        allEvents.forEach(event => {
+            const expertIdStr = event.expertId?.toString();
+            if (!eventsByExpert.has(expertIdStr)) {
+                eventsByExpert.set(expertIdStr, []);
+            }
+            eventsByExpert.get(expertIdStr).push(event);
+        });
+
+        allServices.forEach(service => {
+            const expertIdStr = service.expertId?.toString();
+            if (!servicesByExpert.has(expertIdStr)) {
+                servicesByExpert.set(expertIdStr, []);
+            }
+            servicesByExpert.get(expertIdStr).push(service);
+        });
+
+        allPackages.forEach(pkg => {
+            const expertIdStr = pkg.expertId?.toString();
+            if (!packagesByExpert.has(expertIdStr)) {
+                packagesByExpert.set(expertIdStr, []);
+            }
+            packagesByExpert.get(expertIdStr).push(pkg);
+        });
+
+        // Add computed fields and populated data for each user
         const usersWithMeta = users.map(user => {
             const userObj = user.toObject();
+            const userIdStr = user._id.toString();
+
             return {
                 ...userObj,
+                // Replace ObjectId arrays with populated documents
+                events: eventsByExpert.get(userIdStr) || [],
+                services: servicesByExpert.get(userIdStr) || [],
+                packages: packagesByExpert.get(userIdStr) || [],
+                // Computed fields
                 fullName: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
                 isAdmin: user.subscription?.isAdmin || false,
                 isSubUser: user.isSubUser || false
@@ -58,39 +103,50 @@ router.get("/:userId/institution/users", checkInstitutionAccess, async (req, res
 
 /**
  * GET all events from institution (admin + all sub-users)
+ * Updated to use separate Event collection with expertId reference
  */
 router.get("/:userId/institution/events", checkInstitutionAccess, async (req, res) => {
     try {
         const userId = req.params.userId;
+        const userContextRaw = req.headers['user-context'];
+        let clientContext = {};
+
+        if (userContextRaw) {
+            try {
+                clientContext = JSON.parse(userContextRaw);
+            } catch (e) {
+                console.error('Error parsing user-context header:', e);
+            }
+        }
 
         // Get all user IDs in the institution
         const userIds = await getInstitutionUserIds(userId);
 
-        // Fetch users for expert info
-        const users = await User.find({ _id: { $in: userIds } }).select('information');
+        // Fetch user info for enriching events with expert details
+        const users = await User.find({ _id: { $in: userIds } }).select('information').lean();
         const userMap = new Map();
         users.forEach(user => {
             userMap.set(user._id.toString(), {
                 name: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
-                email: user.information?.email
+                email: user.information?.email || ''
             });
         });
 
-        // Query events from Event collection by expertId
-        const events = await Event.find({ expertId: { $in: userIds } }).lean();
+        // Fetch all events from the Event collection where expertId is in userIds
+        const allEvents = await Event.find({ expertId: { $in: userIds } }).lean();
 
-        // Add expert info to each event
-        const allEvents = events.map(event => {
+        // Enrich events with expert info
+        const enrichedEvents = allEvents.map(event => {
             const expertInfo = userMap.get(event.expertId?.toString()) || {};
             return {
                 ...event,
-                expertName: expertInfo.name || 'Unknown',
+                expertName: expertInfo.name || 'Unknown Expert',
                 expertEmail: expertInfo.email || ''
             };
         });
 
         return res.json({
-            events: allEvents,
+            events: enrichedEvents,
             viewMode: 'institution',
             totalExperts: users.length
         });
@@ -102,45 +158,53 @@ router.get("/:userId/institution/events", checkInstitutionAccess, async (req, re
 
 /**
  * GET all services from institution
+ * Updated to use separate Service collection with expertId reference
  */
 /**
  * GET all services from institution
  */
 router.get("/:userId/institution/services", checkInstitutionAccess, async (req, res) => {
     try {
-        const { userContext } = req;
+        const userId = req.params.userId;
+        const userContextRaw = req.headers['user-context'];
+        let clientContext = {};
 
-        if (!userContext.isAdmin) {
-            return res.status(403).json({ error: 'Only admins can access institution data' });
+        if (userContextRaw) {
+            try {
+                clientContext = JSON.parse(userContextRaw);
+            } catch (e) {
+                console.error('Error parsing user-context header:', e);
+            }
         }
 
-        const userIds = await getInstitutionUserIds(userContext.userId);
+        // Get all user IDs in the institution
+        const userIds = await getInstitutionUserIds(userId);
 
-        // Fetch users for expert info
-        const users = await User.find({ _id: { $in: userIds } }).select('information');
+        // Fetch user info for enriching services with expert details
+        const users = await User.find({ _id: { $in: userIds } }).select('information').lean();
         const userMap = new Map();
         users.forEach(user => {
             userMap.set(user._id.toString(), {
                 name: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
-                email: user.information?.email
+                email: user.information?.email || ''
             });
         });
 
-        // Query services from Service collection by expertId
-        const services = await Service.find({ expertId: { $in: userIds } }).lean();
+        // Fetch all services from the Service collection where expertId is in userIds
+        const allServices = await Service.find({ expertId: { $in: userIds } }).lean();
 
-        // Add expert info to each service
-        const allServices = services.map(service => {
+        // Enrich services with expert info
+        const enrichedServices = allServices.map(service => {
             const expertInfo = userMap.get(service.expertId?.toString()) || {};
             return {
                 ...service,
-                expertName: expertInfo.name || 'Unknown',
+                expertName: expertInfo.name || 'Unknown Expert',
                 expertEmail: expertInfo.email || ''
             };
         });
 
         return res.json({
-            services: allServices,
+            services: enrichedServices,
             viewMode: 'institution',
             totalExperts: users.length
         });
@@ -152,45 +216,53 @@ router.get("/:userId/institution/services", checkInstitutionAccess, async (req, 
 
 /**
  * GET all packages from institution
+ * Updated to use separate Package collection with expertId reference
  */
 /**
  * GET all packages from institution
  */
 router.get("/:userId/institution/packages", checkInstitutionAccess, async (req, res) => {
     try {
-        const { userContext } = req;
+        const userId = req.params.userId;
+        const userContextRaw = req.headers['user-context'];
+        let clientContext = {};
 
-        if (!userContext.isAdmin) {
-            return res.status(403).json({ error: 'Only admins can access institution data' });
+        if (userContextRaw) {
+            try {
+                clientContext = JSON.parse(userContextRaw);
+            } catch (e) {
+                console.error('Error parsing user-context header:', e);
+            }
         }
 
-        const userIds = await getInstitutionUserIds(userContext.userId);
+        // Get all user IDs in the institution
+        const userIds = await getInstitutionUserIds(userId);
 
-        // Fetch users for expert info
-        const users = await User.find({ _id: { $in: userIds } }).select('information');
+        // Fetch user info for enriching packages with expert details
+        const users = await User.find({ _id: { $in: userIds } }).select('information').lean();
         const userMap = new Map();
         users.forEach(user => {
             userMap.set(user._id.toString(), {
                 name: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
-                email: user.information?.email
+                email: user.information?.email || ''
             });
         });
 
-        // Query packages from Package collection by expertId
-        const packages = await Package.find({ expertId: { $in: userIds } }).lean();
+        // Fetch all packages from the Package collection where expertId is in userIds
+        const allPackages = await Package.find({ expertId: { $in: userIds } }).lean();
 
-        // Add expert info to each package
-        const allPackages = packages.map(pkg => {
+        // Enrich packages with expert info
+        const enrichedPackages = allPackages.map(pkg => {
             const expertInfo = userMap.get(pkg.expertId?.toString()) || {};
             return {
                 ...pkg,
-                expertName: expertInfo.name || 'Unknown',
+                expertName: expertInfo.name || 'Unknown Expert',
                 expertEmail: expertInfo.email || ''
             };
         });
 
         return res.json({
-            packages: allPackages,
+            packages: enrichedPackages,
             viewMode: 'institution',
             totalExperts: users.length
         });
@@ -205,13 +277,19 @@ router.get("/:userId/institution/packages", checkInstitutionAccess, async (req, 
  */
 router.get("/:userId/institution/customers", checkInstitutionAccess, async (req, res) => {
     try {
-        const { userContext } = req;
+        const userId = req.params.userId;
+        const userContextRaw = req.headers['user-context'];
+        let clientContext = {};
 
-        if (!userContext.isAdmin) {
-            return res.status(403).json({ error: 'Only admins can access institution data' });
+        if (userContextRaw) {
+            try {
+                clientContext = JSON.parse(userContextRaw);
+            } catch (e) {
+                console.error('Error parsing user-context header:', e);
+            }
         }
 
-        const userIds = await getInstitutionUserIds(userContext.userId);
+        const userIds = await getInstitutionUserIds(userId);
         const users = await User.find({ _id: { $in: userIds } })
             .select('customers information')
             .populate('customers.customerId');
@@ -229,7 +307,7 @@ router.get("/:userId/institution/customers", checkInstitutionAccess, async (req,
                             allCustomers.push({
                                 ...customerRef.customerId.toObject(),
                                 addedByExpertId: user._id,
-                                addedByExpertName: `${user.information.name} ${user.information.surname}`,
+                                addedByExpertName: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
                                 addedAt: customerRef.addedAt
                             });
                             customerMap.set(customerId, true);
@@ -253,41 +331,54 @@ router.get("/:userId/institution/customers", checkInstitutionAccess, async (req,
 
 /**
  * GET all orders/payments from institution
+ * Updated to use Order collection with expertInfo.expertId reference
  */
 router.get("/:userId/institution/orders", checkInstitutionAccess, async (req, res) => {
     try {
-        const { userContext } = req;
+        const userId = req.params.userId;
+        const userContextRaw = req.headers['user-context'];
+        let clientContext = {};
 
-        if (!userContext.isAdmin) {
-            return res.status(403).json({ error: 'Only admins can access institution data' });
+        if (userContextRaw) {
+            try {
+                clientContext = JSON.parse(userContextRaw);
+            } catch (e) {
+                console.error('Error parsing user-context header:', e);
+            }
         }
 
-        const userIds = await getInstitutionUserIds(userContext.userId);
-        const users = await User.find({ _id: { $in: userIds } })
-            .select('orders information')
-            .populate('orders');
+        const userIds = await getInstitutionUserIds(userId);
 
-        const allOrders = [];
+        // Fetch user info for enriching orders with expert details
+        const users = await User.find({ _id: { $in: userIds } }).select('information').lean();
+        const userMap = new Map();
         users.forEach(user => {
-            if (user.orders && user.orders.length > 0) {
-                user.orders.forEach(order => {
-                    if (order) {
-                        allOrders.push({
-                            ...order.toObject(),
-                            expertId: user._id,
-                            expertName: `${user.information.name} ${user.information.surname}`,
-                            expertEmail: user.information.email
-                        });
-                    }
-                });
-            }
+            userMap.set(user._id.toString(), {
+                name: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
+                email: user.information?.email || ''
+            });
+        });
+
+        // Fetch all orders where expertInfo.expertId is in userIds
+        const allOrders = await Order.find({ 'expertInfo.expertId': { $in: userIds } }).lean();
+
+        // Enrich orders with expert info (use from order if available, otherwise from userMap)
+        const enrichedOrders = allOrders.map(order => {
+            const expertIdStr = order.expertInfo?.expertId?.toString();
+            const expertInfo = userMap.get(expertIdStr) || {};
+            return {
+                ...order,
+                expertId: order.expertInfo?.expertId,
+                expertName: order.expertInfo?.name || expertInfo.name || 'Unknown Expert',
+                expertEmail: order.expertInfo?.email || expertInfo.email || ''
+            };
         });
 
         return res.json({
-            orders: allOrders,
+            orders: enrichedOrders,
             viewMode: 'institution',
             totalExperts: users.length,
-            totalOrders: allOrders.length
+            totalOrders: enrichedOrders.length
         });
     } catch (error) {
         console.error('Error fetching institution orders:', error);
@@ -297,18 +388,53 @@ router.get("/:userId/institution/orders", checkInstitutionAccess, async (req, re
 
 /**
  * GET institution statistics/summary
+ * Updated to use separate collections for Events, Services, and Packages
  */
 router.get("/:userId/institution/stats", checkInstitutionAccess, async (req, res) => {
     try {
-        const { userContext } = req;
+        const userId = req.params.userId;
+        const userContextRaw = req.headers['user-context'];
+        let clientContext = {};
 
-        if (!userContext.isAdmin) {
-            return res.status(403).json({ error: 'Only admins can access institution data' });
+        if (userContextRaw) {
+            try {
+                clientContext = JSON.parse(userContextRaw);
+            } catch (e) {
+                console.error('Error parsing user-context header:', e);
+            }
         }
 
-        const userIds = await getInstitutionUserIds(userContext.userId);
+        const userIds = await getInstitutionUserIds(userId);
+
+        // Fetch users for customer counts and basic info
         const users = await User.find({ _id: { $in: userIds } })
-            .select('events services packages customers orders information');
+            .select('customers information').lean();
+
+        // Use aggregation to get counts from separate collections efficiently
+        const [eventCounts, serviceCounts, packageCounts, orderCounts] = await Promise.all([
+            Event.aggregate([
+                { $match: { expertId: { $in: userIds.map(id => id) } } },
+                { $group: { _id: '$expertId', count: { $sum: 1 } } }
+            ]),
+            Service.aggregate([
+                { $match: { expertId: { $in: userIds.map(id => id) } } },
+                { $group: { _id: '$expertId', count: { $sum: 1 } } }
+            ]),
+            Package.aggregate([
+                { $match: { expertId: { $in: userIds.map(id => id) } } },
+                { $group: { _id: '$expertId', count: { $sum: 1 } } }
+            ]),
+            Order.aggregate([
+                { $match: { 'expertInfo.expertId': { $in: userIds.map(id => id) } } },
+                { $group: { _id: '$expertInfo.expertId', count: { $sum: 1 } } }
+            ])
+        ]);
+
+        // Create lookup maps for counts
+        const eventCountMap = new Map(eventCounts.map(e => [e._id?.toString(), e.count]));
+        const serviceCountMap = new Map(serviceCounts.map(s => [s._id?.toString(), s.count]));
+        const packageCountMap = new Map(packageCounts.map(p => [p._id?.toString(), p.count]));
+        const orderCountMap = new Map(orderCounts.map(o => [o._id?.toString(), o.count]));
 
         let totalEvents = 0;
         let totalServices = 0;
@@ -317,14 +443,15 @@ router.get("/:userId/institution/stats", checkInstitutionAccess, async (req, res
         let totalOrders = 0;
 
         const expertStats = users.map(user => {
+            const userIdStr = user._id.toString();
             const stats = {
                 expertId: user._id,
-                expertName: `${user.information.name} ${user.information.surname}`,
-                events: user.events?.length || 0,
-                services: user.services?.length || 0,
-                packages: user.packages?.length || 0,
+                expertName: `${user.information?.name || ''} ${user.information?.surname || ''}`.trim(),
+                events: eventCountMap.get(userIdStr) || 0,
+                services: serviceCountMap.get(userIdStr) || 0,
+                packages: packageCountMap.get(userIdStr) || 0,
                 customers: user.customers?.length || 0,
-                orders: user.orders?.length || 0
+                orders: orderCountMap.get(userIdStr) || 0
             };
 
             totalEvents += stats.events;
