@@ -5,10 +5,10 @@ import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
+import { verifyAccessToken } from "../../middlewares/auth.js";
 import User from "../../models/expertInformation.js";
 import Institution from "../../models/institution.js";
 import { checkInstitutionAdmin } from "../../middlewares/institutionAuth.js";
-import { verifyAccessToken } from "../../middlewares/auth.js";
 
 const router = express.Router();
 

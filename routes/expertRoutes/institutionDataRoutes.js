@@ -160,6 +160,9 @@ router.get("/:userId/institution/events", checkInstitutionAccess, async (req, re
  * GET all services from institution
  * Updated to use separate Service collection with expertId reference
  */
+/**
+ * GET all services from institution
+ */
 router.get("/:userId/institution/services", checkInstitutionAccess, async (req, res) => {
     try {
         const userId = req.params.userId;
@@ -214,6 +217,9 @@ router.get("/:userId/institution/services", checkInstitutionAccess, async (req, 
 /**
  * GET all packages from institution
  * Updated to use separate Package collection with expertId reference
+ */
+/**
+ * GET all packages from institution
  */
 router.get("/:userId/institution/packages", checkInstitutionAccess, async (req, res) => {
     try {
