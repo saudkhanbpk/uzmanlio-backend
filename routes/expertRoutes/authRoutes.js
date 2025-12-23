@@ -152,6 +152,7 @@ router.post("/login", async (req, res) => {
             return res.status(400).json({ message: "Invalid input format" });
         }
 
+
         if (!useremail || !userPassword) throw new ApiError(400, "Please provide email and password");
 
         // Optimized: Only fetch essential fields for password check first
@@ -161,6 +162,18 @@ router.post("/login", async (req, res) => {
                 message: "User Email is incorrect"
             })
         }
+
+        // Check if user has a password set
+        if (!existingUser.information.password) {
+            console.error("❌ User has no password set:", {
+                email: useremail,
+                userId: existingUser._id
+            });
+            return res.status(400).json({
+                message: "Account setup incomplete. Please contact support or reset your password."
+            });
+        }
+
         const isPasswordCorrect = await existingUser.ComparePassword(userPassword);
 
         if (!isPasswordCorrect) {

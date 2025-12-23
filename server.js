@@ -61,6 +61,7 @@ app.use(express.json({ limit: '10mb' })); // Limit payload size
 app.use(cookieParser(process.env.COOKIE_SECRET || "uzmanlio-cookie-secret"));
 
 // CSRF Configuration
+const isProduction = process.env.NODE_ENV === 'production' || process.env.BASE_URL?.includes('https://');
 const {
   invalidCsrfTokenError,
   generateCsrfToken,
@@ -74,8 +75,10 @@ const {
   cookieName: "ps-csrf",
   cookieOptions: {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false, // Force false for localhost development
+    sameSite: isProduction ? "none" : "lax", // "none" required for cross-origin in production
+    secure: isProduction, // Must be true for HTTPS (production)
+    path: '/', // Ensure cookie is sent for all paths
+    domain: isProduction ? undefined : undefined, // Let browser determine domain
   },
   size: 64,
   ignoredMethods: ["GET", "HEAD", "OPTIONS"],
@@ -83,6 +86,14 @@ const {
     // console.log("🔍 getTokenFromRequest:", req.headers["x-csrf-token"]);
     return req.headers["x-csrf-token"];
   },
+});
+
+console.log('🔒 CSRF Configuration:', {
+  isProduction,
+  cookieOptions: {
+    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction
+  }
 });
 
 // Custom middleware to sanitize inputs without reassigning read-only properties (fixes Express 5 issue)

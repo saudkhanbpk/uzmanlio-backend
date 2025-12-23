@@ -383,6 +383,15 @@ UserSchema.pre("save", async function (next) {
 
 // Compare password method
 UserSchema.methods.ComparePassword = async function (candidatePassword) {
+  // Defensive check: ensure both password and hash exist
+  if (!candidatePassword || !this.information.password) {
+    console.error("❌ ComparePassword: Missing password data", {
+      hasCandidate: !!candidatePassword,
+      hasStored: !!this.information.password,
+      userId: this._id
+    });
+    return false;
+  }
   return await bcrypt.compare(candidatePassword, this.information.password);
 };
 
