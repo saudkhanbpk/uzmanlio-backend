@@ -257,8 +257,8 @@ app.use("/api/booking/customers", doubleCsrfProtection, bookingPage);
 
 app.post("/send-sms", async (req, res) => {
   const netgsm = new Netgsm({
-    username: "8503091122",
-    password: "Uzmanlio_1807*",
+    username: process.env.NETGSM_USERNAME,
+    password: process.env.NETGSM_PASSWORD,
     appname: "Uzmanlio" // optional
   });
   const { phone, message } = req.body;
