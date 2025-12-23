@@ -490,9 +490,18 @@ router.get("/:userId", async (req, res) => {
 router.put("/:userId", verifyAccessToken, async (req, res) => {
   try {
     console.log("Updating profile for userId:", req.params.userId);
+
+    // ⛔ CRITICAL: Prevent password deletion
+    // Passwords should ONLY be changed through dedicated auth routes (signup/reset-password)
+    const updateData = { ...req.body };
+    if (updateData.information) {
+      delete updateData.information.password;
+      console.log("🔒 Password field excluded from profile update");
+    }
+
     const expertInformation = await User.findByIdAndUpdate(
       req.params.userId,
-      req.body,
+      updateData,
       {
         new: true,
         runValidators: true,
@@ -518,9 +527,18 @@ router.put("/:userId", verifyAccessToken, async (req, res) => {
 router.patch("/:userId", verifyAccessToken, async (req, res) => {
   try {
     console.log("Patching profile for userId:", req.params.userId);
+
+    // ⛔ CRITICAL: Prevent password deletion
+    // Passwords should ONLY be changed through dedicated auth routes (signup/reset-password)
+    const updateData = { ...req.body };
+    if (updateData.information) {
+      delete updateData.information.password;
+      console.log("🔒 Password field excluded from profile patch");
+    }
+
     const expertInformation = await User.findByIdAndUpdate(
       req.params.userId,
-      { $set: req.body },
+      { $set: updateData },
       { new: true, runValidators: true }
     );
 
