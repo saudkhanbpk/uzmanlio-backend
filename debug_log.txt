@@ -1,0 +1,2 @@
+Keys: invalidCsrfTokenError, generateToken, doubleCsrfProtection
+generateToken type: undefined

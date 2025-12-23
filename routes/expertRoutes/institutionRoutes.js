@@ -232,12 +232,13 @@ import crypto from 'crypto';
 router.get("/:userId/institution/invited-users", verifyAccessToken, checkInstitutionAdmin, async (req, res) => {
   try {
     // Middleware provided institution
-    await req.institution.populate('invitedUsers.acceptedByUserId', 'information');
-    const institution = req.institution;
 
-    if (!institution) {
+    if (!req.institution) {
       return res.json({ invitedUsers: [] });
     }
+
+    await req.institution.populate('invitedUsers.acceptedByUserId', 'information');
+    const institution = req.institution;
 
     const mappedInvitations = institution.invitedUsers.map(inv => {
       let name = inv.name || inv.email.split('@')[0];

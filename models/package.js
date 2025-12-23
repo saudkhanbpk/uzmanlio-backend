@@ -74,11 +74,11 @@ const PackageSchema = new Schema({
 
     // Purchase tracking
     purchasedBy: [{
-        userId: { type: Schema.Types.ObjectId, ref: "User" },
+        userId: { type: Schema.Types.ObjectId, ref: "Customer" },
         orderId: { type: Schema.Types.ObjectId, ref: "Order" },
         purchaseDate: { type: Date, default: Date.now },
         expiryDate: { type: Date },
-        sessionsUsed: { type: Number, default: 0 }
+        sessionsUsed: { type: Number, default: 0 },
     }],
 
     createdAt: { type: Date, default: Date.now },

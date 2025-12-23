@@ -40,41 +40,51 @@ import { Netgsm } from "@netgsm/sms";
 import cookieParser from "cookie-parser";
 import { doubleCsrf } from "csrf-csrf";
 
+// Import auth middleware
+import { verifyAccessToken, optionalAuth } from "./middlewares/auth.js";
+
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Cors must be first
-app.use(cors());
+// Cors must be first - Consolidated configuration
+app.use(cors({
+  origin: true, // Allow all origins for development/testing (reflects request origin)
+  credentials: true
+}));
 
 // Performance middleware - must be early in stack
 app.use(compression()); // Enable gzip compression for all responses
 app.use(express.json({ limit: '10mb' })); // Limit payload size
 app.use(cookieParser(process.env.COOKIE_SECRET || "uzmanlio-cookie-secret"));
-app.use(cors({
-  origin: process.env.FRONTEND_URL || true, // Reflect request origin or specific URL
-  credentials: true
-}));
 
 // CSRF Configuration
 const {
   invalidCsrfTokenError,
-  generateToken,
+  generateCsrfToken,
   doubleCsrfProtection,
 } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET || "uzmanlio-csrf-secret",
+  getSessionIdentifier: (req) => {
+    // console.log("🔍 getSessionIdentifier called. UserId:", req.userId);
+    return req.userId || "anonymous";
+  }, // Required for csrf-csrf v4
   cookieName: "ps-csrf",
   cookieOptions: {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: false, // Force false for localhost development
   },
   size: 64,
   ignoredMethods: ["GET", "HEAD", "OPTIONS"],
-  getTokenFromRequest: (req) => req.headers["x-csrf-token"],
+  getTokenFromRequest: (req) => {
+    // console.log("🔍 getTokenFromRequest:", req.headers["x-csrf-token"]);
+    return req.headers["x-csrf-token"];
+  },
 });
+
 // Custom middleware to sanitize inputs without reassigning read-only properties (fixes Express 5 issue)
 app.use((req, res, next) => {
   if (req.body) mongoSanitize.sanitize(req.body);
@@ -83,8 +93,10 @@ app.use((req, res, next) => {
   next();
 });
 // CSRF Protection Endpoint
-app.get("/api/csrf-token", (req, res) => {
-  const token = generateToken(req, res);
+app.get("/api/csrf-token", optionalAuth, (req, res) => {
+  console.log("🎟️ Generating CSRF token for user:", req.userId || "anonymous");
+  const token = generateCsrfToken(req, res);
+  // console.log("✅ Generated token:", token);
   res.json({ csrfToken: token });
 });
 
@@ -182,9 +194,6 @@ app.get('/test', async (_req, res) => {
 
 
 
-
-// Import auth middleware
-import { verifyAccessToken, optionalAuth } from "./middlewares/auth.js";
 
 // Expert information routes
 // Auth routes (login, signup, forgot-password) - NO authentication required

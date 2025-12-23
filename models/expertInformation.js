@@ -202,10 +202,10 @@ const CustomerNoteSchema = new Schema({
 
 const cardSchema = new Schema({
   id: { type: String, default: uuidv4 },
-  cardNumber: { type: String, required: true },
-  cardHolderName: { type: String, required: true },
-  cardExpiry: { type: String, required: true },
-  cardCvv: { type: String, required: true },
+  cardNumber: { type: String },
+  cardHolderName: { type: String },
+  cardExpiry: { type: String },
+  cardCvv: { type: String },
   billingInfo: {
     companyName: { type: String },
     taxNumber: { type: String },
