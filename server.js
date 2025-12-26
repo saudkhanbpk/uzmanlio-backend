@@ -58,7 +58,7 @@ app.use(cors({
 // Performance middleware - must be early in stack
 app.use(compression()); // Enable gzip compression for all responses
 app.use(express.json({ limit: '10mb' })); // Limit payload size
-app.use(cookieParser(process.env.COOKIE_SECRET || "uzmanlio-cookie-secret"));
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 // CSRF Configuration
 const isProduction = process.env.NODE_ENV === 'production' || process.env.BASE_URL?.includes('https://');
@@ -67,7 +67,7 @@ const {
   generateCsrfToken,
   doubleCsrfProtection,
 } = doubleCsrf({
-  getSecret: () => process.env.CSRF_SECRET || "uzmanlio-csrf-secret",
+  getSecret: () => process.env.CSRF_SECRET,
   getSessionIdentifier: (req) => {
     // console.log("🔍 getSessionIdentifier called. UserId:", req.userId);
     return req.userId || "anonymous";
