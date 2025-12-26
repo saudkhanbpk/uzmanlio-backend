@@ -5,8 +5,8 @@ import axios from 'axios';
 import xml2js from 'xml2js';
 
 const NETGSM_USERCODE = process.env.NETGSM_USERCODE || '8503091122';
-const NETGSM_PASSWORD = process.env.NETGSM_PASSWORD || 'Contentia_1807*';
-const NETGSM_MSGHEADER = process.env.NETGSM_MSGHEADER || '8503091122';
+const NETGSM_PASSWORD = process.env.NETGSM_PASSWORD || 'Uzmanlio_1807*';
+const NETGSM_MSGHEADER = process.env.NETGSM_MSGHEADER || 'Uzmanlio';
 const NETGSM_OTP_URL = process.env.NETGSM_OTP_URL || 'https://api.netgsm.com.tr/sms/send/otp';
 
 // Debug: Log the actual values being used
@@ -40,32 +40,23 @@ export async function sendSms(phone, message) {
         };
     }
 
-    // Format phone number for Netgsm (remove leading 0, ensure 10 digits)
-    let formattedPhone = phone.toString().replace(/\D/g, ''); // Remove non-digits
-    if (formattedPhone.startsWith('0')) {
-        formattedPhone = formattedPhone.substring(1); // Remove leading 0
-    }
-    if (formattedPhone.length !== 10) {
+    // Format phone number for Netgsm (get last 10 digits, must start with 5)
+    let formattedPhone = phone.toString().replace(/\D/g, '').slice(-10);
+
+    if (formattedPhone.length !== 10 || !formattedPhone.startsWith('5')) {
         return {
             success: false,
-            error: 'Phone number must be 10 digits (without country code)'
+            error: 'Phone number must be 10 digits starting with 5 (Turkish mobile format)'
         };
     }
 
     console.log('📱 Original phone:', phone);
     console.log('📱 Formatted phone:', formattedPhone);
 
-    // Smart msgheader handling based on Turkish mobile operators
-    const phonePrefix = formattedPhone.substring(0, 3);
-
-    // Turkish mobile operator prefixes that work with msgheader (mainly Turkcell)
-    const operatorsWithHeader = ['530', '531', '532', '533', '534', '535', '536', '537', '538', '539'];
-
     let xml;
 
-    if (operatorsWithHeader.includes(phonePrefix)) {
-        console.log('📱 Using msgheader for operator prefix:', phonePrefix);
-        xml = `<?xml version="1.0" encoding="UTF-8"?>
+    console.log('📱 Using msgheader:', NETGSM_MSGHEADER);
+    xml = `<?xml version="1.0" encoding="UTF-8"?>
 <mainbody>
   <header>
     <usercode>${NETGSM_USERCODE}</usercode>
@@ -77,21 +68,6 @@ export async function sendSms(phone, message) {
     <no>${formattedPhone}</no>
   </body>
 </mainbody>`;
-    } else {
-        console.log('📱 Using NO msgheader for operator prefix:', phonePrefix);
-        xml = `<?xml version="1.0" encoding="UTF-8"?>
-<mainbody>
-  <header>
-    <usercode>${NETGSM_USERCODE}</usercode>
-    <password>${NETGSM_PASSWORD}</password>
-    <msgheader>${NETGSM_USERCODE}</msgheader>
-  </header>
-  <body>
-    <msg><![CDATA[${message}]]></msg>
-    <no>${formattedPhone}</no>
-  </body>
-</mainbody>`;
-    }
 
     console.log('📤 Sending SMS to Netgsm API...');
     console.log('📱 Phone:', phone);
@@ -168,7 +144,7 @@ export async function sendSms(phone, message) {
  * @returns {Promise<{success: boolean, jobID?: string, error?: string, code?: string}>}
  */
 export async function sendOtp(phone, otp) {
-    const message = `Contentia Doğrulama Kodu: ${otp}`;
+    const message = `Uzmanlio Doğrulama Kodu: ${otp}`;
     return sendSms(phone, message);
 }
 

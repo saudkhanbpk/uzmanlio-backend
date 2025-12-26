@@ -36,7 +36,7 @@ import customerRoutes from "./routes/expertRoutes/customerRoutes.js";
 import fs from "fs";
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
-import { Netgsm } from "@netgsm/sms";
+import { sendSms } from "./services/netgsmService.js";
 import cookieParser from "cookie-parser";
 import { doubleCsrf } from "csrf-csrf";
 
@@ -256,40 +256,31 @@ app.use("/api/booking/customers", doubleCsrfProtection, bookingPage);
 
 
 app.post("/send-sms", async (req, res) => {
-  const netgsm = new Netgsm({
-    username: process.env.NETGSM_USERNAME,
-    password: process.env.NETGSM_PASSWORD,
-    appname: "Uzmanlio" // optional
-  });
   const { phone, message } = req.body;
 
   if (!phone || !message) {
     return res.status(400).json({ success: false, error: "Phone and message are required." });
   }
 
-  // Normalize phone number (keep last 10 digits)
-  let target = phone.length > 10 ? phone.slice(-10) : phone;
-  if (target.length !== 10) {
-    return res.status(400).json({ success: false, error: "Invalid phone number format." });
-  }
-
   try {
-    const response = await netgsm.sendRestSms({
-      msgheader: "8503091122", // Your SMS header
-      encoding: "TR",          // Turkish characters support
-      messages: [
-        { msg: message, no: `5${target}` } // Add leading '5' for Turkish mobile numbers
-      ]
-    });
+    const result = await sendSms(phone, message);
 
-    res.json({
-      success: true,
-      sent_to: phone,
-      netgsm_response: response
-    });
+    if (result.success) {
+      res.json({
+        success: true,
+        sent_to: phone,
+        jobID: result.jobID
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+        code: result.code
+      });
+    }
   } catch (err) {
-    console.error("NETGSM ERROR:", err);
-    res.status(500).json({ success: false, error: err });
+    console.error("NETGSM ROUTE ERROR:", err);
+    res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
 
