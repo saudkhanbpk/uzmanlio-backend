@@ -41,7 +41,9 @@ import cookieParser from "cookie-parser";
 import { doubleCsrf } from "csrf-csrf";
 
 // Import auth middleware
+// Import auth middleware
 import { verifyAccessToken, optionalAuth } from "./middlewares/auth.js";
+import { standardLimiter, authLimiter } from "./middlewares/rateLimiter.js";
 
 // Get __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -97,7 +99,12 @@ console.log('🔒 CSRF Configuration:', {
 });
 
 // Custom middleware to sanitize inputs without reassigning read-only properties (fixes Express 5 issue)
-app.use((req, res, next) => {
+// Apply standard rate limiting to all API routes
+app.use("/api", standardLimiter);
+
+// Specific stricter limits for Auth and SMS
+app.use("/api/expert/auth", authLimiter);
+app.post("/send-sms", authLimiter, async (req, res) => {
   if (req.body) mongoSanitize.sanitize(req.body);
   if (req.params) mongoSanitize.sanitize(req.params);
   if (req.query) mongoSanitize.sanitize(req.query);
@@ -255,7 +262,7 @@ app.use("/api/booking/customers", doubleCsrfProtection, bookingPage);
 
 
 
-app.post("/send-sms", async (req, res) => {
+app.post("/send-sms", authLimiter, async (req, res) => {
   const { phone, message } = req.body;
 
   if (!phone || !message) {

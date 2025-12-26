@@ -33,6 +33,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^8.2.1",
     "googleapis": "^160.0.0",
     "joi": "^18.0.2",
     "json2csv": "^6.0.0-alpha.2",

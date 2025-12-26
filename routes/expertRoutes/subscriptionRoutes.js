@@ -175,17 +175,11 @@ router.post("/:userId/new-subscription", async (req, res) => {
         console.log("Adding the Payment Information and Creating New Subscription");
         const { userId } = req.params;
         const {
-            cardHolderName,
-            cardNumber,
-            cardCvv,
-            cardExpiry,
-            currentPlan,
             selectedSeats,
-            subscriptionDuration,
             price,
             duration,
             plantype,
-            // New billing info fields
+            // Billing info fields
             companyName,
             taxNumber,
             taxOffice,
@@ -195,7 +189,7 @@ router.post("/:userId/new-subscription", async (req, res) => {
             phoneNumber
         } = req.body;
 
-        console.log("Data Received For Card", req.body);
+        console.log("Subscription request received for userId:", userId);
 
         const user = await findUserById(userId);
         const existingInstitutionId = user.subscription?.institutionId || null;
@@ -205,41 +199,25 @@ router.post("/:userId/new-subscription", async (req, res) => {
             user.cards = [];
         }
 
-        const existingCard = user.cards.find(
-            (card) => card.cardNumber === cardNumber
-        );
+        // Only store/update billing info. We keep the cards array structure for compatibility 
+        // but only store the billingInfo.
+        const billingData = {
+            companyName: companyName || "",
+            taxNumber: taxNumber || "",
+            taxOffice: taxOffice || "",
+            address: address || "",
+            city: city || "",
+            district: district || "",
+            phoneNumber: phoneNumber || ""
+        };
 
-        if (!existingCard) {
-            user.cards.push({
-                id: uuidv4(),
-                cardHolderName,
-                cardNumber,
-                cardCvv,
-                cardExpiry,
-                // Store billing info with card
-                billingInfo: {
-                    companyName: companyName || "",
-                    taxNumber: taxNumber || "",
-                    taxOffice: taxOffice || "",
-                    address: address || "",
-                    city: city || "",
-                    district: district || "",
-                    phoneNumber: phoneNumber || ""
-                }
-            });
-            console.log("Card Added Successfully with Billing Info");
+        if (user.cards.length === 0) {
+            user.cards.push({ billingInfo: billingData });
+            console.log("Billing Info Added Successfully");
         } else {
-            // Update existing card's billing info
-            existingCard.billingInfo = {
-                companyName: companyName || existingCard.billingInfo?.companyName || "",
-                taxNumber: taxNumber || existingCard.billingInfo?.taxNumber || "",
-                taxOffice: taxOffice || existingCard.billingInfo?.taxOffice || "",
-                address: address || existingCard.billingInfo?.address || "",
-                city: city || existingCard.billingInfo?.city || "",
-                district: district || existingCard.billingInfo?.district || "",
-                phoneNumber: phoneNumber || existingCard.billingInfo?.phoneNumber || ""
-            };
-            console.log("Card Already Exists, Updated Billing Info");
+            // Update the existing entry's billing info
+            user.cards[0].billingInfo = billingData;
+            console.log("Billing Info Updated Successfully");
         }
 
         const now = new Date();
