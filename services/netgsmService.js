@@ -4,10 +4,10 @@
 import axios from 'axios';
 import xml2js from 'xml2js';
 
-const NETGSM_USERCODE = process.env.NETGSM_USERCODE || '8503091122';
-const NETGSM_PASSWORD = process.env.NETGSM_PASSWORD || 'Uzmanlio_1807*';
-const NETGSM_MSGHEADER = process.env.NETGSM_MSGHEADER || 'Uzmanlio';
-const NETGSM_OTP_URL = process.env.NETGSM_OTP_URL || 'https://api.netgsm.com.tr/sms/send/otp';
+const NETGSM_USERCODE = process.env.NETGSM_USERCODE;
+const NETGSM_PASSWORD = process.env.NETGSM_PASSWORD;
+const NETGSM_MSGHEADER = process.env.NETGSM_MSGHEADER;
+const NETGSM_OTP_URL = process.env.NETGSM_OTP_URL;
 
 // Debug: Log the actual values being used
 console.log('🔧 Netgsm Configuration:');
@@ -53,14 +53,14 @@ export async function sendSms(phone, message) {
     console.log('📱 Original phone:', phone);
     console.log('📱 Formatted phone:', formattedPhone);
 
-    let xml;
-
     console.log('📱 Using msgheader:', NETGSM_MSGHEADER);
     xml = `<?xml version="1.0" encoding="UTF-8"?>
 <mainbody>
   <header>
+    <company dil="TR">Netgsm</company>
     <usercode>${NETGSM_USERCODE}</usercode>
     <password>${NETGSM_PASSWORD}</password>
+    <type>1:n</type>
     <msgheader>${NETGSM_MSGHEADER}</msgheader>
   </header>
   <body>

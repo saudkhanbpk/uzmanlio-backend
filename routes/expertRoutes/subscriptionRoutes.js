@@ -175,7 +175,13 @@ router.post("/:userId/new-subscription", async (req, res) => {
         console.log("Adding the Payment Information and Creating New Subscription");
         const { userId } = req.params;
         const {
+            cardHolderName,
+            cardNumber,
+            cardCvv,
+            cardExpiry,
+            currentPlan,
             selectedSeats,
+            subscriptionDuration,
             price,
             duration,
             plantype,
