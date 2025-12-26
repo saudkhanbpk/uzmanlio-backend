@@ -12,7 +12,7 @@ import Event from "../../models/event.js";
 import { sendEmail } from "../../services/email.js";
 import { getWelcomeEmailTemplate, getForgotPasswordOTPTemplate, getPasswordResetSuccessTemplate, getEmailVerificationTemplate } from "../../services/emailTemplates.js";
 
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret";
 
 const router = express.Router();
 
@@ -688,15 +688,21 @@ router.post("/refresh-token", async (req, res) => {
         // Verify refresh token
         let decoded;
         try {
+            console.log("  - Attempting verification with secret length:", REFRESH_TOKEN_SECRET.length);
             decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
             console.log("  ✅ Token signature verified. User ID:", decoded.id);
         } catch (error) {
             console.log("  ❌ Token verification failed:", error.message);
+            // Optional: try to decode without verification to see what's inside
+            const unverified = jwt.decode(refreshToken);
+            console.log("  - Unverified payload:", unverified);
+
             return res.status(401).json({
                 success: false,
                 message: "Invalid or expired refresh token",
                 code: "INVALID_REFRESH_TOKEN",
-                debug: error.message
+                debug: error.message,
+                tokenType: error.name
             });
         }
 
