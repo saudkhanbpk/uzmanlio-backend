@@ -106,12 +106,6 @@ router.post("/signup", validateBody(signupSchema), async (req, res) => {
                 phoneCode: userData.information.phoneCode,
                 gender: userData.information.gender,
             },
-            // cards: {
-            //     cardNumber: userData.subscription.cardNumber,
-            //     cardHolderName: userData.subscription.cardHolderName,
-            //     cardExpiry: userData.subscription.expiry,
-            //     cardCvv: userData.subscription.cvv,
-            // },
             subscription: {
                 seats: userData.subscription.seats,
                 isAdmin: true,

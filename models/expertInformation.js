@@ -192,14 +192,7 @@ const CustomerNoteSchema = new Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
-
-
 const cardSchema = new Schema({
-  id: { type: String, default: uuidv4 },
-  cardNumber: { type: String },
-  cardHolderName: { type: String },
-  cardExpiry: { type: String },
-  cardCvv: { type: String },
   billingInfo: {
     companyName: { type: String },
     taxNumber: { type: String },
@@ -210,7 +203,6 @@ const cardSchema = new Schema({
     phoneNumber: { type: String }
   }
 });
-
 
 const UserSchema = new Schema(
   {
