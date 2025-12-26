@@ -7,11 +7,11 @@ import xml2js from 'xml2js';
 const NETGSM_USERCODE = process.env.NETGSM_USERCODE;
 const NETGSM_PASSWORD = process.env.NETGSM_PASSWORD;
 const NETGSM_MSGHEADER = process.env.NETGSM_MSGHEADER;
-const NETGSM_OTP_URL = process.env.NETGSM_OTP_URL;
+const NETGSM_XML_URL = process.env.NETGSM_XML_URL || 'https://api.netgsm.com.tr/sms/send/xml';
 
 // Debug: Log the actual values being used
 console.log('🔧 Netgsm Configuration:');
-console.log('   URL:', NETGSM_OTP_URL);
+console.log('   URL:', NETGSM_XML_URL);
 console.log('   Usercode:', NETGSM_USERCODE);
 console.log('   Password:', NETGSM_PASSWORD ? NETGSM_PASSWORD.substring(0, 5) + '*' : 'NOT SET');
 console.log('   Msgheader:', NETGSM_MSGHEADER);
@@ -77,7 +77,7 @@ export async function sendSms(phone, message) {
     console.log('📋 XML Request:', xml);
 
     try {
-        let response = await axios.post(NETGSM_OTP_URL, xml, {
+        let response = await axios.post(NETGSM_XML_URL, xml, {
             headers: {
                 'Content-Type': 'text/xml',
                 'Accept': 'application/xml-dtd'
