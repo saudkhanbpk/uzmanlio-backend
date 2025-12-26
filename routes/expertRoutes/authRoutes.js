@@ -11,8 +11,22 @@ import Order from "../../models/orders.js";
 import Event from "../../models/event.js";
 import { sendEmail } from "../../services/email.js";
 import { getWelcomeEmailTemplate, getForgotPasswordOTPTemplate, getPasswordResetSuccessTemplate, getEmailVerificationTemplate } from "../../services/emailTemplates.js";
+import { validateBody, validateParams } from "../../middlewares/validateRequest.js";
+import {
+    signupSchema,
+    loginSchema,
+    forgotPasswordSchema,
+    verifyOtpSchema,
+    resetPasswordSchema,
+    verifyEmailSchema,
+    resendVerificationSchema,
+    refreshTokenSchema,
+    logoutSchema,
+    userIdParamsSchema,
+} from "../../validations/auth.schema.js";
 
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret";
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'uzmanlio-default-access-secret-123';
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'uzmanlio-default-refresh-secret-123';
 
 const router = express.Router();
 
@@ -61,12 +75,9 @@ const generateOTP = () => {
 
 
 ////////////////////////   Sign Up New User    //////////////////////////
-router.post("/signup", async (req, res) => {
+router.post("/signup", validateBody(signupSchema), async (req, res) => {
     console.log("Signing Up User", req.body)
     const userData = req.body
-    if (!userData.information.email || !userData.password) {
-        throw new ApiError(400, "Please provide email and password");
-    }
     try {
         const existingUser = await User.findOne({ "information.email": userData.information.email });
 
@@ -142,18 +153,12 @@ router.post("/signup", async (req, res) => {
 });
 
 
-router.post("/login", async (req, res) => {
+router.post("/login", validateBody(loginSchema), async (req, res) => {
     try {
         const useremail = req.body.email;
         const userPassword = req.body.password;
 
-        // Security: Ensure inputs are strings to prevent NoSQL injection via objects
-        if (typeof useremail !== 'string' || typeof userPassword !== 'string') {
-            return res.status(400).json({ message: "Invalid input format" });
-        }
-
-
-        if (!useremail || !userPassword) throw new ApiError(400, "Please provide email and password");
+        // Note: Input validation is now handled by Joi middleware
 
         // Optimized: Only fetch essential fields for password check first
         const existingUser = await User.findOne({ "information.email": useremail });
@@ -264,15 +269,14 @@ router.post("/login", async (req, res) => {
         const userEvents = await Event.find({ expertId: existingUser._id }).lean();
         userObject.events = userEvents;
 
-        return res
-            .status(200).json({
-                user: userObject,
-                accessToken,
-                refreshToken,
-                subscriptionExpired,
-                subscriptionEndDate,
-                subscriptionValid: !subscriptionExpired
-            }, "User logged in successfully");
+        return res.status(200).json({
+            user: userObject,
+            accessToken,
+            refreshToken,
+            subscriptionExpired,
+            subscriptionEndDate,
+            subscriptionValid: !subscriptionExpired
+        });
 
     } catch (error) {
         return res.status(500).json({
@@ -283,16 +287,10 @@ router.post("/login", async (req, res) => {
 
 
 ////////////////////////   Forgot Password - Send OTP    //////////////////////////
-router.post("/forgot-password", async (req, res) => {
+router.post("/forgot-password", validateBody(forgotPasswordSchema), async (req, res) => {
     try {
         const { email } = req.body;
-
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: "Geçerli bir E-Posta Adresi Girin"
-            });
-        }
+        // Note: Validation handled by Joi middleware
 
         // Find user by email
         const user = await User.findOne({ "information.email": email });
@@ -351,16 +349,10 @@ router.post("/forgot-password", async (req, res) => {
 
 
 ////////////////////////   Verify OTP    //////////////////////////
-router.post("/verify-otp", async (req, res) => {
+router.post("/verify-otp", validateBody(verifyOtpSchema), async (req, res) => {
     try {
         const { email, otp } = req.body;
-
-        if (!email || !otp) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and OTP are required"
-            });
-        }
+        // Note: Validation handled by Joi middleware
 
         // Find user
         const user = await User.findOne({ "information.email": email });
@@ -411,24 +403,10 @@ router.post("/verify-otp", async (req, res) => {
 
 
 ////////////////////////   Reset Password    //////////////////////////
-router.post("/reset-password", async (req, res) => {
+router.post("/reset-password", validateBody(resetPasswordSchema), async (req, res) => {
     try {
         const { email, otp, newPassword } = req.body;
-
-        if (!email || !otp || !newPassword) {
-            return res.status(400).json({
-                success: false,
-                message: "Email, OTP, and new password are required"
-            });
-        }
-
-        // Validate password strength
-        if (newPassword.length < 8) {
-            return res.status(400).json({
-                success: false,
-                message: "Password must be at least 8 characters long"
-            });
-        }
+        // Note: Validation handled by Joi middleware
 
         // Find user
         const user = await User.findOne({ "information.email": email });
@@ -499,16 +477,10 @@ router.post("/reset-password", async (req, res) => {
 
 
 ////////////////////////   Verify Email    //////////////////////////
-router.post("/verify-email", async (req, res) => {
+router.post("/verify-email", validateBody(verifyEmailSchema), async (req, res) => {
     try {
         const { token } = req.body;
-
-        if (!token) {
-            return res.status(400).json({
-                success: false,
-                message: "Verification token is required"
-            });
-        }
+        // Note: Validation handled by Joi middleware
 
         // Find user with this token
         const user = await User.findOne({
@@ -545,16 +517,10 @@ router.post("/verify-email", async (req, res) => {
 });
 
 ////////////////////////   Resend Verification Email    //////////////////////////
-router.post("/resend-verification", async (req, res) => {
+router.post("/resend-verification", validateBody(resendVerificationSchema), async (req, res) => {
     try {
         const { email } = req.body;
-
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: "Geçerli bir E-Posta Adresi Girin"
-            });
-        }
+        // Note: Validation handled by Joi middleware
 
         const user = await User.findOne({ "information.email": email });
 
@@ -613,25 +579,10 @@ router.post("/resend-verification", async (req, res) => {
 
 
 ////////////////////////   Delete User/Expert    //////////////////////////
-router.delete("/:userId", async (req, res) => {
+router.delete("/:userId", validateParams(userIdParamsSchema), async (req, res) => {
     try {
         const { userId } = req.params;
-
-        // Validate userId
-        if (!userId) {
-            return res.status(400).json({
-                success: false,
-                message: "User ID is required"
-            });
-        }
-
-        // Check if userId is a valid MongoDB ObjectId
-        if (!mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid user ID format"
-            });
-        }
+        // Note: Validation handled by Joi middleware
 
         // Find and delete the user
         const deletedUser = await User.findByIdAndDelete(userId);
@@ -667,7 +618,7 @@ router.delete("/:userId", async (req, res) => {
 
 ////////////////////////   Refresh Token    //////////////////////////
 ////////////////////////   Refresh Token    //////////////////////////
-router.post("/refresh-token", async (req, res) => {
+router.post("/refresh-token", validateBody(refreshTokenSchema), async (req, res) => {
     try {
         const { refreshToken } = req.body;
 
@@ -675,15 +626,7 @@ router.post("/refresh-token", async (req, res) => {
         console.log("🔄 Refresh Token Request Initiated");
         console.log("  - Secret exists:", !!REFRESH_TOKEN_SECRET);
         console.log("  - Secret length:", REFRESH_TOKEN_SECRET ? REFRESH_TOKEN_SECRET.length : 0);
-
-        if (!refreshToken) {
-            console.log("  ❌ No refresh token in body");
-            return res.status(400).json({
-                success: false,
-                message: "Refresh token is required",
-                code: "NO_REFRESH_TOKEN"
-            });
-        }
+        // Note: Validation handled by Joi middleware
 
         // Verify refresh token
         let decoded;
@@ -764,7 +707,7 @@ router.post("/refresh-token", async (req, res) => {
 
 
 ////////////////////////   Logout    //////////////////////////
-router.post("/logout", async (req, res) => {
+router.post("/logout", validateBody(logoutSchema), async (req, res) => {
     try {
         const { userId } = req.body;
 

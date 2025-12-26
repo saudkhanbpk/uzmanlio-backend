@@ -3,6 +3,20 @@ import * as customerController from "../../controllers/customerController.js";
 import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
+import { validateParams, validateBody, validateQuery } from "../../middlewares/validateRequest.js";
+import {
+    createCustomerSchema,
+    updateCustomerSchema,
+    updateCustomerStatusSchema,
+    archiveCustomerSchema,
+    addCustomerNoteSchema,
+    updateCustomerNoteSchema,
+    bulkImportCustomersSchema,
+    customerIdParams,
+    customerNoteIdParams,
+    getCustomersQuery,
+} from "../../validations/customer.schema.js";
+import { userIdParams } from "../../validations/common.schema.js";
 
 const router = express.Router();
 
@@ -25,31 +39,102 @@ const customerNoteUpload = createMulterUpload({
 // Base route is mounted as /api/expert (in server.js)
 
 // Customers CRUD
-router.get("/:userId/customers", customerController.getCustomers);
-router.post("/:userId/customers", customerController.createCustomer);
-router.get("/:userId/customers/:customerId", customerController.getCustomerById);
-router.put("/:userId/customers/:customerId", customerController.updateCustomer);
-router.delete("/:userId/customers/:customerId", customerController.deleteCustomer);
+router.get(
+    "/:userId/customers",
+    validateParams(userIdParams),
+    validateQuery(getCustomersQuery),
+    customerController.getCustomers
+);
+
+router.post(
+    "/:userId/customers",
+    validateParams(userIdParams),
+    validateBody(createCustomerSchema),
+    customerController.createCustomer
+);
+
+router.get(
+    "/:userId/customers/:customerId",
+    validateParams(customerIdParams),
+    customerController.getCustomerById
+);
+
+router.put(
+    "/:userId/customers/:customerId",
+    validateParams(customerIdParams),
+    validateBody(updateCustomerSchema),
+    customerController.updateCustomer
+);
+
+router.delete(
+    "/:userId/customers/:customerId",
+    validateParams(customerIdParams),
+    customerController.deleteCustomer
+);
 
 // Customer Status & Archive
-router.patch("/:userId/customers/:customerId/archive", customerController.archiveCustomer);
-router.patch("/:userId/customers/:customerId/status", customerController.updateCustomerStatus);
+router.patch(
+    "/:userId/customers/:customerId/archive",
+    validateParams(customerIdParams),
+    validateBody(archiveCustomerSchema),
+    customerController.archiveCustomer
+);
+
+router.patch(
+    "/:userId/customers/:customerId/status",
+    validateParams(customerIdParams),
+    validateBody(updateCustomerStatusSchema),
+    customerController.updateCustomerStatus
+);
 
 // Customer Statistics
-router.get("/:userId/customersStats", customerController.getCustomerStats);
+router.get(
+    "/:userId/customersStats",
+    validateParams(userIdParams),
+    customerController.getCustomerStats
+);
 
 // Customer Notes
-router.get("/:userId/customers/:customerId/notes", customerController.getCustomerNotes);
-router.post("/:userId/customers/:customerId/notes",
+router.get(
+    "/:userId/customers/:customerId/notes",
+    validateParams(customerIdParams),
+    customerController.getCustomerNotes
+);
+
+router.post(
+    "/:userId/customers/:customerId/notes",
+    validateParams(customerIdParams),
     customerNoteUpload.single('file'),
     handleMulterError,
     customerController.addCustomerNote
 );
-router.put("/:userId/customers/:customerId/notes/:noteId", customerController.updateCustomerNote);
-router.delete("/:userId/customers/:customerId/notes/:noteId", customerController.deleteCustomerNote);
+
+router.put(
+    "/:userId/customers/:customerId/notes/:noteId",
+    validateParams(customerNoteIdParams),
+    validateBody(updateCustomerNoteSchema),
+    customerController.updateCustomerNote
+);
+
+router.delete(
+    "/:userId/customers/:customerId/notes/:noteId",
+    validateParams(customerNoteIdParams),
+    customerController.deleteCustomerNote
+);
 
 // Bulk Import & Export
-router.post("/:userId/customers/bulk-import", customerController.bulkImportCustomers);
-router.get("/:userId/customerscsv/export", customerController.exportCustomersCsv);
+router.post(
+    "/:userId/customers/bulk-import",
+    validateParams(userIdParams),
+    validateBody(bulkImportCustomersSchema),
+    customerController.bulkImportCustomers
+);
+
+router.get(
+    "/:userId/customerscsv/export",
+    validateParams(userIdParams),
+    customerController.exportCustomersCsv
+);
 
 export default router;
+

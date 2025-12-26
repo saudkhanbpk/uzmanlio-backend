@@ -2,10 +2,15 @@ import express from "express";
 import mongoose from "mongoose";
 import Coupon from "../../models/Coupon.js";
 import User from "../../models/expertInformation.js";
+import { validateBody } from "../../middlewares/validateRequest.js";
+import {
+  createCouponSchema,
+  updateCouponSchema,
+} from "../../validations/subscription.schema.js";
 
 const router = express.Router({ mergeParams: true });
 
-// Middleware: validate userId param
+// Middleware: validate userId param (keeping existing for user existence check)
 router.use(async (req, res, next) => {
   const { userId } = req.params;
   if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -30,14 +35,11 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/expert/:userId/coupons - create coupon for user
-router.post("/", async (req, res) => {
+router.post("/", validateBody(createCouponSchema), async (req, res) => {
   try {
     const { userId } = req.params;
     const { code, type, value, maxUsage, expiryDate } = req.body;
-
-    if (!code || !type || value == null) {
-      return res.status(400).json({ error: "code, type and value are required" });
-    }
+    // Note: Validation handled by Joi middleware
 
     const coupon = new Coupon({
       code: code.toUpperCase().trim(),
@@ -60,7 +62,7 @@ router.post("/", async (req, res) => {
 });
 
 // PUT /api/expert/:userId/coupons/:couponId - update coupon
-router.put("/:couponId", async (req, res) => {
+router.put("/:couponId", validateBody(updateCouponSchema), async (req, res) => {
   try {
     const { userId, couponId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(couponId)) {

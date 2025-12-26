@@ -1,6 +1,16 @@
 import express from "express";
 import { createMulterUpload, handleMulterError } from '../../middlewares/upload.js';
 import * as bookingController from '../../controllers/customerRoutes/bookingController.js';
+import { validateParams, validateBody, validateQuery } from "../../middlewares/validateRequest.js";
+import {
+  bookingDataSchema,
+  validateCouponSchema,
+  bookingParams,
+  bookingFormParams,
+  institutionBlogsFormsParams,
+  getPackagesQuery,
+} from "../../validations/booking.schema.js";
+import { userIdParams } from "../../validations/common.schema.js";
 
 const router = express.Router({ mergeParams: true });
 
@@ -14,13 +24,21 @@ const bookingUpload = createMulterUpload({
 });
 
 // Blog and Forms routes
-router.get("/:institutionID/blogs-forms", bookingController.getBlogsAndForms);
+router.get(
+  "/:institutionID/blogs-forms",
+  validateParams(institutionBlogsFormsParams),
+  bookingController.getBlogsAndForms
+);
 
 // Experts and Institutions list
 router.get("/experts-institutions", bookingController.getExpertsAndInstitutions);
 
 // Expert basic details
-router.get("/:expertID", bookingController.getExpertDetails);
+router.get(
+  "/:expertID",
+  validateParams(bookingParams),
+  bookingController.getExpertDetails
+);
 
 // Test route
 router.get("/test-booking", (req, res) => {
@@ -30,17 +48,38 @@ router.get("/test-booking", (req, res) => {
 // Main booking submission
 router.post(
   "/:finalCustomerId/form",
+  validateParams(bookingFormParams),
   bookingUpload.array("files"),
   handleMulterError,
   bookingController.submitBooking
 );
 
 // Package routes
-router.get("/:userId/packages", bookingController.getPackages);
-router.get("/:userId/packages/active", bookingController.getActivePackages);
-router.get("/:userId/packages/available", bookingController.getAvailablePackages);
+router.get(
+  "/:userId/packages",
+  validateParams(userIdParams),
+  validateQuery(getPackagesQuery),
+  bookingController.getPackages
+);
+
+router.get(
+  "/:userId/packages/active",
+  validateParams(userIdParams),
+  bookingController.getActivePackages
+);
+
+router.get(
+  "/:userId/packages/available",
+  validateParams(userIdParams),
+  bookingController.getAvailablePackages
+);
 
 // Coupon validation
-router.post("/:customerId/validate-coupon", bookingController.validateCoupon);
+router.post(
+  "/:customerId/validate-coupon",
+  validateBody(validateCouponSchema),
+  bookingController.validateCoupon
+);
 
 export default router;
+

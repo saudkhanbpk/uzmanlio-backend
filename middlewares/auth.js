@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken";
 import User from "../models/expertInformation.js";
 
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'uzmanlio-default-access-secret-123';
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'uzmanlio-default-refresh-secret-123';
 
 /**
  * Middleware to verify JWT access token

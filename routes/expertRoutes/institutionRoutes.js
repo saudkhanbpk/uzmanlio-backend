@@ -9,6 +9,12 @@ import { verifyAccessToken } from "../../middlewares/auth.js";
 import User from "../../models/expertInformation.js";
 import Institution from "../../models/institution.js";
 import { checkInstitutionAdmin } from "../../middlewares/institutionAuth.js";
+import { validateParams, validateBody } from "../../middlewares/validateRequest.js";
+import {
+  updateInstitutionSchema,
+  inviteUserSchema,
+} from "../../validations/institution.schema.js";
+import { userIdParams } from "../../validations/common.schema.js";
 
 const router = express.Router();
 
