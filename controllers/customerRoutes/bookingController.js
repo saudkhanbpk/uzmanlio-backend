@@ -6,7 +6,6 @@ import Order from "../../models/orders.js";
 import Event from "../../models/event.js";
 import Service from "../../models/service.js";
 import Package from "../../models/package.js";
-import CustomerAppointments from "../../models/customerAppointment.js";
 import CustomerNote from "../../models/customerNotes.js";
 import Coupon from "../../models/Coupon.js";
 import Institution from "../../models/institution.js";
@@ -226,33 +225,13 @@ export const submitBooking = async (req, res) => {
             });
         }
 
-        let appointment = null;
         let event = null;
 
         // Create appointment and event for services
         if (mappedEventType === "service") {
-            appointment = await CustomerAppointments.create(
-                [{
-                    serviceId: selectedOffering.id,
-                    serviceName: selectedOffering.title,
-                    date: normalizedDate,
-                    time: normalizedTime,
-                    duration: selectedOffering.duration || 60,
-                    status: "scheduled",
-                    price: total,
-                    paymentStatus: "pending",
-                    notes: orderNotes,
-                    meetingType: selectedOffering.meetingType || "",
-                    eventType: selectedOffering.eventType || "online",
-                }],
-                { session }
-            ).then(res => res[0]);
-
-            customer.appointments.push(appointment._id);
             customer.totalAppointments = (customer.totalAppointments || 0) + 1;
             customer.lastAppointment = safeDate(date);
             customer.totalSpent = (customer.totalSpent || 0) + total;
-            expert.appointments.push(appointment._id);
 
             // Create Event Document
             event = await Event.create([{

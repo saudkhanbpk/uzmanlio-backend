@@ -78,13 +78,7 @@ const CalendarProviderSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-const AppointmentMappingSchema = new Schema({
-  appointmentId: { type: String, required: true },
-  provider: { type: String, enum: ["google", "microsoft"], required: true },
-  providerEventId: { type: String, required: true },
-  calendarId: { type: String, required: true },
-  lastSynced: { type: Date, default: Date.now },
-});
+
 
 const DiplomaSchema = new Schema({
   id: { type: String, default: uuidv4 },
@@ -301,9 +295,8 @@ const UserSchema = new Schema(
 
     // Calendar and availability data
     availability: { type: AvailabilitySchema, default: () => ({}) },
-    appointments: [{ type: mongoose.Schema.Types.ObjectId, ref: "CustomerAppointments" }],
     calendarProviders: [CalendarProviderSchema],
-    appointmentMappings: [AppointmentMappingSchema],
+
 
     // Events system
     events: [{ type: mongoose.Schema.Types.ObjectId, ref: "Event" }],
@@ -400,8 +393,8 @@ if (!process.env.ACCESS_TOKEN_SECRET || !process.env.REFRESH_TOKEN_SECRET) {
   console.warn("⚠️ WARNING: Token secrets not set in .env - using fallback values. Set ACCESS_TOKEN_SECRET and REFRESH_TOKEN_SECRET for production!");
 }
 
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "access-secret";
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "refresh-secret";
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 
 //Generate Access token
 UserSchema.methods.generateAccessToken = function () {
@@ -437,7 +430,7 @@ export {
   SkillSchema,
   AvailabilitySchema,
   CalendarProviderSchema,
-  AppointmentMappingSchema,
+
   DiplomaSchema,
   LanguageSchema,
   SubCategorySchema,

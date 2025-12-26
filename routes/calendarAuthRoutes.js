@@ -2,6 +2,8 @@ import express from 'express';
 import { GoogleCalendarService, MicrosoftCalendarService, encryptToken } from '../services/calendarService.js';
 import User from '../models/expertInformation.js';
 import { CalendarSyncService } from '../services/calendarSyncService.js';
+import Event from '../models/event.js';
+import AppointmentMapping from '../models/appointmentsMapping.js';
 
 const router = express.Router();
 const googleService = new GoogleCalendarService();
@@ -27,11 +29,11 @@ router.get('/google/auth/:userId', async (req, res) => {
     await findUserById(userId); // Validate user exists
 
     const authUrl = googleService.getAuthUrl();
-    
+
     // Store userId in session or as state parameter for callback
     const stateParam = Buffer.from(JSON.stringify({ userId, provider: 'google' })).toString('base64');
     const authUrlWithState = `${authUrl}&state=${stateParam}`;
-    
+
     res.json({ authUrl: authUrlWithState });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -119,9 +121,10 @@ router.get('/google/callback', async (req, res) => {
     // Background sync user events
     try {
       const provider = user.calendarProviders.find((p) => p.provider === 'google');
-      if (user.events?.length > 0) {
+      const userEvents = await Event.find({ expertId: userId });
+      if (userEvents?.length > 0) {
         setImmediate(() =>
-          calendarSyncService.syncMultipleAppointmentsToProvider(userId, user.events, provider)
+          calendarSyncService.syncMultipleAppointmentsToProvider(userId, userEvents, provider)
         );
       }
     } catch (syncError) {
@@ -151,11 +154,11 @@ router.get('/microsoft/auth/:userId', async (req, res) => {
     await findUserById(userId); // Validate user exists
 
     const authUrl = microsoftService.getAuthUrl();
-    
+
     // Store userId in session or as state parameter for callback
     const stateParam = Buffer.from(JSON.stringify({ userId, provider: 'microsoft' })).toString('base64');
     const authUrlWithState = `${authUrl}&state=${stateParam}`;
-    
+
     res.json({ authUrl: authUrlWithState });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -222,11 +225,13 @@ router.get("/microsoft/callback", async (req, res) => {
     setImmediate(async () => {
       try {
         console.log("Syncing events for Microsoft:", userId);
-        const events = user.events || [];
+        const eventIds = user.events || [];
+
         const provider = user.calendarProviders.find(
           (p) => p.provider === "microsoft"
         );
-        if (events.length > 0 && provider) {
+        if (eventIds.length > 0 && provider) {
+          const events = await Event.find({ _id: { $in: eventIds } });
           await calendarSyncService.syncMultipleAppointmentsToProvider(userId, events, provider);
         }
       } catch (syncErr) {
@@ -252,7 +257,7 @@ router.get("/microsoft/callback", async (req, res) => {
 router.get('/:userId/providers', async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
-    
+
     const providers = user.calendarProviders.map(provider => ({
       id: provider._id,
       provider: provider.provider,
@@ -288,8 +293,8 @@ router.delete('/:userId/providers/:providerId', async (req, res) => {
     if (provider.subscriptionId && provider.provider === 'google') {
       try {
         await googleService.stopWatching(
-          provider.accessToken, 
-          provider.subscriptionId, 
+          provider.accessToken,
+          provider.subscriptionId,
           provider.calendarId
         );
       } catch (error) {
@@ -299,12 +304,13 @@ router.delete('/:userId/providers/:providerId', async (req, res) => {
 
     // Remove provider
     user.calendarProviders.splice(providerIndex, 1);
-    
+
     // Remove associated appointment mappings
-    user.appointmentMappings = user.appointmentMappings.filter(
-      mapping => mapping.provider !== provider.provider || 
-                 mapping.calendarId !== provider.calendarId
-    );
+    await AppointmentMapping.deleteMany({
+      ExpertId: user._id,
+      provider: provider.provider,
+      calendarId: provider.calendarId
+    });
 
     await user.save();
 
@@ -331,7 +337,7 @@ router.patch('/:userId/providers/:providerId/toggle', async (req, res) => {
     provider.isActive = !provider.isActive;
     await user.save();
 
-    res.json({ 
+    res.json({
       message: `Calendar provider ${provider.isActive ? 'activated' : 'deactivated'}`,
       provider: {
         id: provider._id,

@@ -15,7 +15,7 @@ import userEmailsRoutes from "./routes/expertRoutes/userEmails.js";
 import formRoutes from "./routes/expertRoutes/formRoutes.js";
 import blogRoutes from "./routes/expertRoutes/blogRoutes.js";
 import eventRoutes from "./routes/expertRoutes/eventRoutes.js";
-import appointmentRoutes from "./routes/expertRoutes/appointmentRoutes.js";
+// import appointmentRoutes from "./routes/expertRoutes/appointmentRoutes.js";
 import { loadAndScheduleAll } from "./services/emailScheduler.js";
 import userCouponsRoutes from "./routes/expertRoutes/userCoupons.js";
 import bookingPage from "./routes/customerRoutes/bookingPage.js";
@@ -51,7 +51,7 @@ const app = express();
 
 // Cors must be first - Consolidated configuration
 app.use(cors({
-  origin: true, // Allow all origins for development/testing (reflects request origin)
+  origin: process.env.FRONTEND_URL, // Strictly allow only the specified frontend URL
   credentials: true
 }));
 
@@ -225,7 +225,7 @@ app.use("/api/expert", galleryRoutes);
 app.use("/api/expert", formRoutes);
 app.use("/api/expert", blogRoutes);
 app.use("/api/expert", eventRoutes);
-app.use("/api/expert", appointmentRoutes);
+// app.use("/api/expert", appointmentRoutes);
 app.use("/api/expert", subscriptionRoutes);
 app.use("/api/expert", institutionRoutes);
 app.use("/api/expert", purchaseRoutes);

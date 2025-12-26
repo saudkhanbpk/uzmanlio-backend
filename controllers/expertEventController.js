@@ -4,6 +4,9 @@ import User from "../models/expertInformation.js";
 import Customer from "../models/customer.js";
 import Order from "../models/orders.js";
 import Institution from "../models/institution.js";
+import Event from "../models/event.js";
+import Package from "../models/package.js";
+import Service from "../models/service.js";
 import calendarSyncService from "../services/calendarSyncService.js";
 import agenda from "../services/agendaService.js";
 import { sendEmail } from "../services/email.js";
@@ -194,24 +197,51 @@ export const createEvent = async (req, res) => {
             newEvent.agendaJobId = jobId;
         }
 
-        if (!user.events) user.events = [];
-        user.events.push(newEvent);
+        // Create the event in the standalone Event collection
+        const eventDocument = await Event.create(newEvent);
 
-        // Update package usage if applicable
-        if (eventData.service && user.packages) {
-            user.packages.find(pkg => {
-                if (pkg.id === eventData.service) {
-                    // Logic from original route primarily pushed selectedClients to package
-                    // But usually we track usage. Copying original logic:
+        if (!user.events) user.events = [];
+        user.events.push(eventDocument._id);
+
+        // Update package/service usage (selectedClients) if applicable
+        if (eventData.service) {
+            try {
+                const serviceId = eventData.service;
+                const isPackage = eventData.serviceType === "package";
+                const Model = isPackage ? Package : Service;
+
+                // Find the standalone document (using Mongo _id or legacy id)
+                const doc = await Model.findOne({
+                    $or: [
+                        { _id: mongoose.Types.ObjectId.isValid(serviceId) && String(serviceId).length === 24 ? serviceId : new mongoose.Types.ObjectId() },
+                        { id: serviceId },
+                        { legacyId: serviceId }
+                    ],
+                    expertId: user._id
+                });
+
+                if (doc) {
+                    if (!doc.selectedClients) doc.selectedClients = [];
+
                     for (const client of resolvedClients) {
-                        pkg.selectedClients.push({
-                            id: client.id,
-                            name: client.name,
-                            email: client.email
-                        });
+                        const alreadyAdded = doc.selectedClients.some(sc =>
+                            (sc.id && sc.id.toString() === client.id.toString()) ||
+                            sc.email === client.email
+                        );
+
+                        if (!alreadyAdded) {
+                            doc.selectedClients.push({
+                                id: client.id,
+                                name: client.name,
+                                email: client.email
+                            });
+                        }
                     }
+                    await doc.save();
                 }
-            });
+            } catch (err) {
+                console.error("Error updating Service/Package selectedClients:", err);
+            }
         }
 
         // Process Payments and Orders
@@ -222,9 +252,9 @@ export const createEvent = async (req, res) => {
                     try {
                         const order = await Order.findById(payment.orderId);
                         if (order && order.orderDetails?.events) {
-                            for (let event of order.orderDetails.events) {
-                                if (event.eventType === 'package' && event.package && event.package.packageId?.toString() === payment.packageId.toString()) {
-                                    event.package.completedSessions = (event.package.completedSessions || 0) + 1;
+                            for (let eventUnit of order.orderDetails.events) {
+                                if (eventUnit.eventType === 'package' && eventUnit.package && eventUnit.package.packageId?.toString() === payment.packageId.toString()) {
+                                    eventUnit.package.completedSessions = (eventUnit.package.completedSessions || 0) + 1;
                                     break;
                                 }
                             }
@@ -275,7 +305,7 @@ export const createEvent = async (req, res) => {
             setImmediate(async () => {
                 for (const provider of activeProviders) {
                     try {
-                        await calendarSyncService.syncAppointmentToProvider(user._id, newEvent, { providerId: provider.providerId });
+                        await calendarSyncService.syncAppointmentToProvider(user._id, eventDocument, { providerId: provider.providerId });
                     } catch (e) {
                         console.error("Sync error:", e);
                     }
@@ -284,7 +314,7 @@ export const createEvent = async (req, res) => {
         }
 
         // Send Emails (Simplified for brevity, assuming generic success)
-        res.status(201).json({ message: "Event created successfully", event: newEvent });
+        res.status(201).json({ message: "Event created successfully", event: eventDocument });
 
     } catch (err) {
         console.error("Error creating event:", err);
@@ -295,36 +325,39 @@ export const createEvent = async (req, res) => {
 export const updateEvent = async (req, res) => {
     try {
         const user = await findUserById(req.params.userId);
-        const eventIndex = user.events.findIndex(event =>
-            event.id === req.params.eventId || event._id.toString() === req.params.eventId
-        );
+        const eventId = req.params.eventId;
 
-        if (eventIndex === -1) {
+        const event = await Event.findOne({
+            $or: [
+                { id: eventId },
+                { _id: mongoose.Types.ObjectId.isValid(eventId) && String(eventId).length === 24 ? eventId : new mongoose.Types.ObjectId() }
+            ],
+            expertId: user._id
+        });
+
+        if (!event) {
             return res.status(404).json({ error: "Event not found" });
         }
 
-        const existingEvent = user.events[eventIndex];
         const eventData = req.body;
 
         // Preserve agendaJobId if not changing
-        const oldAgendaJobId = existingEvent.agendaJobId;
+        const oldAgendaJobId = event.agendaJobId;
 
-        const updatedEvent = {
-            ...existingEvent,
-            ...eventData,
-            expertId: existingEvent.expertId || user._id, // Ensure expertId persists
-            updatedAt: new Date()
-        };
+        // Update fields
+        Object.keys(eventData).forEach(key => {
+            event[key] = eventData[key];
+        });
 
-        user.events[eventIndex] = updatedEvent;
-        await user.save();
+        event.updatedAt = new Date();
+        await event.save();
 
         // Reschedule Agenda if needed
-        if ((eventData.date && eventData.date !== existingEvent.date) || (eventData.time && eventData.time !== existingEvent.time)) {
-            const newJobId = await rescheduleReminderForEvent(user, updatedEvent, oldAgendaJobId);
+        if ((eventData.date && eventData.date !== event.date) || (eventData.time && eventData.time !== event.time)) {
+            const newJobId = await rescheduleReminderForEvent(user, event, oldAgendaJobId);
             if (newJobId) {
-                user.events[eventIndex].agendaJobId = newJobId;
-                await user.save();
+                event.agendaJobId = newJobId;
+                await event.save();
             }
         }
 
@@ -334,7 +367,7 @@ export const updateEvent = async (req, res) => {
             setImmediate(async () => {
                 for (const provider of activeProviders) {
                     try {
-                        await calendarSyncService.updateAppointmentInProvider(user._id, updatedEvent, { providerId: provider.providerId });
+                        await calendarSyncService.updateAppointmentInProvider(user._id, event, { providerId: provider.providerId });
                     } catch (e) {
                         console.error("Sync update error:", e);
                     }
@@ -342,7 +375,7 @@ export const updateEvent = async (req, res) => {
             });
         }
 
-        res.json({ message: "Event updated successfully", event: updatedEvent });
+        res.json({ message: "Event updated successfully", event: event });
 
     } catch (err) {
         console.error("Error updating event:", err);
@@ -353,19 +386,23 @@ export const updateEvent = async (req, res) => {
 export const deleteEvent = async (req, res) => {
     try {
         const user = await findUserById(req.params.userId);
-        const eventIndex = user.events.findIndex(event =>
-            event.id === req.params.eventId || event._id.toString() === req.params.eventId
-        );
+        const eventId = req.params.eventId;
 
-        if (eventIndex === -1) {
+        const event = await Event.findOne({
+            $or: [
+                { id: eventId },
+                { _id: mongoose.Types.ObjectId.isValid(eventId) && String(eventId).length === 24 ? eventId : new mongoose.Types.ObjectId() }
+            ],
+            expertId: user._id
+        });
+
+        if (!event) {
             return res.status(404).json({ error: "Event not found" });
         }
 
-        const eventToDelete = user.events[eventIndex];
-
         // Cancel Agenda Job
-        if (eventToDelete.agendaJobId) {
-            await cancelAgendaJob(eventToDelete.agendaJobId);
+        if (event.agendaJobId) {
+            await cancelAgendaJob(event.agendaJobId);
         }
 
         // Remove from Calendar Providers
@@ -374,7 +411,7 @@ export const deleteEvent = async (req, res) => {
             setImmediate(async () => {
                 for (const provider of activeProviders) {
                     try {
-                        await calendarSyncService.deleteAppointmentFromProvider(user._id, eventToDelete.id, { id: provider._id });
+                        await calendarSyncService.deleteAppointmentFromProvider(user._id, event.id, { providerId: provider.providerId });
                     } catch (e) {
                         console.error("Calendar delete error:", e);
                     }
@@ -382,8 +419,14 @@ export const deleteEvent = async (req, res) => {
             });
         }
 
-        user.events.splice(eventIndex, 1);
-        await user.save();
+        // Remove from User's events array
+        if (user.events) {
+            user.events = user.events.filter(id => id.toString() !== event._id.toString());
+            await user.save();
+        }
+
+        // Delete the event document
+        await Event.deleteOne({ _id: event._id });
 
         res.json({ message: "Event deleted successfully" });
 
@@ -396,7 +439,15 @@ export const deleteEvent = async (req, res) => {
 export const updateEventStatus = async (req, res) => {
     try {
         const user = await findUserById(req.params.userId);
-        const event = user.events.find(e => e.id === req.params.eventId || e._id.toString() === req.params.eventId);
+        const eventId = req.params.eventId;
+
+        const event = await Event.findOne({
+            $or: [
+                { id: eventId },
+                { _id: mongoose.Types.ObjectId.isValid(eventId) && String(eventId).length === 24 ? eventId : new mongoose.Types.ObjectId() }
+            ],
+            expertId: user._id
+        });
 
         if (!event) {
             return res.status(404).json({ error: "Event not found" });
@@ -404,7 +455,21 @@ export const updateEventStatus = async (req, res) => {
 
         const { status } = req.body;
         event.status = status;
-        await user.save();
+        await event.save();
+
+        // Sync to connected calendars in background
+        const activeProviders = user.calendarProviders?.filter(cp => cp.isActive) || [];
+        if (activeProviders.length > 0) {
+            setImmediate(async () => {
+                for (const provider of activeProviders) {
+                    try {
+                        await calendarSyncService.updateAppointmentInProvider(user._id, event, { providerId: provider.providerId });
+                    } catch (e) {
+                        console.error("Sync update error:", e);
+                    }
+                }
+            });
+        }
 
         res.json({ message: "Event status updated", event });
     } catch (err) {

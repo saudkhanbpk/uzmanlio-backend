@@ -8,7 +8,6 @@ import { v4 as uuidv4 } from "uuid";
 import { createMulterUpload, handleMulterError } from "../../middlewares/upload.js";
 import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
-// Removed CustomerAppointments import
 import { sendBulkEmail, sendEmail } from "../../services/email.js";
 import { Parser } from "json2csv";
 import {
@@ -26,6 +25,8 @@ import { sendSms } from "../../services/netgsmService.js";
 import agenda from "../../services/agendaService.js";
 import Order from "../../models/orders.js";
 import Event from "../../models/event.js";
+import Service from "../../models/service.js";
+import Package from "../../models/package.js";
 import { scheduleRepeatedEvents } from "../../services/repetitionAgendaService.js";
 import expertEventController from "../../controllers/expertEventController.js";
 const router = express.Router();
@@ -364,14 +365,6 @@ router.get("/:userId/profile", async (req, res) => {
         {
           path: "customers.customerId",
           model: "Customer"
-        },
-        {
-          path: "services",
-          model: "Service"
-        },
-        {
-          path: "packages",
-          model: "Package"
         }
       ]);
 
@@ -379,12 +372,18 @@ router.get("/:userId/profile", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Fetch events from the Event collection (since events are now a separate model)
-    const userEvents = await Event.find({ expertId: req.params.userId }).lean();
+    // Fetch documents from standalone collections
+    const [userEvents, userServices, userPackages] = await Promise.all([
+      Event.find({ expertId: req.params.userId }).lean(),
+      Service.find({ expertId: req.params.userId }).lean(),
+      Package.find({ expertId: req.params.userId }).lean()
+    ]);
 
-    // Return user object with populated events
+    // Return user object with gathered data
     const userObject = user.toObject();
     userObject.events = userEvents;
+    userObject.services = userServices;
+    userObject.packages = userPackages;
 
     res.json(userObject);
   } catch (error) {
@@ -405,20 +404,18 @@ router.get("/:userId", async (req, res) => {
         {
           path: "customers.customerId",
           model: "Customer"
-        },
-        {
-          path: "services",
-          model: "Service"
-        },
-        {
-          path: "packages",
-          model: "Package"
         }
       ]);
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    // Fetch services and packages directly
+    const [userServices, userPackages] = await Promise.all([
+      Service.find({ expertId: req.params.userId }).lean(),
+      Package.find({ expertId: req.params.userId }).lean()
+    ]);
 
     // Get all customer IDs from the user's customers array
     const customerIds = user.customers
@@ -474,8 +471,10 @@ router.get("/:userId", async (req, res) => {
     // Return user object with customersPackageDetails
     const userObject = user.toObject();
     userObject.customersPackageDetails = customersPackageDetails;
+    userObject.services = userServices;
+    userObject.packages = userPackages;
 
-    // Fetch events from the Event collection (since events are now a separate model)
+    // Fetch events from the Event collection
     const userEvents = await Event.find({ expertId: req.params.userId }).lean();
     userObject.events = userEvents;
 

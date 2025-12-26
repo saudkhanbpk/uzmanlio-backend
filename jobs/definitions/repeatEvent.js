@@ -14,6 +14,7 @@ import {
     getGroupSessionConfirmationTemplate,
     getClientAppointmentCreatedTemplate
 } from "../../services/eventEmailTemplates.js";
+import calendarSyncService from "../../services/calendarSyncService.js";
 
 /**
  * Define the create-repeated-event job processor
@@ -90,6 +91,25 @@ export default function defineRepeatEventJob(agenda) {
 
                 const createdEvent = await Event.create(newEventData);
                 console.log(`✅ Created repeated event ${createdEvent._id}`);
+
+                // Sync to connected calendars in background
+                const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
+                if (providers.length > 0) {
+                    // Note: We don't necessarily need setImmediate here since this is already in a background job,
+                    // but it helps keep the job responsive if one sync fails or takes long.
+                    for (const provider of providers) {
+                        try {
+                            await calendarSyncService.syncAppointmentToProvider(
+                                userId,
+                                createdEvent,
+                                { providerId: provider.providerId }
+                            );
+                            console.log(`✅ Synced repetition to ${provider.provider}`);
+                        } catch (syncError) {
+                            console.error(`❌ Failed syncing repetition to ${provider.provider}:`, syncError);
+                        }
+                    }
+                }
 
                 // Arrays to track issues
                 const insufficientSessionsCustomers = [];

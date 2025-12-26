@@ -16,28 +16,17 @@ const findUserById = async (userId) => {
     return user;
 };
 
-// Helper function to find user with populated packages
-const findUserWithPackages = async (userId) => {
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-        throw new Error("Invalid user ID");
-    }
-    const user = await User.findById(userId).populate("packages");
-    if (!user) {
-        throw new Error("User not found");
-    }
-    return user;
-};
-
 /**
  * Get all packages for a user
  * GET /:userId/packages
  */
 export const getPackages = async (req, res) => {
     try {
-        const user = await findUserWithPackages(req.params.userId);
-        res.json({ packages: user.packages || [] });
+        const { userId } = req.params;
+        const packages = await Package.find({ expertId: userId });
+        res.json({ packages: packages || [] });
     } catch (error) {
-        res.status(404).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 };
 
@@ -47,13 +36,11 @@ export const getPackages = async (req, res) => {
  */
 export const getActivePackages = async (req, res) => {
     try {
-        const user = await findUserWithPackages(req.params.userId);
-        const activePackages = (user.packages || []).filter(
-            (pkg) => pkg.status === "active"
-        );
+        const { userId } = req.params;
+        const activePackages = await Package.find({ expertId: userId, status: "active" });
         res.json({ packages: activePackages });
     } catch (error) {
-        res.status(404).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 };
 
@@ -63,13 +50,15 @@ export const getActivePackages = async (req, res) => {
  */
 export const getAvailablePackages = async (req, res) => {
     try {
-        const user = await findUserWithPackages(req.params.userId);
-        const availablePackages = (user.packages || []).filter(
-            (pkg) => pkg.isAvailable && pkg.status === "active"
-        );
+        const { userId } = req.params;
+        const availablePackages = await Package.find({
+            expertId: userId,
+            isAvailable: true,
+            status: "active"
+        });
         res.json({ packages: availablePackages });
     } catch (error) {
-        res.status(404).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 };
 

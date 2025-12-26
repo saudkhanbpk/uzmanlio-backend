@@ -1,6 +1,7 @@
 import express from 'express';
 import calendarSyncService from '../services/calendarSyncService.js';
 import User from '../models/expertInformation.js';
+import Event from '../models/event.js';
 
 const router = express.Router();
 
@@ -21,7 +22,11 @@ router.post('/:userId/appointments/:appointmentId/sync', async (req, res) => {
     const { userId, appointmentId } = req.params;
     const user = await findUserById(userId);
 
-    const appointment = user.appointments.find(apt => apt.id === appointmentId);
+    const appointment = await Event.findOne({
+      _id: appointmentId,
+      expertId: user._id
+    });
+
     if (!appointment) {
       return res.status(404).json({ error: 'Appointment not found' });
     }
@@ -35,11 +40,11 @@ router.post('/:userId/appointments/:appointmentId/sync', async (req, res) => {
     for (const provider of activeProviders) {
       try {
         const syncResult = await calendarSyncService.syncAppointmentToProvider(
-          userId, 
-          appointment, 
-          { id: provider._id }
+          userId,
+          appointment,
+          { providerId: provider.providerId }
         );
-        
+
         results.push({
           provider: provider.provider,
           email: provider.email,
@@ -93,11 +98,11 @@ router.delete('/:userId/appointments/:appointmentId/sync', async (req, res) => {
     for (const provider of activeProviders) {
       try {
         await calendarSyncService.deleteAppointmentFromProvider(
-          userId, 
-          appointmentId, 
-          { id: provider._id }
+          userId,
+          appointmentId,
+          { providerId: provider.providerId }
         );
-        
+
         results.push({
           provider: provider.provider,
           email: provider.email,
@@ -132,7 +137,7 @@ router.post('/:userId/providers/:providerId/sync', async (req, res) => {
     const user = await findUserById(userId);
 
     const provider = user.calendarProviders.find(
-      cp => cp._id.toString() === providerId
+      cp => cp.providerId === providerId
     );
 
     if (!provider) {
@@ -144,14 +149,16 @@ router.post('/:userId/providers/:providerId/sync', async (req, res) => {
     }
 
     const results = [];
-    for (const appointment of user.appointments) {
+    const userAppointments = await Event.find({ expertId: userId }).lean();
+
+    for (const appointment of userAppointments) {
       try {
         const syncResult = await calendarSyncService.syncAppointmentToProvider(
-          userId, 
-          appointment, 
-          { id: provider._id }
+          userId,
+          appointment,
+          { providerId: provider.providerId }
         );
-        
+
         results.push({
           appointmentId: appointment.id,
           appointmentTitle: appointment.title,

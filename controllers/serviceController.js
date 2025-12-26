@@ -14,18 +14,6 @@ const findUserById = async (userId) => {
     return user;
 };
 
-// Helper function to find user with populated services
-const findUserWithServices = async (userId) => {
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-        throw new Error("Invalid user ID");
-    }
-    const user = await User.findById(userId).populate("services");
-    if (!user) {
-        throw new Error("User not found");
-    }
-    return user;
-};
-
 /**
  * Create a new service
  * POST /:userId/services
@@ -119,10 +107,11 @@ export const createService = async (req, res) => {
  */
 export const getServices = async (req, res) => {
     try {
-        const user = await findUserWithServices(req.params.userId);
-        res.json({ services: user.services || [] });
+        const { userId } = req.params;
+        const services = await Service.find({ expertId: userId });
+        res.json({ services: services || [] });
     } catch (error) {
-        res.status(404).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 };
 
@@ -132,13 +121,11 @@ export const getServices = async (req, res) => {
  */
 export const getActiveServices = async (req, res) => {
     try {
-        const user = await findUserWithServices(req.params.userId);
-        const activeServices = (user.services || []).filter(
-            (service) => service.isActive
-        );
+        const { userId } = req.params;
+        const activeServices = await Service.find({ expertId: userId, isActive: true });
         res.json({ services: activeServices });
     } catch (error) {
-        res.status(404).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 };
 

@@ -3,6 +3,7 @@ import User from "../models/expertInformation.js";
 import mongoose from "mongoose";
 import Customer from "../models/customer.js";
 import Order from "../models/orders.js";
+import Package from "../models/package.js";
 import { scheduleEventReminder as scheduleReminderForEvent, updateEventReminder as rescheduleReminderForEvent, cancelEventReminder } from "../services/agendaService.js";
 import { scheduleRepeatedEvents, cancelRepeatedEvents } from "../services/repetitionAgendaService.js";
 import { sendEmail } from "../services/email.js";
@@ -183,23 +184,28 @@ export const createEvent = async (req, res) => {
 
         // Update package selectedClients with resolved customers
         if (eventData.serviceType === "package") {
-            const pkg = user.packages.find((pkg) => pkg.id === eventData.service);
-            if (pkg) {
-                for (const client of resolvedClients) {
-                    const alreadyAdded = pkg.selectedClients?.some(
-                        (sc) =>
-                            sc.id?.toString() === client.id?.toString() ||
-                            sc.email === client.email
-                    );
-                    if (!alreadyAdded) {
-                        if (!pkg.selectedClients) pkg.selectedClients = [];
-                        pkg.selectedClients.push({
-                            id: client.id,
-                            name: client.name,
-                            email: client.email,
-                        });
+            try {
+                const pkg = await Package.findById(eventData.service);
+                if (pkg && pkg.expertId.toString() === user._id.toString()) {
+                    for (const client of resolvedClients) {
+                        const alreadyAdded = pkg.selectedClients?.some(
+                            (sc) =>
+                                sc.id?.toString() === client.id?.toString() ||
+                                sc.email === client.email
+                        );
+                        if (!alreadyAdded) {
+                            if (!pkg.selectedClients) pkg.selectedClients = [];
+                            pkg.selectedClients.push({
+                                id: client.id,
+                                name: client.name,
+                                email: client.email,
+                            });
+                        }
                     }
+                    await pkg.save();
                 }
+            } catch (pkgError) {
+                console.error("Error updating package in createEvent:", pkgError);
             }
         }
 
@@ -584,7 +590,7 @@ export const createEvent = async (req, res) => {
                             await calendarSyncService.syncAppointmentToProvider(
                                 req.params.userId,
                                 event,
-                                provider
+                                { providerId: provider.providerId }
                             );
                         if (response.success) {
                             console.log("synced Event To Calendar Successfully");
@@ -698,10 +704,10 @@ export const updateEvent = async (req, res) => {
             setImmediate(async () => {
                 for (const provider of providers) {
                     try {
-                        await updateAppointmentInProvider(
+                        await calendarSyncService.updateAppointmentInProvider(
                             req.params.userId,
                             existingEvent,
-                            provider
+                            { providerId: provider.providerId }
                         );
                         console.log(
                             `Synced event ${existingEvent.title} to ${provider.provider}`
@@ -802,6 +808,12 @@ export const deleteEvent = async (req, res) => {
             return res.status(404).json({ error: "Event not found" });
         }
 
+        // Remove from user's events array
+        if (user.events) {
+            user.events = user.events.filter(id => id.toString() !== event._id.toString());
+            await user.save();
+        }
+
         const agendaJobId = event.agendaJobId;
         console.log("agendaJobId is found:", agendaJobId);
 
@@ -863,7 +875,7 @@ export const deleteEvent = async (req, res) => {
             setImmediate(async () => {
                 for (const provider of providers) {
                     try {
-                        await deleteAppointmentFromProvider(req.params.userId, event, provider);
+                        await calendarSyncService.deleteAppointmentFromProvider(req.params.userId, event.id, { providerId: provider.providerId });
                         console.log(`Deleted event ${event.title} from ${provider.provider}`);
                     } catch (error) {
                         console.error(`Failed Deleting ${event.title} from ${provider.provider}:`, error);
@@ -910,27 +922,14 @@ export const getEventStatistics = async (req, res) => {
 // Get all events for a user
 export const getEvents = async (req, res) => {
     try {
-        // const user = await findUserById(req.params.userId);
-        const user = await User.findById(req.params.userId)
+        const events = await Event.find({ expertId: req.params.userId })
             .populate({
-                path: "events",
-                populate: {
-                    path: "customers",
-                    model: "Customer"
-                }
+                path: "customers",
+                model: "Customer"
             });
 
-        res.json({ events: user.events });
+        res.json({ events });
 
-        // const events = user.events || [];
-        // const customerAppointments = user.appointments || [];
-
-        // // Fetch all appointment documents
-        // const customerEvents = await Promise.all(
-        //   customerAppointments.map(id => CustomerAppointments.findById(id))
-        // );
-
-        // res.json({ events: [...events, ...customerEvents] });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1026,7 +1025,7 @@ export const updateEventStatus = async (req, res) => {
             setImmediate(async () => {
                 for (const provider of providers) {
                     try {
-                        await updateAppointmentInProvider(req.params.userId, updatedEvent, provider);
+                        await calendarSyncService.updateAppointmentInProvider(req.params.userId, updatedEvent, { providerId: provider.providerId });
                         console.log(`Synced event ${updatedEvent.title} to ${provider.provider}`);
                     } catch (error) {
                         console.error(`Failed syncing ${updatedEvent.title} to ${provider.provider}:`, error);
