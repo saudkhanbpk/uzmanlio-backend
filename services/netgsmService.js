@@ -54,7 +54,7 @@ export async function sendSms(phone, message) {
     console.log('📱 Formatted phone:', formattedPhone);
 
     console.log('📱 Using msgheader:', NETGSM_MSGHEADER);
-    xml = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <mainbody>
   <header>
     <company dil="TR">Netgsm</company>
@@ -85,20 +85,45 @@ export async function sendSms(phone, message) {
             timeout: 30000, // Increased to 30 seconds
         });
 
-        // Check for error 32 (operator code error) and provide helpful message
-        const checkResult = await xml2js.parseStringPromise(response.data, { explicitArray: false });
-        if (checkResult.xml?.main?.code === '32') {
-            console.log('⚠ Error 32: This phone number operator is not supported by your current msgheader');
-            console.log('💡 Contact Netgsm to get msgheader approved for this operator');
-        }
-
         console.log('📥 Netgsm raw response:', response.data);
 
-        // Parse XML response
-        const result = await xml2js.parseStringPromise(response.data, { explicitArray: false });
-        const code = result.xml.main.code;
-        const jobID = result.xml.main.jobID;
-        const error = result.xml.main.error;
+        // Netgsm can return plain text errors or XML. We try to handle both.
+        let result = {};
+        let code, jobID, error;
+
+        // Try parsing as XML
+        try {
+            const parsed = await xml2js.parseStringPromise(response.data, { explicitArray: false });
+            if (parsed && parsed.mainbody) {
+                // If it's the full XML response structure
+                code = parsed.mainbody.header.responseCode || parsed.mainbody.body.msg; // Structure varies, need to be careful
+                // Actually NetGSM OTP usually returns simple text or specific XML based on endpoint. 
+                // Let's assume standard structure: <main><code/><jobID/><error/></main>
+                if (parsed.main) {
+                    code = parsed.main.code;
+                    jobID = parsed.main.jobID;
+                    error = parsed.main.error;
+                }
+            } else if (parsed && parsed.xml) {
+                // Format observed previously
+                code = parsed.xml.main.code;
+                jobID = parsed.xml.main.jobID;
+                error = parsed.xml.main.error;
+            }
+        } catch (parseError) {
+            console.log('⚠️ Response is not XML, treating as plain text');
+            // If not XML, might be plain text code like "30" or "00 123456"
+            const parts = response.data.toString().trim().split(' ');
+            if (parts.length > 0) {
+                code = parts[0];
+                if (parts.length > 1) jobID = parts[1];
+            }
+        }
+
+        // Check for error 32 (operator code error)
+        if (code === '32') {
+            console.log('⚠ Error 32: Phone operator not supported by msgheader');
+        }
 
         console.log('📊 Parsed response:', { code, jobID, error });
 

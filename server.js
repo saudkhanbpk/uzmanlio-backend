@@ -104,7 +104,8 @@ app.use("/api", standardLimiter);
 
 // Specific stricter limits for Auth and SMS
 app.use("/api/expert/auth", authLimiter);
-app.post("/send-sms", authLimiter, async (req, res) => {
+
+app.use((req, res, next) => {
   if (req.body) mongoSanitize.sanitize(req.body);
   if (req.params) mongoSanitize.sanitize(req.params);
   if (req.query) mongoSanitize.sanitize(req.query);
