@@ -3,7 +3,7 @@
 import { Netgsm } from '@netgsm/sms';
 
 // Environment variables
-const NETGSM_USERNAME = process.env.NETGSM_USERCODE || process.env.NETGSM_USERNAME;
+const NETGSM_USERCODE = process.env.NETGSM_USERCODE || process.env.NETGSM_USERNAME;
 const NETGSM_PASSWORD = process.env.NETGSM_PASSWORD;
 const NETGSM_MSGHEADER = process.env.NETGSM_MSGHEADER;
 
@@ -12,14 +12,14 @@ let netgsmClient = null;
 
 function getClient() {
     if (!netgsmClient) {
-        if (!NETGSM_USERNAME || !NETGSM_PASSWORD) {
+        if (!NETGSM_USERCODE || !NETGSM_PASSWORD) {
             throw new Error('NetGSM credentials not configured');
         }
 
-        console.log('Initializing NetGSM client with username:', NETGSM_USERNAME);
+        console.log('Initializing NetGSM client with username:', NETGSM_USERCODE);
 
         netgsmClient = new Netgsm({
-            username: NETGSM_USERNAME,
+            username: NETGSM_USERCODE,
             password: NETGSM_PASSWORD,
         });
 
@@ -37,7 +37,7 @@ function getClient() {
  */
 export async function sendSms(phone, message) {
     // Validate environment variables
-    if (!NETGSM_USERNAME || !NETGSM_PASSWORD) {
+    if (!NETGSM_USERCODE || !NETGSM_PASSWORD) {
         console.error('NetGSM credentials not configured');
         return {
             success: false,
