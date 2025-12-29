@@ -33,10 +33,11 @@ import institutionDataRoutes from "./routes/expertRoutes/institutionDataRoutes.j
 import analyticsRoutes from "./routes/expertRoutes/analyticsRoutes.js";
 import parasutRoute from "./routes/customerRoutes/parasut.routes.js";
 import customerRoutes from "./routes/expertRoutes/customerRoutes.js";
+import smsRoutes from "./routes/smsRoutes.js";
+import { sendSms } from "./services/netgsmService.js";
 import fs from "fs";
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
-import { sendSms } from "./services/netgsmService.js";
 import cookieParser from "cookie-parser";
 import { doubleCsrf } from "csrf-csrf";
 
@@ -243,6 +244,8 @@ app.use("/api/expert", institutionDataRoutes); // Institution-wide data aggregat
 app.use("/api/expert", customerRoutes);  // Customer Routes
 app.use("/api/analytics", analyticsRoutes); // GA4 Analytics routes
 
+// SMS Routes - with authentication and rate limiting
+app.use("/api/sms", doubleCsrfProtection, smsRoutes);
 
 // parasut route
 app.use("/api/v1/parasut", doubleCsrfProtection, parasutRoute);
@@ -258,6 +261,7 @@ app.use("/api/expert/:userId/emails", doubleCsrfProtection, userEmailsRoutes);
 
 // Booking Page Routes - CSRF protection
 app.use("/api/booking/customers", doubleCsrfProtection, bookingPage);
+
 
 
 
