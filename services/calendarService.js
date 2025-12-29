@@ -9,9 +9,9 @@ const ENCRYPTION_KEY = process.env.CALENDAR_ENCRYPTION_KEY || '37d5baac21de6cf4e
 
 // Encryption utilities
 export const encryptToken = (token) => {
-  console.log("Token to Encrypt:",token)
-  const encryptedToken =CryptoJS.AES.encrypt(token, ENCRYPTION_KEY).toString();
-  console.log("Token Encrypted:",encryptedToken)
+  console.log("Token to Encrypt:", token)
+  const encryptedToken = CryptoJS.AES.encrypt(token, ENCRYPTION_KEY).toString();
+  console.log("Token Encrypted:", encryptedToken)
   return encryptedToken;
 };
 
@@ -46,8 +46,8 @@ export class GoogleCalendarService {
 
 
 
-//Getting the authURL from google to send it to frontend as a response  and to redirect the frontend to the 
-//google sign in Page
+  //Getting the authURL from google to send it to frontend as a response  and to redirect the frontend to the 
+  //google sign in Page
   getAuthUrl() {
     const scopes = [
       'https://www.googleapis.com/auth/calendar.events',
@@ -63,26 +63,19 @@ export class GoogleCalendarService {
 
   async exchangeCodeForTokens(code) {
     const { tokens } = await this.oauth2Client.getToken(code);
-     this.oauth2Client.setCredentials(tokens);
+    this.oauth2Client.setCredentials(tokens);
     return tokens;
   }
 
-  // async refreshAccessToken(refreshToken) {
-  //   this.oauth2Client.setCredentials({
-  //     refresh_token: decryptToken(refreshToken)
-  //   });
 
-  //   const { credentials } = await this.oauth2Client.refreshAccessToken();
-  //   return credentials;
-  // }
   async refreshAccessToken(refreshToken) {
-  this.oauth2Client.setCredentials({
-    refresh_token: decryptToken(refreshToken)
-  });
+    this.oauth2Client.setCredentials({
+      refresh_token: decryptToken(refreshToken)
+    });
 
-  const { credentials } = await this.oauth2Client.refreshToken(refreshToken);
-  return credentials;
-}
+    const { credentials } = await this.oauth2Client.refreshToken(refreshToken);
+    return credentials;
+  }
 
 
   async getUserInfo(accessToken) {
@@ -101,7 +94,7 @@ export class GoogleCalendarService {
     });
 
     const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-    
+
     const event = {
       summary: eventData.title,
       description: eventData.description || '',
@@ -124,38 +117,43 @@ export class GoogleCalendarService {
     return response.data;
   }
 
-  // async updateEvent(accessToken, calendarId, eventId, eventData) {
-  //   this.oauth2Client.setCredentials({
-  //     access_token: decryptToken(accessToken)
-  //   });
 
-  //   const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-    
-  //   const event = {
-  //     summary: eventData.title,
-  //     description: eventData.description || '',
-  //     start: {
-  //       dateTime: eventData.startDateTime,
-  //       timeZone: eventData.timeZone || 'UTC',
-  //     },
-  //     end: {
-  //       dateTime: eventData.endDateTime,
-  //       timeZone: eventData.timeZone || 'UTC',
-  //     },
-  //     attendees: eventData.attendees || [],
-  //   };
 
-  //   const response = await calendar.events.update({
-  //     calendarId: calendarId || 'primary',
-  //     eventId: eventId,
-  //     resource: event,
-  //   });
+  //   async updateEvent(accessToken, calendarId, eventId, eventData) {
+  //   try {
+  //     this.oauth2Client.setCredentials({
+  //       access_token: decryptToken(accessToken),
+  //     });
 
-  //   return response.data;
+  //     const calendar = google.calendar({ version: "v3", auth: this.oauth2Client });
+
+  //     const event = {
+  //       summary: eventData.title,
+  //       description: eventData.description || "",
+  //       start: {
+  //         dateTime: new Date(eventData.startDateTime).toISOString(),
+  //         timeZone: eventData.timeZone || "UTC",
+  //       },
+  //       end: {
+  //         dateTime: new Date(eventData.endDateTime).toISOString(),
+  //         timeZone: eventData.timeZone || "UTC",
+  //       },
+  //       attendees: eventData.attendees || [],
+  //     };
+
+  //     const response = await calendar.events.update({
+  //       calendarId: calendarId || "primary",
+  //       eventId,
+  //       resource: event,
+  //     });
+
+  //     return response.data;
+  //   } catch (error) {
+  //     console.error("❌ Google updateEvent error:", error);
+  //     throw new Error(`Failed to update Google event: ${error.message}`);
+  //   }
   // }
-
-  async updateEvent(accessToken, calendarId, eventId, eventData) {
-  try {
+  async createEvent(accessToken, calendarId, eventData) {
     this.oauth2Client.setCredentials({
       access_token: decryptToken(accessToken),
     });
@@ -174,20 +172,27 @@ export class GoogleCalendarService {
         timeZone: eventData.timeZone || "UTC",
       },
       attendees: eventData.attendees || [],
+
+      // THIS generates the Google Meet link
+      conferenceData: {
+        createRequest: {
+          requestId: "meet-" + Date.now(),
+          conferenceSolutionKey: { type: "hangoutsMeet" }
+        }
+      }
     };
 
-    const response = await calendar.events.update({
+    const response = await calendar.events.insert({
       calendarId: calendarId || "primary",
-      eventId,
+      conferenceDataVersion: 1,   //Required
       resource: event,
     });
 
+    console.log("Meet Link:", response.data.hangoutLink);
+
     return response.data;
-  } catch (error) {
-    console.error("❌ Google updateEvent error:", error);
-    throw new Error(`Failed to update Google event: ${error.message}`);
   }
-}
+
 
 
   async deleteEvent(accessToken, calendarId, eventId) {
@@ -196,39 +201,39 @@ export class GoogleCalendarService {
     });
 
     const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-    
+
     await calendar.events.delete({
       calendarId: calendarId || 'primary',
       eventId: eventId,
     });
   }
 
-async watchCalendar(accessToken, calendarId, webhookUrl) {
-  this.oauth2Client.setCredentials({
-    access_token: decryptToken(accessToken)
-  });
-  const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-  const watchRequest = {
-    id: `uzmanlio-${Date.now()}`,
-    type: 'web_hook',
-    address: webhookUrl,
-    token: process.env.GOOGLE_WEBHOOK_TOKEN,
-  };
+  async watchCalendar(accessToken, calendarId, webhookUrl) {
+    this.oauth2Client.setCredentials({
+      access_token: decryptToken(accessToken)
+    });
+    const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
+    const watchRequest = {
+      id: `uzmanlio-${Date.now()}`,
+      type: 'web_hook',
+      address: webhookUrl,
+      token: process.env.GOOGLE_WEBHOOK_TOKEN,
+    };
 
-  const response = await calendar.events.watch({
-    calendarId: calendarId || 'primary',
-    resource: watchRequest,
-  });
+    const response = await calendar.events.watch({
+      calendarId: calendarId || 'primary',
+      resource: watchRequest,
+    });
 
-  const data = response.data;
+    const data = response.data;
 
-  // ✅ Always include a fallback expiration
-  if (!data.expiration || isNaN(Number(data.expiration))) {
-    data.expiration = Date.now() + 24 * 60 * 60 * 1000; // Default to +1 day
+    // ✅ Always include a fallback expiration
+    if (!data.expiration || isNaN(Number(data.expiration))) {
+      data.expiration = Date.now() + 24 * 60 * 60 * 1000; // Default to +1 day
+    }
+
+    return data;
   }
-
-  return data;
-}
 
 
   async stopWatching(accessToken, channelId, resourceId) {
@@ -237,7 +242,7 @@ async watchCalendar(accessToken, calendarId, webhookUrl) {
     });
 
     const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
-    
+
     await calendar.channels.stop({
       resource: {
         id: channelId,
@@ -271,7 +276,7 @@ export class MicrosoftCalendarService {
 
   async exchangeCodeForTokens(code) {
     const tokenUrl = `${this.authority}/oauth2/v2.0/token`;
-    
+
     const params = new URLSearchParams();
     params.append('client_id', this.clientId);
     params.append('client_secret', this.clientSecret);
@@ -296,7 +301,7 @@ export class MicrosoftCalendarService {
 
   async refreshAccessToken(refreshToken) {
     const tokenUrl = `${this.authority}/oauth2/v2.0/token`;
-    
+
     const params = new URLSearchParams();
     params.append('client_id', this.clientId);
     params.append('client_secret', this.clientSecret);
@@ -370,94 +375,56 @@ export class MicrosoftCalendarService {
     return await response.json();
   }
 
-  // async updateEvent(accessToken, calendarId, eventId, eventData) {
-  //   const event = {
-  //     subject: eventData.title,
-  //     body: {
-  //       contentType: 'HTML',
-  //       content: eventData.description || '',
-  //     },
-  //     start: {
-  //       dateTime: eventData.startDateTime,
-  //       timeZone: eventData.timeZone || 'UTC',
-  //     },
-  //     end: {
-  //       dateTime: eventData.endDateTime,
-  //       timeZone: eventData.timeZone || 'UTC',
-  //     },
-  //     attendees: eventData.attendees?.map(email => ({
-  //       emailAddress: { address: email, name: email },
-  //     })) || [],
-  //   };
 
-  //   const eventPath = calendarId ?
-  //     `/me/calendars/${calendarId}/events/${eventId}` :
-  //     `/me/events/${eventId}`;
-
-  //   const response = await fetch(`https://graph.microsoft.com/v1.0${eventPath}`, {
-  //     method: 'PATCH',
-  //     headers: {
-  //       'Authorization': `Bearer ${decryptToken(accessToken)}`,
-  //       'Content-Type': 'application/json'
-  //     },
-  //     body: JSON.stringify(event)
-  //   });
-
-  //   if (!response.ok) {
-  //     throw new Error(`Failed to update event: ${response.statusText}`);
-  //   }
-
-  //   return await response.json();
-  // }
   async updateEvent(accessToken, calendarId, eventId, eventData) {
-  try {
-    const decryptedToken = decryptToken(accessToken);
+    try {
+      const decryptedToken = decryptToken(accessToken);
 
-    const event = {
-      subject: eventData.title,
-      body: {
-        contentType: "HTML",
-        content: eventData.description || "",
-      },
-      start: {
-        dateTime: new Date(eventData.startDateTime).toISOString(),
-        timeZone: eventData.timeZone || "UTC",
-      },
-      end: {
-        dateTime: new Date(eventData.endDateTime).toISOString(),
-        timeZone: eventData.timeZone || "UTC",
-      },
-      attendees:
-        eventData.attendees?.map((email) => ({
-          emailAddress: { address: email, name: email },
-          type: "required",
-        })) || [],
-    };
+      const event = {
+        subject: eventData.title,
+        body: {
+          contentType: "HTML",
+          content: eventData.description || "",
+        },
+        start: {
+          dateTime: new Date(eventData.startDateTime).toISOString(),
+          timeZone: eventData.timeZone || "UTC",
+        },
+        end: {
+          dateTime: new Date(eventData.endDateTime).toISOString(),
+          timeZone: eventData.timeZone || "UTC",
+        },
+        attendees:
+          eventData.attendees?.map((email) => ({
+            emailAddress: { address: email, name: email },
+            type: "required",
+          })) || [],
+      };
 
-    const eventPath = calendarId
-      ? `/me/calendars/${calendarId}/events/${eventId}`
-      : `/me/events/${eventId}`;
+      const eventPath = calendarId
+        ? `/me/calendars/${calendarId}/events/${eventId}`
+        : `/me/events/${eventId}`;
 
-    const response = await fetch(`https://graph.microsoft.com/v1.0${eventPath}`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${decryptedToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(event),
-    });
+      const response = await fetch(`https://graph.microsoft.com/v1.0${eventPath}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${decryptedToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(event),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Microsoft update failed: ${response.status} ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Microsoft update failed: ${response.status} ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("❌ Microsoft updateEvent error:", error);
+      throw new Error(`Failed to update Microsoft event: ${error.message}`);
     }
-
-    return await response.json();
-  } catch (error) {
-    console.error("❌ Microsoft updateEvent error:", error);
-    throw new Error(`Failed to update Microsoft event: ${error.message}`);
   }
-}
 
 
   async deleteEvent(accessToken, calendarId, eventId) {
