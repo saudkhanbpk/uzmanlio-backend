@@ -4,8 +4,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // SMTP Configuration from environment variables
-const EMAIL_USER = process.env.EMAIL_USER;
-const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD;
+const EMAIL_USER = process.env.EMAIL_USER || "info@uzmanlio.com";
+const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD || "iryz qlpf jnrq ycxe";
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com'; // Default to Gmail
 const EMAIL_PORT = process.env.EMAIL_PORT || 587;
 const EMAIL_SECURE = process.env.EMAIL_SECURE === 'true'; // false for TLS, true for SSL
