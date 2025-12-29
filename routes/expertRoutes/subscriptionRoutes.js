@@ -6,6 +6,9 @@ import mongoose from "mongoose";
 import ParasutApiService from "../../services/parasutService/parasutApi.services.js";
 import { sendEmail } from "../../services/email.js";
 import { getSubscriptionInvoiceEmailTemplate } from "../../services/emailTemplates.js";
+import { validateParams, validateBody } from "../../middlewares/validateRequest.js";
+import { newSubscriptionSchema } from "../../validations/subscription.schema.js";
+import { userIdParams } from "../../validations/common.schema.js";
 
 const router = express.Router();
 
@@ -170,7 +173,7 @@ const createSubscriptionInvoiceAsync = async (userId, subscriptionData, billingI
     }
 };
 
-router.post("/:userId/new-subscription", async (req, res) => {
+router.post("/:userId/new-subscription", validateParams(userIdParams), validateBody(newSubscriptionSchema), async (req, res) => {
     try {
         console.log("Adding the Payment Information and Creating New Subscription");
         const { userId } = req.params;

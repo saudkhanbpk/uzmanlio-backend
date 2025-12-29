@@ -381,9 +381,8 @@ UserSchema.methods.ComparePassword = async function (candidatePassword) {
 };
 
 // Token secrets - fallback provided but should be set in .env for production
-// Token secrets - fallback provided but should be set in .env for production
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'uzmanlio-default-access-secret-123';
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'uzmanlio-default-refresh-secret-123';
 
 if (!process.env.ACCESS_TOKEN_SECRET || !process.env.REFRESH_TOKEN_SECRET) {
   console.warn("⚠️ WARNING: Token secrets not set in .env - using fallback values. Set ACCESS_TOKEN_SECRET and REFRESH_TOKEN_SECRET for production!");
