@@ -132,10 +132,13 @@ export const optionalAuth = async (req, res, next) => {
                 const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
                 req.userId = decoded.id;
                 req.token = token;
-            } catch {
+            } catch (err) {
                 // Token invalid, but continue without auth
+                console.log('  ⚠️ Optional auth token invalid:', err.message);
                 req.userId = null;
             }
+        } else {
+            req.userId = null;
         }
         next();
     } catch (error) {

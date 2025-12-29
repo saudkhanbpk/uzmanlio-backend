@@ -16,7 +16,7 @@ const BlogSchema = new Schema(
     title: { type: String, required: true },
     content: { type: String, required: true },
     category: { type: String, required: true },
-    keywords: [{ type: String }],
+    keywords: { type: [String], default: [] },
     status: { type: String, enum: ["draft", "published"], default: "draft" },
     slug: { type: String, required: true, unique: true },
     author: { type: String, required: true }

@@ -31,7 +31,7 @@ export const validateRequest = (schemaConfig) => {
       if (error) {
         errors.push(...formatJoiErrors(error, 'body'));
       } else {
-        req.body = value; // Replace with validated data
+        Object.defineProperty(req, 'body', { value, writable: true, configurable: true, enumerable: true });
       }
     }
 
@@ -41,7 +41,7 @@ export const validateRequest = (schemaConfig) => {
       if (error) {
         errors.push(...formatJoiErrors(error, 'params'));
       } else {
-        req.params = value;
+        Object.defineProperty(req, 'params', { value, writable: true, configurable: true, enumerable: true });
       }
     }
 
@@ -51,7 +51,7 @@ export const validateRequest = (schemaConfig) => {
       if (error) {
         errors.push(...formatJoiErrors(error, 'query'));
       } else {
-        req.query = value;
+        Object.defineProperty(req, 'query', { value, writable: true, configurable: true, enumerable: true });
       }
     }
 
