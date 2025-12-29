@@ -61,7 +61,7 @@ app.use(cors({
 // Performance middleware - must be early in stack
 app.use(compression()); // Enable gzip compression for all responses
 app.use(express.json({ limit: '10mb' })); // Limit payload size
-app.use(cookieParser(process.env.COOKIE_SECRET));
+app.use(cookieParser(process.env.COOKIE_SECRET || "uzmanlio-default-cookie-secret-123"));
 
 // CSRF Configuration
 const isProduction = process.env.NODE_ENV === 'production' || process.env.BASE_URL?.includes('https://');
@@ -70,10 +70,11 @@ const {
   generateCsrfToken,
   doubleCsrfProtection,
 } = doubleCsrf({
-  getSecret: () => process.env.CSRF_SECRET,
+  getSecret: () => process.env.CSRF_SECRET || "uzmanlio-default-csrf-secret-123",
   getSessionIdentifier: (req) => {
     // console.log("🔍 getSessionIdentifier called. UserId:", req.userId);
-    return req.userId || "anonymous";
+    // Ensure userId is a string for consistent hashing in csrf-csrf
+    return req.userId ? String(req.userId) : "anonymous";
   }, // Required for csrf-csrf v4
   cookieName: "ps-csrf",
   cookieOptions: {
@@ -219,11 +220,13 @@ app.get('/test', async (_req, res) => {
 // Auth routes (login, signup, forgot-password) - NO authentication required
 app.use("/api/expert", authRoutes);
 
-// Protected routes - require valid JWT token AND CSRF Protection
 // Apply verifyAccessToken middleware to all routes that need authentication
+// Route-specific userId param should be checked by the routes themselves if needed
+// but server.js sets a base middleware for all /api/expert/:userId routes
 app.use("/api/expert/:userId", verifyAccessToken);
 
 // Apply CSRF protection to all state-changing expert routes
+// Important: This MUST come after verifyAccessToken so req.userId is available
 app.use("/api/expert", doubleCsrfProtection);
 
 // All these routes now require valid JWT token because of the middleware above
@@ -328,8 +331,17 @@ app.use("/api/booking/customers", bookingPage);
 // Custom error handling for CSRF
 app.use((err, req, res, next) => {
   if (err === invalidCsrfTokenError) {
+    console.error("🔒 CSRF Error:", {
+      message: "Invalid CSRF token",
+      userId: req.userId || "anonymous",
+      method: req.method,
+      url: req.originalUrl,
+      hasToken: !!req.headers["x-csrf-token"],
+      cookies: req.cookies ? Object.keys(req.cookies) : "none"
+    });
     res.status(403).json({
       error: "Invalid CSRF token",
+      details: "The CSRF token provided is invalid or has expired."
     });
   } else {
     next(err);
