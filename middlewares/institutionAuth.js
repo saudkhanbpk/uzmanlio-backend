@@ -14,7 +14,7 @@ export const checkInstitutionAdmin = async (req, res, next) => {
             });
         }
 
-        const user = await User.findById(userId).select('subscription refreshToken information.name');
+        const user = await User.findById(userId).select('subscription refreshToken information.name information.surname information.email');
 
         if (!user) {
             return res.status(404).json({

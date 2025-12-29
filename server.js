@@ -220,6 +220,9 @@ app.get('/test', async (_req, res) => {
 // Auth routes (login, signup, forgot-password) - NO authentication required
 app.use("/api/expert", authRoutes);
 
+// Institution routes (contains public invitation acceptance routes + internal auth)
+app.use("/api/expert", institutionRoutes);
+
 // Apply verifyAccessToken middleware to all routes that need authentication
 // Route-specific userId param should be checked by the routes themselves if needed
 // but server.js sets a base middleware for all /api/expert/:userId routes
@@ -239,7 +242,6 @@ app.use("/api/expert", blogRoutes);
 app.use("/api/expert", eventRoutes);
 // app.use("/api/expert", appointmentRoutes);
 app.use("/api/expert", subscriptionRoutes);
-app.use("/api/expert", institutionRoutes);
 app.use("/api/expert", purchaseRoutes);
 app.use("/api/expert", paymentRoutes);
 app.use("/api/expert", reportsRoutes);
