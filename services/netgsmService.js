@@ -1,16 +1,36 @@
 // services/netgsmService.js
-// Netgsm SMS sender helper (Direct REST API v2)
-// Usage: sendSms(phone, message)
-import axios from 'axios';
+// NetGSM SMS sender using official @netgsm/sms SDK
+import { Netgsm } from '@netgsm/sms';
 
 // Environment variables
 const NETGSM_USERNAME = process.env.NETGSM_USERCODE || process.env.NETGSM_USERNAME;
 const NETGSM_PASSWORD = process.env.NETGSM_PASSWORD;
 const NETGSM_MSGHEADER = process.env.NETGSM_MSGHEADER;
-const NETGSM_API_URL = 'https://api.netgsm.com.tr/sms/rest/v2/send';
+
+// Initialize NetGSM client
+let netgsmClient = null;
+
+function getClient() {
+    if (!netgsmClient) {
+        if (!NETGSM_USERNAME || !NETGSM_PASSWORD) {
+            throw new Error('NetGSM credentials not configured');
+        }
+
+        console.log('Initializing NetGSM client with username:', NETGSM_USERNAME);
+
+        netgsmClient = new Netgsm({
+            username: NETGSM_USERNAME,
+            password: NETGSM_PASSWORD,
+        });
+
+        console.log('NetGSM client initialized:', !!netgsmClient);
+        console.log('sendRestSms method exists:', typeof netgsmClient.sendRestSms);
+    }
+    return netgsmClient;
+}
 
 /**
- * Send SMS via NetGSM API
+ * Send SMS via NetGSM SDK
  * @param {string} phone - Phone number (10 digits, can have leading 0)
  * @param {string} message - SMS message content
  * @returns {Promise<{success: boolean, jobID?: string, error?: string, code?: string}>}
@@ -18,7 +38,7 @@ const NETGSM_API_URL = 'https://api.netgsm.com.tr/sms/rest/v2/send';
 export async function sendSms(phone, message) {
     // Validate environment variables
     if (!NETGSM_USERNAME || !NETGSM_PASSWORD) {
-        console.error('Netgsm credentials not configured');
+        console.error('NetGSM credentials not configured');
         return {
             success: false,
             error: 'SMS service not configured. Please contact support.'
@@ -26,7 +46,7 @@ export async function sendSms(phone, message) {
     }
 
     if (!NETGSM_MSGHEADER) {
-        console.error('Netgsm MsgHeader not configured');
+        console.error('NetGSM MsgHeader not configured');
         return {
             success: false,
             error: 'SMS sender header not configured.'
@@ -60,44 +80,38 @@ export async function sendSms(phone, message) {
         }
     }
 
-
-
     try {
-        const payload = {
-            msgheader: NETGSM_MSGHEADER,
-            messages: [
-                {
-                    msg: message,
-                    no: formattedPhone
-                }
-            ],
-            encoding: 'TR', // Support Turkish characters
-            iysfilter: '0' // Informational
+        const client = getClient();
+
+        // Check if message contains Turkish characters
+        const hasTurkishChars = /[ğüşıöçĞÜŞİÖÇ]/g.test(message);
+
+        // Prepare message object as SDK expects
+        const messageData = {
+            msg: message,
+            no: formattedPhone
         };
 
-        // Basic Auth
-        const auth = Buffer.from(`${NETGSM_USERNAME}:${NETGSM_PASSWORD}`).toString('base64');
+        console.log('Sending SMS with data:', { msgheader: NETGSM_MSGHEADER, messages: [messageData], encoding: hasTurkishChars ? 'TR' : undefined });
 
-        const response = await axios.post(NETGSM_API_URL, payload, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${auth}`
-            },
-            timeout: 30000
+        // Send SMS using SDK - correct method is sendRestSms
+        const response = await client.sendRestSms({
+            msgheader: NETGSM_MSGHEADER,
+            messages: [messageData],
+            ...(hasTurkishChars && { encoding: 'TR' }) // Add encoding only if Turkish chars present
         });
 
-        console.log('Netgsm API response:', response.data);
+        console.log('NetGSM API response:', response);
 
-        // API Response: { code: "00", jobID: "...", description: "queued" }
-        const { code, jobID, description } = response.data;
-
-        if (code === '00') {
+        // SDK returns { jobid, code, description }
+        // Code '00' means success
+        if (response.code === '00' || response.jobid) {
             return {
                 success: true,
-                jobID: jobID || response.data['Job ID'] // Key might be "Job ID" or "jobID" based on docs/example mismatch
+                jobID: response.jobid
             };
         } else {
-            // Map codes
+            // Map error codes
             const errorMessages = {
                 '20': 'Message text error or too long.',
                 '30': 'Invalid credentials or API access restricted.',
@@ -108,20 +122,41 @@ export async function sendSms(phone, message) {
                 '85': 'Duplicate submission limit.'
             };
 
-            const detailedError = errorMessages[code] || description || 'Unknown error';
+            const detailedError = errorMessages[response.code] || response.description || 'Unknown error';
 
             return {
                 success: false,
                 error: detailedError,
-                code
+                code: response.code
             };
         }
 
     } catch (err) {
-        console.error('Netgsm API request error:', err.response ? err.response.data : err.message);
+        console.error('NetGSM SDK error:', err);
 
-        // Handle 406 or other HTTP errors that might contain the API error code
-        if (err.response && err.response.data && err.response.data.code) {
+        // The SDK throws errors with { status, code, jobid, description } structure
+        if (err.code) {
+            const errorMessages = {
+                '20': 'Message text error or too long.',
+                '30': 'Invalid credentials or API access restricted.',
+                '40': 'Sender name (Header) not defined.',
+                '50': 'Balance insufficient.',
+                '70': 'Invalid parameters.',
+                '80': 'Sending limit exceeded.',
+                '85': 'Duplicate submission limit.'
+            };
+
+            const detailedError = errorMessages[err.code] || err.description || 'Unknown error';
+
+            return {
+                success: false,
+                error: detailedError,
+                code: err.code
+            };
+        }
+
+        // Handle other SDK errors
+        if (err.response?.data) {
             return {
                 success: false,
                 error: err.response.data.description || 'API Error',
@@ -129,7 +164,10 @@ export async function sendSms(phone, message) {
             };
         }
 
-        return { success: false, error: err.message };
+        return {
+            success: false,
+            error: err.message || 'Failed to send SMS'
+        };
     }
 }
 
