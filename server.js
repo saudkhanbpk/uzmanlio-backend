@@ -272,37 +272,6 @@ app.use("/api/booking/customers", doubleCsrfProtection, bookingPage);
 
 
 
-app.post("/send-sms", authLimiter, async (req, res) => {
-  const { phone, message } = req.body;
-
-  if (!phone || !message) {
-    return res.status(400).json({ success: false, error: "Phone and message are required." });
-  }
-
-  try {
-    const result = await sendSms(phone, message);
-
-    if (result.success) {
-      res.json({
-        success: true,
-        sent_to: phone,
-        jobID: result.jobID
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: result.error,
-        code: result.code
-      });
-    }
-  } catch (err) {
-    console.error("NETGSM ROUTE ERROR:", err);
-    res.status(500).json({ success: false, error: "Internal server error" });
-  }
-});
-
-
-
 //customer Routes
 
 // Graceful shutdown

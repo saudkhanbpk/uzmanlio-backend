@@ -15,6 +15,7 @@ import {
     getGroupSessionConfirmationTemplate,
     getClientAppointmentCreatedTemplate
 } from "../services/eventEmailTemplates.js";
+import { sendSms } from "../services/netgsmService.js";
 import calendarSyncService from "../services/calendarSyncService.js";
 
 // Helper function to find user by ID
@@ -578,6 +579,39 @@ export const createEvent = async (req, res) => {
         // Fire email sending in background
         sendEmailsAsync();
 
+        // === SMS SENDING (ASYNCHRONOUS) ===
+        setImmediate(async () => {
+            try {
+                const expertName = `${user.information.name} ${user.information.surname}`;
+                const serviceName = eventData.serviceName;
+                const date = eventData.date;
+                const time = eventData.time;
+                const joinLink = eventData.platform || "Link yakında paylaşılacak";
+
+                for (const client of formattedClients) {
+                    // Fetch full customer data for phone number
+                    const customerDoc = await Customer.findOne({ email: client.email }).select("phone name");
+
+                    if (customerDoc && customerDoc.phone) {
+                        const smsMessage = `Merhaba ${client.name}, ${expertName} senin için ${serviceName} randevusu oluşturdu. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+
+                        try {
+                            const result = await sendSms(customerDoc.phone, smsMessage);
+                            if (result.success) {
+                                console.log(`✅ Event creation SMS sent to customer: ${customerDoc.phone}`);
+                            } else {
+                                console.error(`❌ Failed to send event creation SMS: ${result.error}`);
+                            }
+                        } catch (smsErr) {
+                            console.error("Error sending event creation SMS:", smsErr);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Error in SMS sending block:", err);
+            }
+        });
+
         if (user.calendarProviders && user.calendarProviders.length > 0) {
             const activeProviders = user.calendarProviders.filter(
                 (cp) => cp.isActive
@@ -733,7 +767,7 @@ export const updateEvent = async (req, res) => {
                     const expertName = `${user.information.name} ${user.information.surname}`;
                     const date = event.date;
                     const time = event.time;
-                    const joinLink = event.platform || "Link will be shared soon";
+                    const joinLink = event.platform || "Link yakında paylaşılacak";
 
                     let recipients = [];
 
@@ -773,6 +807,24 @@ export const updateEvent = async (req, res) => {
                         console.log(
                             `✅ Event update email sent to ${recipient.email}`
                         );
+
+                        // === SMS SENDING (ASYNCHRONOUS) ===
+                        try {
+                            const customerDoc = await Customer.findOne({ email: recipient.email }).select("phone name");
+                            if (customerDoc && customerDoc.phone) {
+                                const smsMessage = `Merhaba ${customerDoc.name}, ${expertName} ile ${event.serviceName} randevunun zamanı güncellendi. Yeni tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+                                try {
+                                    const result = await sendSms(customerDoc.phone, smsMessage);
+                                    if (result.success) {
+                                        console.log(`✅ Event update SMS sent to customer: ${customerDoc.phone}`);
+                                    }
+                                } catch (smsErr) {
+                                    console.error("Error sending event update SMS:", smsErr);
+                                }
+                            }
+                        } catch (docErr) {
+                            console.error("Error fetching customer for SMS update:", docErr);
+                        }
                     }
                 } catch (emailError) {
                     console.error(
@@ -1051,7 +1103,7 @@ export const updateEventStatus = async (req, res) => {
                     const serviceName = updatedEvent.serviceName || updatedEvent.title;
                     const date = updatedEvent.date;
                     const time = updatedEvent.time;
-                    const joinLink = updatedEvent.platform || 'Link will be shared soon';
+                    const joinLink = updatedEvent.platform || 'Link yakında paylaşılacak';
 
                     // Get customer information from selectedClients
                     let recipients = [];
@@ -1129,19 +1181,26 @@ export const updateEventStatus = async (req, res) => {
                     // Send SMS to each customer with a valid phone number
                     for (const customer of customersWithPhones) {
                         if (customer.phone && customer.phone.trim() !== '') {
-                            const smsMessage = `Merhaba ${customer.name}, ${expertName} ile ${serviceName} randevunuz onaylandı. Tarih: ${date} ${time}. İyi günler!`;
+                            const clientSmsMessage = `Merhaba ${customer.name}, ${expertName} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
+                            const expertSmsMessage = `${customer.name} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
 
                             try {
-                                const smsResult = await sendSms(customer.phone, smsMessage);
+                                // SMS to Customer
+                                const clientResult = await sendSms(customer.phone, clientSmsMessage);
+                                if (clientResult.success) {
+                                    console.log(`✅ Approval SMS sent to customer: ${customer.name} (${customer.phone})`);
+                                }
 
-                                if (smsResult.success) {
-                                    console.log(`✅ SMS sent successfully to ${customer.name} (${customer.phone}), JobID: ${smsResult.jobID}`);
-                                } else {
-                                    console.error(`❌ Failed to send SMS to ${customer.name} (${customer.phone}): ${smsResult.error}`);
+                                // SMS to Expert
+                                const expertPhone = user.information?.phone;
+                                if (expertPhone) {
+                                    const expertResult = await sendSms(expertPhone, expertSmsMessage);
+                                    if (expertResult.success) {
+                                        console.log(`✅ Approval SMS notification sent to expert: ${expertPhone}`);
+                                    }
                                 }
                             } catch (smsError) {
-                                console.error(`❌ Error sending SMS to ${customer.name} (${customer.phone}):`, smsError);
-                                // Don't fail the request if SMS fails
+                                console.error(`❌ Error sending status update SMS:`, smsError);
                             }
                         } else {
                             console.log(`⚠️ Customer ${customer.name} (${customer.email}) has no phone number, skipping SMS`);
@@ -1278,6 +1337,28 @@ export const updateEventStatus = async (req, res) => {
                         });
 
                         console.log(`✅ Cancellation email sent to customer: ${recipient.email}`);
+                    }
+
+                    // Send SMS notification to customers
+                    console.log('📱 Sending cancellation SMS notifications to customers...');
+                    let customersWithPhones = [];
+                    if (selectedClients && selectedClients.length > 0) {
+                        const customerEmails = selectedClients.map(c => c.email);
+                        customersWithPhones = await Customer.find({ email: { $in: customerEmails } }).select('name email phone');
+                    } else if (customerIds.length > 0) {
+                        customersWithPhones = await Customer.find({ _id: { $in: customerIds } }).select('name email phone');
+                    }
+
+                    for (const customer of customersWithPhones) {
+                        if (customer.phone) {
+                            const smsMessage = `Merhaba ${customer.name}, ${serviceName} randevu talebin ${expertName} tarafından reddedildi. Detaylar için Uzmanlio hesabını kontrol edebilirsin.`;
+                            try {
+                                await sendSms(customer.phone, smsMessage);
+                                console.log(`✅ Cancellation SMS sent to customer: ${customer.name}`);
+                            } catch (smsErr) {
+                                console.error("Error sending cancellation SMS:", smsErr);
+                            }
+                        }
                     }
 
                 } catch (emailError) {

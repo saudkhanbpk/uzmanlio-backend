@@ -10,6 +10,7 @@ import CustomerNote from "../../models/customerNotes.js";
 import Coupon from "../../models/Coupon.js";
 import Institution from "../../models/institution.js";
 import { sendBookingEmails } from "../../services/email.js";
+import { sendSms } from "../../services/netgsmService.js";
 import { bookingDataSchema, validateCouponSchema } from "../../utils/bookingValidation.js";
 import mongoSanitize from "express-mongo-sanitize";
 
@@ -406,8 +407,30 @@ export const submitBooking = async (req, res) => {
                         sessionsIncluded: selectedOffering.sessionsIncluded || selectedOffering.sessions
                     }
                 );
+                // Send SMS notification to expert (Non-blocking)
+                const expertPhone = expert.information?.phone;
+                if (expertPhone) {
+                    const clientName = `${customer.name} ${customer.surname}`;
+                    const expertName = expert.information?.name || "Expert";
+                    const serviceName = selectedOffering.title;
+                    const bDate = normalizedDate || selectedOffering.date || date || "";
+                    const bTime = normalizedTime || selectedOffering.time || time || "";
+
+                    const smsMessage = `Merhaba ${expertName}, ${clientName} senden ${serviceName} randevusu aldı. Tarih: ${bDate} ${bTime}. Onaylamak için paneli ziyaret edin.`;
+
+                    try {
+                        const smsResult = await sendSms(expertPhone, smsMessage);
+                        if (smsResult.success) {
+                            console.log(`✅ Booking SMS sent to expert: ${expertPhone}`);
+                        } else {
+                            console.error(`❌ Failed to send booking SMS to expert: ${smsResult.error}`);
+                        }
+                    } catch (smsErr) {
+                        console.error("Error sending booking SMS to expert:", smsErr);
+                    }
+                }
             } catch (e) {
-                console.error("Email sending failed:", e.message);
+                console.error("Booking notifications failed:", e.message);
             }
         });
 
