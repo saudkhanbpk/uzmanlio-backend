@@ -51,7 +51,7 @@ export const createServiceSchema = Joi.object({
         .default('0'),
     category: Joi.string().max(100).allow('', null),
     features: Joi.array().items(Joi.string().max(500)).default([]),
-    date: Joi.date().allow(null),
+    date: Joi.string().allow('', null),
     time: Joi.string().max(20).allow('', null),
     location: Joi.string().max(500).allow('', null),
     platform: Joi.string().max(200).allow('', null),
