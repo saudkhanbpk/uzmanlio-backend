@@ -10,6 +10,7 @@ import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
 import { sendBulkEmail, sendEmail } from "../../services/email.js";
 import { Parser } from "json2csv";
+import bcrypt from "bcrypt";
 import {
   getExpertEventCreatedTemplate, getClient11SessionTemplate,
   getClientGroupSessionTemplate, getClientPackageSessionTemplate,
@@ -487,25 +488,38 @@ router.get("/:userId",
       res.status(400).json({ error: err.message });
     }
   });
-
-router.put("/:userId",
+router.put(
+  "/:userId",
   validateParams(expertSchemas.userIdParams),
   validateBody(expertSchemas.updateProfileSchema),
   verifyAccessToken,
   async (req, res) => {
     try {
-      console.log("Updating profile for userId:", req.params.userId);
-
-      // ⛔ CRITICAL: Prevent password deletion
-      // Passwords should ONLY be changed through dedicated auth routes (signup/reset-password)
+      const { userId } = req.params;
       const updateData = { ...req.body };
-      if (updateData.information) {
-        delete updateData.information.password;
-        console.log("🔒 Password field excluded from profile update");
+
+      // 🔹 Get existing user first
+      const existingUser = await User.findById(userId);
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // 🔐 Password handling
+      if (updateData.information?.password) {
+        // New password provided → hash & update
+        const salt = await bcrypt.genSalt(10);
+        updateData.information.password = await bcrypt.hash(
+          updateData.information.password,
+          salt
+        );
+      } else if (updateData.information) {
+        // No password in request → keep old password
+        updateData.information.password =
+          existingUser.information.password;
       }
 
       const expertInformation = await User.findByIdAndUpdate(
-        req.params.userId,
+        userId,
         updateData,
         {
           new: true,
@@ -513,21 +527,60 @@ router.put("/:userId",
         }
       );
 
-      if (!expertInformation) {
-        console.log("User not found for ID:", req.params.userId);
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      console.log("Profile updated successfully for userId:", req.params.userId);
-      res.json({ message: "Profile updated", expertInformation });
-    } catch (err) {
-      console.error("Update error:", {
-        message: err.message,
-        stack: err.stack
+      res.json({
+        message: "Profile updated successfully",
+        expertInformation,
       });
-      res.status(500).json({ error: "Error updating profile", details: err.message });
+    } catch (err) {
+      console.error("Update error:", err);
+      res.status(500).json({
+        error: "Error updating profile",
+        details: err.message,
+      });
     }
-  });
+  }
+);
+
+// router.put("/:userId",
+//   validateParams(expertSchemas.userIdParams),
+//   validateBody(expertSchemas.updateProfileSchema),
+//   verifyAccessToken,
+//   async (req, res) => {
+//     try {
+//       console.log("Updating profile for userId:", req.params.userId);
+
+//       // ⛔ CRITICAL: Prevent password deletion
+//       // Passwords should ONLY be changed through dedicated auth routes (signup/reset-password)
+//       const updateData = { ...req.body };
+//       if (updateData.information) {
+//         delete updateData.information.password;
+//         console.log("🔒 Password field excluded from profile update");
+//       }
+
+//       const expertInformation = await User.findByIdAndUpdate(
+//         req.params.userId,
+//         updateData,
+//         {
+//           new: true,
+//           runValidators: true,
+//         }
+//       );
+
+//       if (!expertInformation) {
+//         console.log("User not found for ID:", req.params.userId);
+//         return res.status(404).json({ error: "User not found" });
+//       }
+
+//       console.log("Profile updated successfully for userId:", req.params.userId);
+//       res.json({ message: "Profile updated", expertInformation });
+//     } catch (err) {
+//       console.error("Update error:", {
+//         message: err.message,
+//         stack: err.stack
+//       });
+//       res.status(500).json({ error: "Error updating profile", details: err.message });
+//     }
+//   });
 
 router.patch("/:userId",
   validateParams(expertSchemas.userIdParams),
