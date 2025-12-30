@@ -119,8 +119,8 @@ export const updateCertificatesSchema = Joi.object({
 export const experienceSchema = Joi.object({
     company: Joi.string().max(200).required(),
     position: Joi.string().max(200).required(),
-    start: Joi.string().allow('', null),
-    end: Joi.string().allow('', null),
+    start: Joi.number().allow('', null),
+    end: Joi.number().allow('', null),
     stillWork: Joi.boolean().default(false),
     description: Joi.string().max(2000).allow('', null),
     country: Joi.string().max(100).allow('', null),

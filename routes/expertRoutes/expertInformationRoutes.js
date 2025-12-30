@@ -852,7 +852,7 @@ router.put("/:userId/education/:educationId",
   verifyAccessToken,
   async (req, res) => {
     try {
-      const { level, university, name, department, graduationYear } = req.body;
+      const { level, university, name, department, graduationYear, startDate, endDate, current } = req.body;
       const user = await findUserById(req.params.userId);
 
       if (!user.resume?.education) {
@@ -867,13 +867,27 @@ router.put("/:userId/education/:educationId",
         return res.status(404).json({ error: "Education record not found" });
       }
 
+      const start = startDate ? new Date(startDate) : null;
+      if (!start || isNaN(start.getTime())) {
+        return res.status(400).json({ error: "Start date is invalid or missing" });
+      }
+
+      const end = endDate && !current ? new Date(endDate) : null;
+      if (end && isNaN(end.getTime())) {
+        return res.status(400).json({ error: "End date is invalid" });
+      }
+
+      // Update the education record
       user.resume.education[educationIndex] = {
         ...user.resume.education[educationIndex],
         level,
         university,
         name,
         department,
-        graduationYear
+        graduationYear,
+        startDate: start,
+        endDate: end,
+        current: !!current
       };
 
       await user.save();
@@ -885,6 +899,7 @@ router.put("/:userId/education/:educationId",
       res.status(500).json({ error: error.message });
     }
   });
+
 
 // Delete education
 router.delete("/:userId/education/:educationId",

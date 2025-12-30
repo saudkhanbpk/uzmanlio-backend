@@ -16,12 +16,12 @@ const Title = new Schema({
 // ---------------- Sub-Schemas ----------------
 const EducationSchema = new Schema({
   id: { type: String, default: uuidv4 },
-  level: { type: String, required: true },
+  level: { type: String },
   university: { type: Schema.Types.ObjectId, ref: "University", default: null },
-  name: { type: String, required: true },
+  name: { type: String },
   department: { type: String, default: "" },
   graduationYear: { type: Number, default: null },
-  startDate: { type: Date, required: true },
+  startDate: { type: Date },
   endDate: { type: Date, default: null },
   current: { type: Boolean, default: false }
 });
