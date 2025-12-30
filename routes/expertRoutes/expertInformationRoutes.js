@@ -808,11 +808,20 @@ router.post("/:userId/education",
   verifyAccessToken,
   async (req, res) => {
     try {
-      const { level, university, name, department, graduationYear } = req.body;
+      const { level, university, name, department, graduationYear, startDate, endDate, current } = req.body;
       const user = await findUserById(req.params.userId);
 
       if (!user.resume) {
         user.resume = { education: [] };
+      }
+      const start = startDate ? new Date(startDate) : null;
+      if (!start || isNaN(start.getTime())) {
+        return res.status(400).json({ error: "Start date is invalid or missing" });
+      }
+
+      const end = endDate && !current ? new Date(endDate) : null;
+      if (end && isNaN(end.getTime())) {
+        return res.status(400).json({ error: "End date is invalid" });
       }
 
       const newEducation = {
@@ -821,7 +830,10 @@ router.post("/:userId/education",
         university,
         name,
         department,
-        graduationYear
+        graduationYear,
+        startDate: start,
+        endDate: end,
+        current: !!current
       };
 
       user.resume.education.push(newEducation);

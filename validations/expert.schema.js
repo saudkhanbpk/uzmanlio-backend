@@ -74,10 +74,13 @@ export const categorySchema = Joi.object({
 
 export const educationSchema = Joi.object({
     level: Joi.string().max(100).required(),
-    university: Joi.string().max(200).required(),
+    university: Joi.number().allow('', null),
     name: Joi.string().max(200).required(), // Degree name
     department: Joi.string().max(200).allow('', null),
-    graduationYear: Joi.string().max(10).allow('', null),
+    graduationYear: Joi.number().allow('', null),
+    startDate: Joi.date().required(),         // <-- required
+    endDate: Joi.date().allow(null),          // <-- optional
+    current: Joi.boolean().default(false)    // <-- optional
 });
 
 export const updateEducationSchema = Joi.object({
@@ -141,7 +144,10 @@ export const updateExperienceSchema = Joi.object({
 
 export const skillSchema = Joi.object({
     name: Joi.string().max(100).required(),
-    level: Joi.string().valid('beginner', 'intermediate', 'advanced', 'expert', '').allow('', null),
+    level: Joi.number()
+        .min(0)
+        .max(100)
+        .required(),
     category: Joi.string().max(100).allow('', null),
     description: Joi.string().max(500).allow('', null),
 });
