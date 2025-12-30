@@ -169,13 +169,7 @@ export const updateSkillsSchema = Joi.object({
 export const availabilitySchema = Joi.object({
     alwaysAvailable: Joi.boolean().default(false),
     selectedSlots: Joi.array().items(
-        Joi.object({
-            id: Joi.string().allow('', null),
-            day: Joi.string().valid('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday').required(),
-            start: Joi.string().pattern(/^([01]?\d|2[0-3]):[0-5]\d$/).required(),
-            end: Joi.string().pattern(/^([01]?\d|2[0-3]):[0-5]\d$/).required(),
-            active: Joi.boolean().default(true),
-        })
+        Joi.string().pattern(/^\d-[0-5]\d:[0-5]\d$/)
     ).default([]),
 });
 
