@@ -1047,16 +1047,22 @@ router.post("/:userId/experience",
   verifyAccessToken, // Added verifyAccessToken for security consistency
   async (req, res) => {
     try {
-      const { company, position, start, end, stillWork, description, country, city } = req.body;
+      const { company, position, start, end, stillWork, startDate, endDate, current, description, country, city } = req.body;
       const user = await findUserById(req.params.userId);
+
+      const sDate = startDate ? new Date(startDate) : null;
+      const eDate = endDate && !current ? new Date(endDate) : null;
 
       const newExperience = {
         id: uuidv4(),
         company,
         position,
-        start,
-        end: stillWork ? null : end,
-        stillWork,
+        start: sDate ? sDate.getFullYear() : start,
+        end: current ? null : (eDate ? eDate.getFullYear() : end),
+        startDate: sDate,
+        endDate: eDate,
+        current: !!current,
+        stillWork: !!stillWork || !!current,
         description,
         country,
         city
@@ -1078,7 +1084,7 @@ router.put("/:userId/experience/:experienceId",
   verifyAccessToken, // Added verifyAccessToken for security consistency
   async (req, res) => {
     try {
-      const { company, position, description, start, end, stillWork, country, city } = req.body;
+      const { company, position, description, start, end, stillWork, startDate, endDate, current, country, city } = req.body;
       const user = await findUserById(req.params.userId);
 
       const experienceIndex = user.experience.findIndex(
@@ -1089,14 +1095,20 @@ router.put("/:userId/experience/:experienceId",
         return res.status(404).json({ error: "Experience not found" });
       }
 
+      const sDate = startDate ? new Date(startDate) : null;
+      const eDate = endDate && !current ? new Date(endDate) : null;
+
       user.experience[experienceIndex] = {
         ...user.experience[experienceIndex],
         company,
         description,
         position,
-        start,
-        end: stillWork ? null : end,
-        stillWork,
+        start: sDate ? sDate.getFullYear() : start,
+        end: current ? null : (eDate ? eDate.getFullYear() : end),
+        startDate: sDate,
+        endDate: eDate,
+        current: !!current,
+        stillWork: !!stillWork || !!current,
         country,
         city
       };
