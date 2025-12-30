@@ -46,10 +46,7 @@ export const createFormSchema = Joi.object({
         'any.required': 'Form title is required',
     }),
     description: description.allow('', null),
-    fields: Joi.array().items(formFieldSchema).min(1).required().messages({
-        'any.required': 'At least one form field is required',
-        'array.min': 'At least one form field is required',
-    }),
+    fields: Joi.array().allow(null),
     status: Joi.string().valid(...formStatuses).default('draft'),
     settings: Joi.object({
         submitButtonText: Joi.string().max(50).default('Submit'),
@@ -71,7 +68,7 @@ export const createFormSchema = Joi.object({
 export const updateFormSchema = Joi.object({
     title: title,
     description: description.allow('', null),
-    fields: Joi.array().items(formFieldSchema).min(1),
+    fields: Joi.array().allow(null),
     status: Joi.string().valid(...formStatuses),
     settings: Joi.object({
         submitButtonText: Joi.string().max(50),
