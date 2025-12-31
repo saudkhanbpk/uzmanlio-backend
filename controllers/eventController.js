@@ -15,6 +15,12 @@ import {
     getGroupSessionConfirmationTemplate,
     getClientAppointmentCreatedTemplate
 } from "../services/eventEmailTemplates.js";
+import {
+    getAppointmentApprovedBireyselTemplate,
+    getGroupSessionApprovedTemplate,
+    getCancellationEmailTemplate,
+    getEventUpdatedTemplate
+} from "../services/emailTemplates.js";
 import { sendSms } from "../services/netgsmService.js";
 import calendarSyncService from "../services/calendarSyncService.js";
 

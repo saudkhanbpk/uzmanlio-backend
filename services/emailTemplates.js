@@ -4650,3 +4650,55 @@ export function getSubscriptionInvoiceEmailTemplate(data) {
         `
     };
 }
+
+/**
+ * Get email template for Event Update (Date/Time change)
+ */
+export function getEventUpdatedTemplate(data) {
+    const { clientName, expertName, newDate, newTime, appointmentLocation, videoLink } = data;
+    return {
+        subject: "Randevu Bilgileri Güncellendi - Uzmanlio",
+        html: `
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Randevu Güncelleme</title>
+    <style>
+        body { font-family: 'Inter', Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+        .header { background: #e0f2fe; padding: 40px 30px; text-align: center; color: #075985; }
+        .content { padding: 40px 30px; }
+        .appointment-card { background: #f0f9ff; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #0ea5e9; }
+        .detail-item { margin: 10px 0; }
+        .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 Randevu Güncellendi</h1>
+            <p>Randevu bilgilerinizde değişiklik yapıldı.</p>
+        </div>
+        <div class="content">
+            <p>Merhaba <strong>${clientName}</strong>,</p>
+            <p><strong>${expertName}</strong> ile olan randevunuzun bilgileri güncellenmiştir.</p>
+            
+            <div class="appointment-card">
+                <h3>📅 Yeni Detaylar</h3>
+                <div class="detail-item"><strong>Tarih:</strong> ${newDate}</div>
+                <div class="detail-item"><strong>Saat:</strong> ${newTime}</div>
+                <div class="detail-item"><strong>Konum:</strong> ${appointmentLocation}</div>
+                ${videoLink ? `<div style="margin-top: 15px;"><a href="${videoLink}" style="background: #0ea5e9; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Görüşmeye Katıl</a></div>` : ''}
+            </div>
+        </div>
+        <div class="footer">
+            <p>Uzmanlio Ekibi</p>
+        </div>
+    </div>
+</body>
+</html>
+        `
+    };
+}
