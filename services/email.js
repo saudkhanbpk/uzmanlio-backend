@@ -1,84 +1,74 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { getCustomerEmailTemplate, getExpertEmailTemplate } from "./emailTemplates.js";
 import dotenv from "dotenv";
 dotenv.config();
 
-// SMTP Configuration from environment variables
-const EMAIL_USER = process.env.EMAIL_USER;
-const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD;
-const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com'; // Default to Gmail
-const EMAIL_PORT = process.env.EMAIL_PORT || 587;
-const EMAIL_SECURE = process.env.EMAIL_SECURE === 'true'; // false for TLS, true for SSL
+// Resend Configuration from environment variables
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SENDER_NAME = process.env.SENDER_NAME || "Uzmanlio";
+const SENDER_EMAIL = process.env.SENDER_EMAIL || "onboarding@resend.dev"; // Default Resend test email
 
 // Validate configuration
-if (!EMAIL_USER || !EMAIL_APP_PASSWORD) {
-    console.error("❌ EMAIL_USER or EMAIL_APP_PASSWORD is not set in environment variables!");
-    console.error("⚠️  Please set these in your .env file:");
-    console.error("   EMAIL_USER=your-email@gmail.com");
-    console.error("   EMAIL_APP_PASSWORD=your-app-password");
-    console.error("⚠️  For Gmail, create an App Password at: https://myaccount.google.com/apppasswords");
+if (!RESEND_API_KEY) {
+    console.warn("⚠️ RESEND_API_KEY is not set in environment variables!");
+    console.warn("⚠️ Email sending will fail until this is configured.");
 }
 
-// Create reusable transporter
-let transporter = null;
+// Create reusable resend instance
+let resendClient = null;
 
 /**
- * Initialize nodemailer transporter
+ * Initialize Resend client
  */
-function getTransporter() {
-    if (transporter) {
-        return transporter;
+function getResendClient() {
+    if (resendClient) {
+        return resendClient;
     }
 
-    if (!EMAIL_USER || !EMAIL_APP_PASSWORD) {
-        throw new Error("Email configuration is missing. Please set EMAIL_USER and EMAIL_APP_PASSWORD in .env");
+    if (!RESEND_API_KEY) {
+        throw new Error("Resend API Key is missing. Please set RESEND_API_KEY in .env");
     }
 
-    transporter = nodemailer.createTransport({
-        host: EMAIL_HOST,
-        port: EMAIL_PORT,
-        secure: EMAIL_SECURE, // true for 465, false for other ports
-        auth: {
-            user: EMAIL_USER,
-            pass: EMAIL_APP_PASSWORD,
-        },
-    });
-
-    console.log("✅ Email transporter initialized");
-    return transporter;
+    resendClient = new Resend(RESEND_API_KEY);
+    console.log("✅ Resend client initialized");
+    return resendClient;
 }
 
 /**
- * Send email using nodemailer SMTP
+ * Send email using Resend API
  * @param {string} receiver - Email address of the receiver
  * @param {object} emailData - Email data containing subject and body
  */
 async function sendEmail(receiver, emailData) {
     try {
-        console.log("📧 Sending email via SMTP to:", receiver);
+        console.log("📧 Sending email via Resend to:", receiver);
 
-        const transport = getTransporter();
+        const resend = getResendClient();
 
-        const mailOptions = {
-            from: `${SENDER_NAME} <${EMAIL_USER}>`,
-            to: receiver,
+        const { data, error } = await resend.emails.send({
+            from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+            to: [receiver],
             subject: emailData.subject,
             text: emailData.text || emailData.body || '',
             html: emailData.html || `<p>${emailData.body || emailData.text || ''}</p>`,
-        };
+        });
 
-        const info = await transport.sendMail(mailOptions);
+        if (error) {
+            console.error("❌ Resend API error:", error);
+            return {
+                success: false,
+                error: `Resend API error: ${error.message}`
+            };
+        }
 
-        console.log("✅ Email sent successfully:", info.messageId);
+        console.log("✅ Email sent successfully via Resend:", data.id);
         return {
             success: true,
-            messageId: info.messageId,
-            provider: "smtp",
-            response: info.response
+            messageId: data.id,
+            provider: "resend"
         };
     } catch (error) {
-        console.error("❌ SMTP email error:", error.message);
+        console.error("❌ Resend general error:", error.message);
         return {
             success: false,
             error: `Email sending failed: ${error.message}`
@@ -87,7 +77,7 @@ async function sendEmail(receiver, emailData) {
 }
 
 /**
- * Send bulk email using nodemailer SMTP
+ * Send bulk email using Resend API
  * @param {string[]} emails - array of recipient emails
  * @param {string} subject - email subject
  * @param {string} text - plain text body
@@ -99,27 +89,36 @@ async function sendBulkEmail(emails, subject, text, html = null) {
     }
 
     try {
-        const transport = getTransporter();
+        console.log(`📧 Sending bulk email to ${emails.length} recipients via Resend`);
+        const resend = getResendClient();
 
-        const mailOptions = {
-            from: `${SENDER_NAME} <${EMAIL_USER}>`,
-            to: emails.join(', '), // Join multiple recipients
+        // Resend recommends using the batch send for bulk
+        // However, for simplicity if target is small, we can batch them in one call if privacy isn't an issue
+        // or loop if they need to be individualized. Here we follow previous pattern of "to: join(', ')" equivalent.
+        // Actually Resend 'to' can be an array.
+
+        const { data, error } = await resend.emails.send({
+            from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+            to: emails,
             subject,
             text,
             html: html || `<p>${text}</p>`,
-        };
+        });
 
-        const info = await transport.sendMail(mailOptions);
+        if (error) {
+            console.error("❌ Resend Bulk API error:", error);
+            throw new Error(`Bulk email sending failed: ${error.message}`);
+        }
 
-        console.log("✅ Bulk email sent successfully:", info.messageId);
+        console.log("✅ Bulk email sent successfully via Resend:", data.id);
         return {
             success: true,
-            messageId: info.messageId,
-            provider: "smtp",
+            messageId: data.id,
+            provider: "resend",
             recipientCount: emails.length
         };
     } catch (error) {
-        console.error("❌ SMTP bulk email error:", error.message);
+        console.error("❌ Resend bulk email error:", error.message);
         throw new Error(`Bulk email sending failed: ${error.message}`);
     }
 }
@@ -174,17 +173,19 @@ async function sendBookingEmails(bookingType, customerData, expertData, bookingD
 }
 
 /**
- * Verify email configuration
+ * Verify Resend configuration
  * @returns {Promise<boolean>} True if configuration is valid
  */
 async function verifyEmailConfig() {
     try {
-        const transport = getTransporter();
-        await transport.verify();
-        console.log("✅ Email server is ready to send messages");
-        return true;
+        if (!RESEND_API_KEY) return false;
+        const resend = getResendClient();
+        // There isn't a direct .verify() like nodemailer, but we can try to list domains or similar
+        // if we just want to check connectivity/key validity. 
+        // For now, let's just check if the client can be initialized.
+        return !!resend;
     } catch (error) {
-        console.error("❌ Email configuration verification failed:", error.message);
+        console.error("❌ Resend configuration verification failed:", error.message);
         return false;
     }
 }

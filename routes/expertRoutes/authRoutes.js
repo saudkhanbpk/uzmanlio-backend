@@ -539,7 +539,8 @@ router.post("/resend-verification", validateBody(resendVerificationSchema), asyn
 
         // Send verification email
         try {
-            const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${user.emailVerificationToken}`;
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const verificationUrl = `${frontendUrl}/verify-email?token=${user.emailVerificationToken}`;
 
             const verificationEmailTemplate = getEmailVerificationTemplate({
                 name: user.information.name,
