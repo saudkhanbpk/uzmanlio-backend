@@ -1,5 +1,5 @@
 import express from 'express';
-import jwt from 'jsonwebtoken';
+import { verifyAccessToken } from '../../middlewares/auth.js';
 import User from '../../models/expertInformation.js';
 import Institution from '../../models/institution.js';
 import {
@@ -14,43 +14,6 @@ import {
 
 const router = express.Router();
 
-// Token secret - fallback provided but should be set in .env for production
-if (!process.env.ACCESS_TOKEN_SECRET) {
-    console.warn("⚠️ WARNING: ACCESS_TOKEN_SECRET not set in .env - using fallback value.");
-}
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "access-secret";
-
-/**
- * Authentication middleware
- */
-const authenticateToken = async (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    console.log("🔐 Analytics Auth - Full Authorization header:", authHeader);
-    console.log("🔐 Analytics Auth - Extracted token (first 50 chars):", token ? token.substring(0, 50) + "..." : "NO TOKEN");
-    console.log("🔐 Analytics Auth - Token length:", token ? token.length : 0);
-
-    if (!token) {
-        return res.status(401).json({ success: false, error: 'Authentication required' });
-    }
-
-    try {
-        const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
-        console.log("🔐 Analytics Auth - Token decoded successfully, user ID:", decoded.id);
-        const user = await User.findById(decoded.id);
-
-        if (!user) {
-            return res.status(401).json({ success: false, error: 'User not found' });
-        }
-
-        req.user = user;
-        next();
-    } catch (error) {
-        console.log("🔐 Analytics Auth - Token verification FAILED:", error.message);
-        return res.status(403).json({ success: false, error: 'Invalid token' });
-    }
-};
 
 /**
  * Helper to get date range based on period
@@ -81,13 +44,30 @@ const getDateRange = (period, year) => {
     return { startDate, endDate };
 };
 
+// Helper to get user by ID and attach it to req.user
+const attachUser = async (req, res, next) => {
+    try {
+        if (!req.userId) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(401).json({ success: false, error: 'User not found' });
+        }
+        req.user = user;
+        next();
+    } catch (error) {
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+};
+
 /**
  * GET /api/analytics/expert/:expertId/profile-views
  * Get profile views for an expert
  * - Experts can only access their own analytics
  * - Admins can access any expert in their institution
  */
-router.get('/expert/:expertId/profile-views', authenticateToken, async (req, res) => {
+router.get('/expert/:expertId/profile-views', verifyAccessToken, attachUser, async (req, res) => {
     try {
         const { expertId } = req.params;
         const { period = 'monthly', year = new Date().getFullYear(), startDate, endDate } = req.query;
@@ -149,7 +129,7 @@ router.get('/expert/:expertId/profile-views', authenticateToken, async (req, res
  * GET /api/analytics/expert/:expertId/realtime
  * Get real-time visitors for an expert's profile
  */
-router.get('/expert/:expertId/realtime', authenticateToken, async (req, res) => {
+router.get('/expert/:expertId/realtime', verifyAccessToken, attachUser, async (req, res) => {
     try {
         const { expertId } = req.params;
         const currentUser = req.user;
@@ -186,7 +166,7 @@ router.get('/expert/:expertId/realtime', authenticateToken, async (req, res) => 
  * GET /api/analytics/expert/:expertId/detailed
  * Get detailed analytics (traffic sources, devices, countries)
  */
-router.get('/expert/:expertId/detailed', authenticateToken, async (req, res) => {
+router.get('/expert/:expertId/detailed', verifyAccessToken, attachUser, async (req, res) => {
     try {
         const { expertId } = req.params;
         const { period = 'monthly', year = new Date().getFullYear(), startDate, endDate } = req.query;
@@ -236,7 +216,7 @@ router.get('/expert/:expertId/detailed', authenticateToken, async (req, res) => 
  * GET /api/analytics/admin/all-experts
  * Get aggregated analytics for all experts in institution (admin only)
  */
-router.get('/admin/all-experts', authenticateToken, async (req, res) => {
+router.get('/admin/all-experts', verifyAccessToken, attachUser, async (req, res) => {
     try {
         const currentUser = req.user;
         const { period = 'monthly', year = new Date().getFullYear(), startDate, endDate } = req.query;
@@ -324,7 +304,7 @@ router.get('/admin/all-experts', authenticateToken, async (req, res) => {
  * GET /api/analytics/admin/expert/:expertId
  * Get detailed analytics for a specific expert (admin only)
  */
-router.get('/admin/expert/:expertId', authenticateToken, async (req, res) => {
+router.get('/admin/expert/:expertId', verifyAccessToken, attachUser, async (req, res) => {
     try {
         const { expertId } = req.params;
         const { period = 'monthly', year = new Date().getFullYear(), startDate, endDate } = req.query;
@@ -408,7 +388,7 @@ router.get('/admin/expert/:expertId', authenticateToken, async (req, res) => {
  * GET /api/analytics/institution/:institutionId/profile-views
  * Get profile views for an institution page
  */
-router.get('/institution/:institutionId/profile-views', authenticateToken, async (req, res) => {
+router.get('/institution/:institutionId/profile-views', verifyAccessToken, attachUser, async (req, res) => {
     try {
         const { institutionId } = req.params;
         const { period = 'monthly', year = new Date().getFullYear(), startDate, endDate } = req.query;
