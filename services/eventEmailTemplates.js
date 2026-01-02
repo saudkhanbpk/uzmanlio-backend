@@ -596,10 +596,12 @@ export function getClientGroupSessionTemplate(data) {
             </div>
             
             ${videoLink ? `
-            <div class="join-group">
+            <div class="join-group" style="border-color: ${videoLink.includes('zoom.us') ? '#2D8CFF' : '#009743'};">
                 <h3>🎥 Grup Seansına Katıl</h3>
                 <p>Seans saatinde aşağıdaki bağlantıya tıklayarak katılabilirsiniz:</p>
-                <a href="${videoLink}" class="group-button" style="color: white;">Grup Seansına Katıl</a>
+                <a href="${videoLink}" class="group-button" style="color: white; background-color: ${videoLink.includes('zoom.us') ? '#2D8CFF' : '#009743'};">
+                    ${videoLink.includes('zoom.us') ? '🔵 Zoom Toplantısına Katıl' : 'Grup Seansına Katıl'}
+                </a>
             </div>
             ` : ''}
             

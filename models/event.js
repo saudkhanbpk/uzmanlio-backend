@@ -65,6 +65,9 @@ const EventSchema = new Schema({
     originalEventId: { type: String }, // Reference to original event if this is a repetition
     repetitionNumber: { type: Number }, // Which repetition this is (1, 2, 3, etc.)
     completedRepetitions: { type: Number, default: 0 }, // Number of completed repetitions
+    zoomMeetingId: { type: String },
+    zoomJoinUrl: { type: String },
+    zoomStartUrl: { type: String },
 
 },
     {

@@ -23,6 +23,7 @@ import {
 } from "../services/emailTemplates.js";
 import { sendSms } from "../services/netgsmService.js";
 import calendarSyncService from "../services/calendarSyncService.js";
+import zoomService from "../services/zoomService.js";
 
 // Helper function to find user by ID
 const findUserById = async (userId) => {
@@ -152,6 +153,27 @@ export const createEvent = async (req, res) => {
             }
         }
         // ===========================================================
+
+        // --- ZOOM MEETING INTEGRATION ---
+        let zoomMeeting = null;
+        let zoomErrorInfo = null;
+        console.log('🔍 Platform Check:', eventData.platform);
+
+        if (eventData.platform?.toLowerCase() === 'zoom') {
+            try {
+                zoomMeeting = await zoomService.createMeeting({
+                    title: eventData.title || eventData.serviceName,
+                    date: eventData.date,
+                    time: eventData.time,
+                    duration: eventData.duration
+                });
+                console.log('✅ Zoom Meeting Result:', !!zoomMeeting);
+            } catch (zoomError) {
+                console.error("❌ Zoom integration failed:", zoomError);
+                zoomErrorInfo = zoomError.message;
+            }
+        }
+
         const event = await Event.create({
             expertId: user._id,
             title: eventData.title || eventData.serviceName,
@@ -164,6 +186,9 @@ export const createEvent = async (req, res) => {
             duration: eventData.duration,
             location: eventData.location,
             platform: eventData.platform,
+            zoomMeetingId: zoomMeeting?.id,
+            zoomJoinUrl: zoomMeeting?.join_url,
+            zoomStartUrl: zoomMeeting?.start_url,
             eventType: eventData.eventType,
             meetingType: eventData.meetingType,
             price: eventData.price,
@@ -430,7 +455,7 @@ export const createEvent = async (req, res) => {
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
                                 sessionDuration: eventData.duration,
-                                videoLink: eventData.platform || "",
+                                videoLink: event.zoomJoinUrl || eventData.platform || "",
                             });
 
                             emailPromises.push(
@@ -448,7 +473,7 @@ export const createEvent = async (req, res) => {
                             eventTime: eventData.time,
                             eventLocation: eventData.location,
                             serviceName: eventData.serviceName,
-                            videoLink: eventData.platform || "",
+                            videoLink: event.zoomStartUrl || event.zoomJoinUrl || eventData.platform || "",
                         });
 
                         emailPromises.push(
@@ -467,7 +492,7 @@ export const createEvent = async (req, res) => {
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
                                 sessionDuration: eventData.duration,
-                                videoLink: eventData.platform || "",
+                                videoLink: event.zoomJoinUrl || eventData.platform || "",
                             });
 
                             const confirmationTemplate = getGroupSessionConfirmationTemplate({
@@ -475,7 +500,7 @@ export const createEvent = async (req, res) => {
                                 sessionName: eventData.serviceName,
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
-                                videoLink: eventData.platform || "",
+                                videoLink: event.zoomJoinUrl || eventData.platform || "",
                             });
 
                             emailPromises.push(
@@ -499,7 +524,7 @@ export const createEvent = async (req, res) => {
                             eventTime: eventData.time,
                             eventLocation: eventData.location,
                             serviceName: eventData.serviceName,
-                            videoLink: eventData.platform || "",
+                            videoLink: event.zoomStartUrl || event.zoomJoinUrl || eventData.platform || "",
                         });
 
                         emailPromises.push(
@@ -520,7 +545,7 @@ export const createEvent = async (req, res) => {
                             sessionDate: eventData.date,
                             sessionTime: eventData.time,
                             sessionDuration: eventData.duration,
-                            videoLink: eventData.platform || "",
+                            videoLink: event.zoomJoinUrl || eventData.platform || "",
                         });
 
                         const appointmentTemplate = getClientAppointmentCreatedTemplate({
@@ -529,7 +554,7 @@ export const createEvent = async (req, res) => {
                             appointmentDate: eventData.date,
                             appointmentTime: eventData.time,
                             appointmentLocation: eventData.location || "Online",
-                            videoLink: eventData.platform || "",
+                            videoLink: event.zoomJoinUrl || eventData.platform || "",
                         });
 
                         emailPromises.push(
@@ -554,7 +579,7 @@ export const createEvent = async (req, res) => {
                         eventTime: eventData.time,
                         eventLocation: eventData.location,
                         serviceName: eventData.serviceName,
-                        videoLink: eventData.platform || "",
+                        videoLink: event.zoomStartUrl || event.zoomJoinUrl || eventData.platform || "",
                     });
 
                     emailPromises.push(
@@ -592,7 +617,7 @@ export const createEvent = async (req, res) => {
                 const serviceName = eventData.serviceName;
                 const date = eventData.date;
                 const time = eventData.time;
-                const joinLink = eventData.platform || "Link yakında paylaşılacak";
+                const joinLink = event.zoomJoinUrl || eventData.platform || "Link yakında paylaşılacak";
 
                 for (const client of formattedClients) {
                     // Fetch full customer data for phone number
@@ -650,6 +675,7 @@ export const createEvent = async (req, res) => {
         res.status(201).json({
             event: event,
             message: "Event created successfully",
+            zoomError: zoomErrorInfo,
             repetitionsScheduled: repetitionJobIds ? true : false,
         });
     } catch (error) {
