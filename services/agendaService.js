@@ -75,17 +75,11 @@ export const scheduleEventReminder = async (event, userId) => {
       eventTime: event.time
     };
 
-    // If reminder time passed → schedule immediate
+    // If reminder time passed (event is within 2 hours) → DON'T schedule a reminder.
+    // The confirmation email already serves as the notification for near-term events.
     if (reminderTime <= now) {
-      console.log(`⚡ Reminder time passed → scheduling immediate job`);
-
-      const job = await agenda.schedule(
-        new Date(Date.now() + 10000),
-        JOB_TYPES.SEND_EVENT_REMINDER,
-        jobData
-      );
-
-      return job?.attrs?._id?.toString?.() || null;
+      console.log(`⚡ Event is starting within 2 hours (${event.date} ${event.time}) → skipping redundant reminder job`);
+      return null;
     }
 
     // Normal case

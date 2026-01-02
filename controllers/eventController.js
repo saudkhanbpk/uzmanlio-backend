@@ -466,24 +466,9 @@ export const createEvent = async (req, res) => {
                             );
                         }
 
-                        const expertTemplate = getExpertEventCreatedTemplate({
-                            expertName: user.information.name,
-                            clientName: formattedClients[0]?.name || "Danışan",
-                            eventDate: eventData.date,
-                            eventTime: eventData.time,
-                            eventLocation: eventData.location,
-                            serviceName: eventData.serviceName,
-                            videoLink: event.zoomStartUrl || event.zoomJoinUrl || eventData.platform || "",
-                        });
 
-                        emailPromises.push(
-                            sendEmail(user.information.email, {
-                                subject: expertTemplate.subject,
-                                html: expertTemplate.html,
-                            })
-                        );
                     } else {
-                        // Group session emails
+                        // Group session emails - Send only ONE consolidated email
                         for (const client of formattedClients) {
                             const inviteTemplate = getClientGroupSessionTemplate({
                                 participantName: client.name,
@@ -495,59 +480,19 @@ export const createEvent = async (req, res) => {
                                 videoLink: event.zoomJoinUrl || eventData.platform || "",
                             });
 
-                            const confirmationTemplate = getGroupSessionConfirmationTemplate({
-                                participantName: client.name,
-                                sessionName: eventData.serviceName,
-                                sessionDate: eventData.date,
-                                sessionTime: eventData.time,
-                                videoLink: event.zoomJoinUrl || eventData.platform || "",
-                            });
-
                             emailPromises.push(
                                 sendEmail(client.email, {
                                     subject: inviteTemplate.subject,
                                     html: inviteTemplate.html,
                                 })
                             );
-                            emailPromises.push(
-                                sendEmail(client.email, {
-                                    subject: confirmationTemplate.subject,
-                                    html: confirmationTemplate.html,
-                                })
-                            );
                         }
 
-                        const expertTemplate = getExpertEventCreatedTemplate({
-                            expertName: user.information.name,
-                            clientName: formattedClients.map((c) => c.name).join(", "),
-                            eventDate: eventData.date,
-                            eventTime: eventData.time,
-                            eventLocation: eventData.location,
-                            serviceName: eventData.serviceName,
-                            videoLink: event.zoomStartUrl || event.zoomJoinUrl || eventData.platform || "",
-                        });
 
-                        emailPromises.push(
-                            sendEmail(user.information.email, {
-                                subject: expertTemplate.subject,
-                                html: expertTemplate.html,
-                            })
-                        );
                     }
                 } else {
-                    // Package emails
+                    // Package emails - Send only ONE consolidated email
                     for (const client of formattedClients) {
-                        const packageUsageTemplate = getClientPackageSessionTemplate({
-                            participantName: client.name,
-                            expertName: user.information.name,
-                            packageName: eventData.serviceName,
-                            sessionName: eventData.serviceName,
-                            sessionDate: eventData.date,
-                            sessionTime: eventData.time,
-                            sessionDuration: eventData.duration,
-                            videoLink: event.zoomJoinUrl || eventData.platform || "",
-                        });
-
                         const appointmentTemplate = getClientAppointmentCreatedTemplate({
                             clientName: client.name,
                             expertName: user.information.name,
@@ -556,13 +501,6 @@ export const createEvent = async (req, res) => {
                             appointmentLocation: eventData.location || "Online",
                             videoLink: event.zoomJoinUrl || eventData.platform || "",
                         });
-
-                        emailPromises.push(
-                            sendEmail(client.email, {
-                                subject: packageUsageTemplate.subject,
-                                html: packageUsageTemplate.html,
-                            })
-                        );
 
                         emailPromises.push(
                             sendEmail(client.email, {
