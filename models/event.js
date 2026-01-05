@@ -69,6 +69,10 @@ const EventSchema = new Schema({
     zoomJoinUrl: { type: String },
     zoomStartUrl: { type: String },
 
+    // Microsoft Teams Meeting Fields
+    teamsMeetingId: { type: String },
+    teamsJoinUrl: { type: String },
+
     // Video Meeting Information
     videoMeetingUrl: { type: String },
     moderatorMeetingUrl: { type: String },

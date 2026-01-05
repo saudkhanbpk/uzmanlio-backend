@@ -25,6 +25,7 @@ import {
 import { sendSms } from "../services/netgsmService.js";
 import calendarSyncService from "../services/calendarSyncService.js";
 import zoomService from "../services/zoomService.js";
+import teamsService from "../services/teamsService.js";
 
 // Helper function to find user by ID
 const findUserById = async (userId) => {
@@ -175,6 +176,32 @@ export const createEvent = async (req, res) => {
             }
         }
 
+        // --- MICROSOFT TEAMS MEETING INTEGRATION ---
+        let teamsMeeting = null;
+        let teamsErrorInfo = null;
+        const platformLower = (eventData.platform || '').toLowerCase();
+
+        if (platformLower.includes('microsoft teams') || platformLower === 'teams') {
+            try {
+                // Use the expert's email as the organizer
+                const organizerEmail = user.information?.email;
+                if (!organizerEmail) {
+                    throw new Error('Expert email not found for Teams meeting creation');
+                }
+
+                teamsMeeting = await teamsService.createMeeting({
+                    title: eventData.title || eventData.serviceName,
+                    date: eventData.date,
+                    time: eventData.time,
+                    duration: eventData.duration
+                }, organizerEmail);
+                console.log('✅ Microsoft Teams Meeting Result:', !!teamsMeeting);
+            } catch (teamsError) {
+                console.error("❌ Microsoft Teams integration failed:", teamsError);
+                teamsErrorInfo = teamsError.message;
+            }
+        }
+
         const event = await Event.create({
             expertId: user._id,
             title: eventData.title || eventData.serviceName,
@@ -191,13 +218,29 @@ export const createEvent = async (req, res) => {
             zoomJoinUrl: zoomMeeting?.join_url,
             zoomStartUrl: zoomMeeting?.start_url,
 
-            // Unified Meeting Details
-            meetingDetails: {
-                platform: eventData.platform?.toLowerCase() === 'zoom' ? 'zoom' : (eventData.platform || 'other'),
-                meetingId: zoomMeeting?.id,
-                adminUrl: zoomMeeting?.start_url,
-                guestUrl: zoomMeeting?.join_url,
-                startUrl: zoomMeeting?.start_url
+            // Teams Meeting Fields
+            teamsMeetingId: teamsMeeting?.id,
+            teamsJoinUrl: teamsMeeting?.join_url,
+
+            // Unified Meeting Details - prioritize Teams, then Zoom
+            meetingDetails: teamsMeeting ? {
+                platform: 'microsoft-teams',
+                meetingId: teamsMeeting.id,
+                adminUrl: teamsMeeting.start_url,
+                guestUrl: teamsMeeting.join_url,
+                startUrl: teamsMeeting.start_url
+            } : zoomMeeting ? {
+                platform: 'zoom',
+                meetingId: zoomMeeting.id,
+                adminUrl: zoomMeeting.start_url,
+                guestUrl: zoomMeeting.join_url,
+                startUrl: zoomMeeting.start_url
+            } : {
+                platform: eventData.platform || 'other',
+                meetingId: null,
+                adminUrl: null,
+                guestUrl: null,
+                startUrl: null
             },
 
             eventType: eventData.eventType,
@@ -452,7 +495,19 @@ export const createEvent = async (req, res) => {
         let videoMeetingPlatform = "other";
 
         if (user.calendarProviders && user.calendarProviders.length > 0) {
-            const activeProviders = user.calendarProviders.filter(cp => cp.isActive);
+            let activeProviders = user.calendarProviders.filter(cp => cp.isActive);
+
+            // Prioritize Microsoft provider if platform is Microsoft Teams
+            const platformLower = (eventData.platform || '').toLowerCase();
+            if (platformLower.includes('microsoft teams') || platformLower.includes('teams')) {
+                activeProviders = activeProviders.sort((a, b) => {
+                    if (a.provider === 'microsoft' && b.provider !== 'microsoft') return -1;
+                    if (a.provider !== 'microsoft' && b.provider === 'microsoft') return 1;
+                    return 0;
+                });
+                console.log('🔵 Microsoft Teams selected - prioritizing Microsoft calendar provider');
+            }
+
             if (activeProviders.length > 0) {
                 for (const provider of activeProviders) {
                     try {
@@ -703,6 +758,7 @@ export const createEvent = async (req, res) => {
             event: event,
             message: "Event created successfully",
             zoomError: zoomErrorInfo,
+            teamsError: teamsErrorInfo,
             repetitionsScheduled: repetitionJobIds ? true : false,
         });
     } catch (error) {

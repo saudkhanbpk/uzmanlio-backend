@@ -14,6 +14,16 @@ export class CalendarSyncService {
     const startDateTime = new Date(`${appointment.date}T${appointment.time}:00`);
     const endDateTime = new Date(startDateTime.getTime() + (appointment.duration * 60000));
 
+    // Detect if this is an online meeting based on platform
+    const platformLower = (appointment.platform || '').toLowerCase();
+    const isOnlineMeeting = appointment.eventType === 'online' ||
+      appointment.location === 'Online' ||
+      platformLower.includes('microsoft teams') ||
+      platformLower.includes('teams') ||
+      platformLower.includes('zoom') ||
+      platformLower.includes('google meet') ||
+      platformLower.includes('jitsi');
+
     return {
       title: appointment.title,
       description: `Uzmanlio Appointment\nType: ${appointment.serviceType}\nDuration: ${appointment.duration} minutes\nStatus: ${appointment.status}${appointment.notes ? `\n\nNotes: ${appointment.notes}` : ''}`,
@@ -21,7 +31,7 @@ export class CalendarSyncService {
       endDateTime: endDateTime.toISOString(),
       timeZone: timeZone,
       attendees: appointment.clientEmail ? [appointment.clientEmail] : [],
-      isOnline: appointment.eventType === 'online' || appointment.location === 'Online'
+      isOnline: isOnlineMeeting
     };
   }
 
