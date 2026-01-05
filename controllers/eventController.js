@@ -1,4 +1,5 @@
 import Event from "../models/event.js";
+import jwt from "jsonwebtoken";
 import User from "../models/expertInformation.js";
 import mongoose from "mongoose";
 import Customer from "../models/customer.js";
@@ -405,13 +406,58 @@ export const createEvent = async (req, res) => {
             }
         }
 
+        // === Calendar Synchronization (Move up to get meeting links before emails) ===
+        let videoMeetingUrl = eventData.platform;
+        let videoMeetingPlatform = "other";
+
+        if (user.calendarProviders && user.calendarProviders.length > 0) {
+            const activeProviders = user.calendarProviders.filter(cp => cp.isActive);
+            if (activeProviders.length > 0) {
+                for (const provider of activeProviders) {
+                    try {
+                        const syncResult = await calendarSyncService.syncAppointmentToProvider(
+                            req.params.userId,
+                            savedEvent,
+                            { providerId: provider.providerId }
+                        );
+                        if (syncResult.success && syncResult.meetingUrl) {
+                            videoMeetingUrl = syncResult.meetingUrl;
+                            videoMeetingPlatform = syncResult.platform === 'google' ? 'google-meet' : 'microsoft-teams';
+
+                            // Save to event document
+                            savedEvent.videoMeetingUrl = videoMeetingUrl;
+                            savedEvent.videoMeetingPlatform = videoMeetingPlatform;
+                            await savedEvent.save();
+                            console.log(`✅ Synced with ${provider.provider} and got meeting link: ${videoMeetingUrl}`);
+                            break; // Stop after first successful sync that provides a link
+                        }
+                    } catch (syncError) {
+                        console.error(`Failed to sync event to ${provider.provider}:`, syncError);
+                    }
+                }
+            }
+        }
+
+        // Handle Jitsi embedded (Client requirement)
+        if (!savedEvent.videoMeetingUrl && (eventData.platform?.toLowerCase().includes("jitsi") || eventData.eventType === "online")) {
+            // Generate a unique Jitsi link using the event ID
+            const jitsiRoom = `uzmanlio-${savedEvent._id}`;
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            savedEvent.videoMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}`;
+            savedEvent.moderatorMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}?role=moderator`;
+            savedEvent.guestMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}`;
+            savedEvent.videoMeetingPlatform = "jitsi";
+            await savedEvent.save();
+            videoMeetingUrl = savedEvent.videoMeetingUrl;
+        }
+
         const clientEmails = (formattedClients || []).map((c) => c.email);
 
-        // === EMAIL SENDING (UNCHANGED) ===
         // === EMAIL SENDING (ASYNCHRONOUS) ===
         const sendEmailsAsync = async () => {
             try {
                 const emailPromises = [];
+                const joinUrl = savedEvent.videoMeetingUrl || eventData.platform || "";
 
                 if (eventData.serviceType === "service") {
                     if (eventData.meetingType === "1-1") {
@@ -424,7 +470,7 @@ export const createEvent = async (req, res) => {
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
                                 sessionDuration: eventData.duration,
-                                videoLink: eventData.platform || "",
+                                videoLink: savedEvent.guestMeetingUrl || joinUrl,
                             });
 
                             emailPromises.push(
@@ -442,7 +488,7 @@ export const createEvent = async (req, res) => {
                             eventTime: eventData.time,
                             eventLocation: eventData.location,
                             serviceName: eventData.serviceName,
-                            videoLink: eventData.platform || "",
+                            videoLink: savedEvent.moderatorMeetingUrl || joinUrl,
                         });
 
                         emailPromises.push(
@@ -461,7 +507,7 @@ export const createEvent = async (req, res) => {
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
                                 sessionDuration: eventData.duration,
-                                videoLink: eventData.platform || "",
+                                videoLink: savedEvent.guestMeetingUrl || joinUrl,
                             });
 
                             const confirmationTemplate = getGroupSessionConfirmationTemplate({
@@ -469,7 +515,7 @@ export const createEvent = async (req, res) => {
                                 sessionName: eventData.serviceName,
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
-                                videoLink: eventData.platform || "",
+                                videoLink: savedEvent.guestMeetingUrl || joinUrl,
                             });
 
                             emailPromises.push(
@@ -493,7 +539,7 @@ export const createEvent = async (req, res) => {
                             eventTime: eventData.time,
                             eventLocation: eventData.location,
                             serviceName: eventData.serviceName,
-                            videoLink: eventData.platform || "",
+                            videoLink: savedEvent.moderatorMeetingUrl || joinUrl,
                         });
 
                         emailPromises.push(
@@ -514,7 +560,7 @@ export const createEvent = async (req, res) => {
                             sessionDate: eventData.date,
                             sessionTime: eventData.time,
                             sessionDuration: eventData.duration,
-                            videoLink: eventData.platform || "",
+                            videoLink: savedEvent.guestMeetingUrl || joinUrl,
                         });
 
                         const appointmentTemplate = getClientAppointmentCreatedTemplate({
@@ -523,7 +569,7 @@ export const createEvent = async (req, res) => {
                             appointmentDate: eventData.date,
                             appointmentTime: eventData.time,
                             appointmentLocation: eventData.location || "Online",
-                            videoLink: eventData.platform || "",
+                            videoLink: savedEvent.guestMeetingUrl || joinUrl,
                         });
 
                         emailPromises.push(
@@ -548,7 +594,7 @@ export const createEvent = async (req, res) => {
                         eventTime: eventData.time,
                         eventLocation: eventData.location,
                         serviceName: eventData.serviceName,
-                        videoLink: eventData.platform || "",
+                        videoLink: savedEvent.moderatorMeetingUrl || joinUrl,
                     });
 
                     emailPromises.push(
@@ -559,7 +605,7 @@ export const createEvent = async (req, res) => {
                     );
                 }
 
-                // Fire emails asynchronously, don't block main flow
+                // Fire emails asynchronously
                 Promise.allSettled(emailPromises)
                     .then((results) => {
                         results.forEach((r, i) => {
@@ -586,15 +632,13 @@ export const createEvent = async (req, res) => {
                 const serviceName = eventData.serviceName;
                 const date = eventData.date;
                 const time = eventData.time;
-                const joinLink = eventData.platform || "Link yakında paylaşılacak";
+                const joinLink = savedEvent.videoMeetingUrl || eventData.platform || "Link yakında paylaşılacak";
 
                 for (const client of formattedClients) {
-                    // Fetch full customer data for phone number
                     const customerDoc = await Customer.findOne({ email: client.email }).select("phone name");
-
                     if (customerDoc && customerDoc.phone) {
-                        const smsMessage = `Merhaba ${client.name}, ${expertName} senin için ${serviceName} randevusu oluşturdu. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
-
+                        const smsLink = savedEvent.guestMeetingUrl || joinLink;
+                        const smsMessage = `Merhaba ${client.name}, ${expertName} senin için ${serviceName} randevusu oluşturdu. Tarih: ${date} ${time}. Katılım linki: ${smsLink}`;
                         try {
                             const result = await sendSms(customerDoc.phone, smsMessage);
                             if (result.success) {
@@ -612,35 +656,6 @@ export const createEvent = async (req, res) => {
             }
         });
 
-        if (user.calendarProviders && user.calendarProviders.length > 0) {
-            const activeProviders = user.calendarProviders.filter(
-                (cp) => cp.isActive
-            );
-
-            if (activeProviders.length > 0) {
-                for (const provider of activeProviders) {
-                    try {
-                        const response =
-                            await calendarSyncService.syncAppointmentToProvider(
-                                req.params.userId,
-                                event,
-                                { providerId: provider.providerId }
-                            );
-                        if (response.success) {
-                            console.log("synced Event To Calendar Successfully");
-                        } else {
-                            console.log("Sync Failed to Calendar", error);
-                        }
-                    } catch (error) {
-                        console.error(
-                            `Failed to sync event to ${provider.provider}:`,
-                            error
-                        );
-                    }
-                }
-            }
-        }
-
         res.status(201).json({
             event: event,
             message: "Event created successfully",
@@ -649,7 +664,161 @@ export const createEvent = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
-}
+};
+
+/**
+ * Publicly get meeting info (Title, Expert Name) without login
+ */
+export const getPublicMeetingInfo = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const roomIdParts = roomId.split("-");
+        const eventId = roomIdParts[roomIdParts.length - 1];
+
+        const event = await Event.findById(eventId)
+            .populate("expertId", "information.name information.surname information.image")
+            .select("title date time duration expertId platform videoMeetingPlatform isMeetingStarted");
+
+        if (!event) {
+            return res.status(404).json({ error: "Görüşme bulunamadı." });
+        }
+
+        res.json({
+            title: event.title,
+            expert: {
+                name: `${event.expertId?.information?.name || ""} ${event.expertId?.information?.surname || ""}`,
+                image: event.expertId?.information?.image
+            },
+            date: event.date,
+            time: event.time,
+            duration: event.duration,
+            platform: event.title === "Görüşme" ? "jitsi" : event.platform,
+            isJitsi: event.videoMeetingPlatform === 'jitsi' || event.platform?.toLowerCase().includes('jitsi'),
+            isStarted: event.isMeetingStarted || false // Waiting Room Status
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Start Meeting (Expert Only)
+export const startMeeting = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const roomIdParts = roomId.split("-");
+        const eventId = roomIdParts[roomIdParts.length - 1];
+
+        const event = await Event.findById(eventId);
+        if (!event) return res.status(404).json({ error: "Event not found" });
+
+        // Verify Expert
+        if (event.expertId.toString() !== req.userId) {
+            return res.status(403).json({ error: "Not authorized" });
+        }
+
+        event.isMeetingStarted = true;
+        await event.save();
+
+        res.json({ success: true, isStarted: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+export const generateJitsiToken = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const roomIdParts = roomId.split("-");
+        const eventId = roomIdParts[roomIdParts.length - 1];
+
+        const event = await Event.findById(eventId);
+        if (!event) return res.status(404).json({ error: "Görüşme bulunamadı." });
+
+        const userId = req.userId;
+        const eventExpertId = event.expertId?._id || event.expertId;
+        const isExpert = userId && eventExpertId && eventExpertId.toString() === userId.toString();
+
+        let name = req.query.name || "Ziyaretçi";
+        let email = req.query.email || "";
+        let isModerator = false;
+
+        if (isExpert) {
+            const expert = await User.findById(userId);
+            if (expert) {
+                name = `${expert.information?.name || ""} ${expert.information?.surname || ""}`.trim();
+                email = expert.information?.email || "";
+                isModerator = true;
+            }
+        } else {
+            // GUEST VALIDATION
+            // 1. Email is required for guests
+            if (!email) {
+                return res.status(400).json({ error: "Katılım için e-posta adresi gereklidir." });
+            }
+
+            // 2. Normalize email
+            email = email.trim().toLowerCase();
+
+            // 3. Check if email is in the allowed list for this event
+            // events store selectedClients as an array of objects with email
+            const isAuthorized = event.selectedClients && event.selectedClients.some(
+                client => client.email && client.email.trim().toLowerCase() === email
+            );
+
+            if (!isAuthorized) {
+                return res.status(403).json({
+                    error: "Bu görüşmeye katılım izniniz bulunmamaktadır.",
+                    details: "E-posta adresiniz davetli listesinde bulunamadı."
+                });
+            }
+
+            // If authorized, set name from the client list if available
+            const clientInfo = event.selectedClients.find(c => c.email.trim().toLowerCase() === email);
+            if (clientInfo && clientInfo.name) {
+                name = clientInfo.name;
+            }
+        }
+
+        const appId = process.env.JITSI_APP_ID || "uzmanlio-app";
+        const appSecret = process.env.JITSI_APP_SECRET || "uzmanlio-secret"; // Must match server config
+
+        // Deterministic room password for free tier automation (optional usage)
+        const roomPassword = jwt.sign({ eventId }, appSecret).substring(0, 12);
+
+        // Payload for Jitsi JWT
+        const token = jwt.sign({
+            aud: "jitsi",
+            iss: appId,
+            sub: appId, // domain
+            room: roomId, // Specific room
+            exp: Math.floor(Date.now() / 1000) + (60 * 60 * 4), // 4 hours validity
+            context: {
+                user: {
+                    name,
+                    email,
+                    moderator: isModerator,
+                    affiliation: isModerator ? "owner" : "member"
+                },
+                features: {
+                    recording: isModerator,
+                    livestreaming: isModerator,
+                    "screen-sharing": true
+                }
+            }
+        }, appSecret);
+
+        res.json({
+            token,
+            isModerator,
+            roomPassword,
+            role: isModerator ? 'moderator' : 'guest',
+            user: { name, email }
+        });
+    } catch (error) {
+        console.error("Jitsi Token Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
 
 // Update event controller
 export const updateEvent = async (req, res) => {
@@ -714,6 +883,16 @@ export const updateEvent = async (req, res) => {
                 );
 
                 existingEvent.agendaJobId = newJobId || undefined;
+
+                // Update Jitsi links if platform is Jitsi
+                if (existingEvent.videoMeetingPlatform === "jitsi") {
+                    const jitsiRoom = `uzmanlio-${existingEvent._id}`;
+                    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                    existingEvent.videoMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}`;
+                    existingEvent.moderatorMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}?role=moderator`;
+                    existingEvent.guestMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}`;
+                }
+
                 await existingEvent.save();
 
                 console.log(
@@ -730,30 +909,36 @@ export const updateEvent = async (req, res) => {
             }
         }
 
-        // ===== Sync to connected calendars (background) =====
-        const providers =
-            user.calendarProviders?.filter(cp => cp.isActive) || [];
-
+        // ===== Sync to connected calendars (Background with meeting URL capture) =====
+        const providers = user.calendarProviders?.filter(cp => cp.isActive) || [];
         if (providers.length > 0) {
             setImmediate(async () => {
                 for (const provider of providers) {
                     try {
-                        await calendarSyncService.updateAppointmentInProvider(
+                        const syncResult = await calendarSyncService.updateAppointmentInProvider(
                             req.params.userId,
                             existingEvent,
                             { providerId: provider.providerId }
                         );
-                        console.log(
-                            `Synced event ${existingEvent.title} to ${provider.provider}`
-                        );
+                        if (syncResult.success && syncResult.meetingUrl) {
+                            existingEvent.videoMeetingUrl = syncResult.meetingUrl;
+                            existingEvent.videoMeetingPlatform = syncResult.platform === 'google' ? 'google-meet' : 'microsoft-teams';
+                            await existingEvent.save();
+                            console.log(`✅ Updated sync with ${provider.provider} and got meeting link: ${syncResult.meetingUrl}`);
+                        }
                     } catch (error) {
-                        console.error(
-                            `Failed syncing ${existingEvent.title} to ${provider.provider}:`,
-                            error
-                        );
+                        console.error(`Failed syncing ${existingEvent.title} to ${provider.provider}:`, error);
                     }
                 }
             });
+        }
+
+        // Handle Jitsi embedded (Client requirement)
+        if (!existingEvent.videoMeetingUrl && (eventData.platform?.toLowerCase().includes("jitsi") || eventData.eventType === "online")) {
+            const jitsiRoom = `uzmanlio-${existingEvent._id}`;
+            existingEvent.videoMeetingUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/meeting/${jitsiRoom}`;
+            existingEvent.videoMeetingPlatform = "jitsi";
+            await existingEvent.save();
         }
 
         // ===== Notify customers if date/time changed =====
@@ -767,7 +952,7 @@ export const updateEvent = async (req, res) => {
                     const expertName = `${user.information.name} ${user.information.surname}`;
                     const date = event.date;
                     const time = event.time;
-                    const joinLink = event.platform || "Link yakında paylaşılacak";
+                    const joinLink = event.videoMeetingUrl || event.platform || "Link yakında paylaşılacak";
 
                     let recipients = [];
 
@@ -1406,4 +1591,4 @@ export const updateEventStatus = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
-}
+};

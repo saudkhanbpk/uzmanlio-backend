@@ -20,7 +20,8 @@ export class CalendarSyncService {
       startDateTime: startDateTime.toISOString(),
       endDateTime: endDateTime.toISOString(),
       timeZone: timeZone,
-      attendees: appointment.clientEmail ? [appointment.clientEmail] : []
+      attendees: appointment.clientEmail ? [appointment.clientEmail] : [],
+      isOnline: appointment.eventType === 'online' || appointment.location === 'Online'
     };
   }
 
@@ -105,10 +106,16 @@ export class CalendarSyncService {
       calendarProvider.lastSync = new Date();
       await user.save();
 
-      return providerEvent;
+      // ✅ Return standardized sync result
+      return {
+        success: true,
+        providerEventId: providerEvent.id,
+        meetingUrl: providerEvent.hangoutLink || providerEvent.onlineMeeting?.joinUrl,
+        platform: calendarProvider.provider
+      };
     } catch (error) {
       console.error(`❌ Failed to sync appointment to ${provider.provider}:`, error);
-      throw error;
+      return { success: false, error: error.message };
     }
   }
 
@@ -295,10 +302,16 @@ export class CalendarSyncService {
         `✅ Appointment ${appointment.id} updated in ${calendarProvider.provider} calendar`
       );
 
-      return updatedEvent;
+      // ✅ Return standardized sync result
+      return {
+        success: true,
+        providerEventId: updatedEvent.id,
+        meetingUrl: updatedEvent.hangoutLink || updatedEvent.onlineMeeting?.joinUrl,
+        platform: calendarProvider.provider
+      };
     } catch (error) {
       console.error(`❌ Failed to update appointment in provider:`, error);
-      throw error;
+      return { success: false, error: error.message };
     }
   }
 

@@ -66,6 +66,14 @@ const EventSchema = new Schema({
     repetitionNumber: { type: Number }, // Which repetition this is (1, 2, 3, etc.)
     completedRepetitions: { type: Number, default: 0 }, // Number of completed repetitions
 
+    // Video Meeting Information
+    videoMeetingUrl: { type: String },
+    moderatorMeetingUrl: { type: String },
+    guestMeetingUrl: { type: String },
+    videoMeetingPlatform: { type: String, enum: ["google-meet", "microsoft-teams", "jitsi", "zoom", "other"] },
+    videoMeetingId: { type: String }, // Platform-specific meeting ID
+    isMeetingStarted: { type: Boolean, default: false }, // Waiting Room Lock
+
 },
     {
         timestamps: true // ✅ createdAt & updatedAt automatically

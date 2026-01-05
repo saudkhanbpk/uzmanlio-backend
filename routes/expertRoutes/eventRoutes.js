@@ -1,6 +1,7 @@
 import express from "express";
 import * as eventController from "../../controllers/eventController.js";
 import { checkInstitutionAdmin } from "../../middlewares/institutionAuth.js";
+import { verifyAccessToken } from "../../middlewares/auth.js";
 import { validateRequest, validateBody, validateParams, validateQuery } from "../../middlewares/validateRequest.js";
 import {
     createEventSchema,
@@ -56,6 +57,9 @@ router.get(
     validateParams(eventStatusParams),
     eventController.getEventByStatus
 );
+
+router.get('/:userId/events/:roomId/token', verifyAccessToken, eventController.generateJitsiToken);
+router.post('/:userId/events/:roomId/start', verifyAccessToken, eventController.startMeeting); // New start Trigger
 
 router.patch(
     "/:userId/events/:eventId/status",

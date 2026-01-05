@@ -40,9 +40,9 @@ import axios from "axios";
 import { parseStringPromise } from "xml2js";
 import cookieParser from "cookie-parser";
 import { doubleCsrf } from "csrf-csrf";
+import { generateJitsiToken } from "./controllers/eventController.js";
 
-// Import auth middleware
-// Import auth middleware
+import * as eventController from "./controllers/eventController.js";
 import { verifyAccessToken, optionalAuth } from "./middlewares/auth.js";
 import { standardLimiter, authLimiter } from "./middlewares/rateLimiter.js";
 
@@ -101,6 +101,11 @@ console.log('🔒 CSRF Configuration:', {
 });
 
 // Custom middleware to sanitize inputs without reassigning read-only properties (fixes Express 5 issue)
+// Apply standard rate limiting to all API routes
+// Public Meeting Routes - Excluded from Rate Limiting for polling support
+app.get("/api/public/meeting/:roomId/info", eventController.getPublicMeetingInfo);
+app.get("/api/public/meeting/:roomId/access", optionalAuth, eventController.generateJitsiToken);
+
 // Apply standard rate limiting to all API routes
 app.use("/api", standardLimiter);
 
@@ -207,13 +212,6 @@ app.get("/api/status", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error", details: error.message });
   }
 });
-
-// Express route
-app.get('/test', async (_req, res) => {
-  console.log("Received request at /test endpoint");
-});
-
-
 
 
 // Expert information routes

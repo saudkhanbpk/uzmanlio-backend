@@ -188,7 +188,54 @@ export class GoogleCalendarService {
       resource: event,
     });
 
-    console.log("Meet Link:", response.data.hangoutLink);
+    console.log("Meet Link Generated:", response.data.hangoutLink);
+
+    return response.data;
+  }
+
+  async updateEvent(accessToken, calendarId, eventId, eventData) {
+    this.oauth2Client.setCredentials({
+      access_token: decryptToken(accessToken),
+    });
+
+    const calendar = google.calendar({ version: "v3", auth: this.oauth2Client });
+
+    // Fetch existing event to see if it already has a meet link
+    const existing = await calendar.events.get({
+      calendarId: calendarId || "primary",
+      eventId: eventId
+    });
+
+    const event = {
+      summary: eventData.title,
+      description: eventData.description || "",
+      start: {
+        dateTime: new Date(eventData.startDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
+      },
+      end: {
+        dateTime: new Date(eventData.endDateTime).toISOString(),
+        timeZone: eventData.timeZone || "UTC",
+      },
+      attendees: eventData.attendees || [],
+    };
+
+    // If it's an online event and doesn't have a meet link, add one
+    if (eventData.isOnline && !existing.data.hangoutLink) {
+      event.conferenceData = {
+        createRequest: {
+          requestId: "meet-update-" + Date.now(),
+          conferenceSolutionKey: { type: "hangoutsMeet" }
+        }
+      };
+    }
+
+    const response = await calendar.events.update({
+      calendarId: calendarId || "primary",
+      eventId: eventId,
+      conferenceDataVersion: 1,
+      resource: event,
+    });
 
     return response.data;
   }
@@ -356,6 +403,9 @@ export class MicrosoftCalendarService {
       attendees: eventData.attendees?.map(email => ({
         emailAddress: { address: email, name: email },
       })) || [],
+      // Enable Teams meeting
+      isOnlineMeeting: eventData.isOnline || false,
+      onlineMeetingProvider: eventData.isOnline ? 'teamsForBusiness' : undefined
     };
 
     const calendarPath = calendarId ? `/me/calendars/${calendarId}/events` : '/me/events';
@@ -369,10 +419,13 @@ export class MicrosoftCalendarService {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to create event: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Failed to create Microsoft event: ${response.status} ${errorText}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log("Teams Link Generated:", data.onlineMeeting?.joinUrl);
+    return data;
   }
 
 
@@ -399,6 +452,9 @@ export class MicrosoftCalendarService {
             emailAddress: { address: email, name: email },
             type: "required",
           })) || [],
+        // Preserve or enable Teams meeting
+        isOnlineMeeting: eventData.isOnline || false,
+        onlineMeetingProvider: eventData.isOnline ? 'teamsForBusiness' : undefined
       };
 
       const eventPath = calendarId
