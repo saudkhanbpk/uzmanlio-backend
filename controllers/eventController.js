@@ -489,8 +489,8 @@ export const createEvent = async (req, res) => {
             }
         }
 
-        // Handle Jitsi embedded (Client requirement)
-        if (!savedEvent.videoMeetingUrl && (eventData.platform?.toLowerCase().includes("jitsi") || eventData.eventType === "online")) {
+        // Handle Jitsi strictly (Client requirement: Only if "jitsi" is explicitly selected)
+        if (eventData.platform?.toLowerCase() === "jitsi") {
             // Generate a unique Jitsi link using the event ID
             const jitsiRoom = `uzmanlio-${savedEvent._id}`;
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -987,11 +987,24 @@ export const updateEvent = async (req, res) => {
             });
         }
 
-        // Handle Jitsi embedded (Client requirement)
-        if (!existingEvent.videoMeetingUrl && (eventData.platform?.toLowerCase().includes("jitsi") || eventData.eventType === "online")) {
+        // Handle Jitsi strictly (Client requirement: Only if "jitsi" is explicitly selected)
+        if (eventData.platform?.toLowerCase() === "jitsi") {
             const jitsiRoom = `uzmanlio-${existingEvent._id}`;
-            existingEvent.videoMeetingUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/meeting/${jitsiRoom}`;
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            existingEvent.videoMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}`;
+            existingEvent.moderatorMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}?role=moderator`;
+            existingEvent.guestMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}`;
             existingEvent.videoMeetingPlatform = "jitsi";
+
+            // Unified Meeting Details Update
+            existingEvent.meetingDetails = {
+                platform: "jitsi",
+                guestUrl: existingEvent.guestMeetingUrl,
+                adminUrl: existingEvent.moderatorMeetingUrl,
+                meetingId: jitsiRoom,
+                password: ""
+            };
+
             await existingEvent.save();
         }
 
