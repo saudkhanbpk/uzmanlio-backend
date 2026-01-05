@@ -172,15 +172,17 @@ export class GoogleCalendarService {
         timeZone: eventData.timeZone || "UTC",
       },
       attendees: eventData.attendees || [],
+    };
 
-      // THIS generates the Google Meet link
-      conferenceData: {
+    // Only generate Google Meet link if explicitly requested
+    if (eventData.createMeetLink) {
+      event.conferenceData = {
         createRequest: {
           requestId: "meet-" + Date.now(),
           conferenceSolutionKey: { type: "hangoutsMeet" }
         }
-      }
-    };
+      };
+    }
 
     const response = await calendar.events.insert({
       calendarId: calendarId || "primary",
@@ -188,7 +190,9 @@ export class GoogleCalendarService {
       resource: event,
     });
 
-    console.log("Meet Link Generated:", response.data.hangoutLink);
+    if (response.data.hangoutLink) {
+      console.log("Meet Link Generated:", response.data.hangoutLink);
+    }
 
     return response.data;
   }
@@ -220,8 +224,8 @@ export class GoogleCalendarService {
       attendees: eventData.attendees || [],
     };
 
-    // If it's an online event and doesn't have a meet link, add one
-    if (eventData.isOnline && !existing.data.hangoutLink) {
+    // If it's a Google Meet event and doesn't have a meet link, add one
+    if (eventData.createMeetLink && !existing.data.hangoutLink) {
       event.conferenceData = {
         createRequest: {
           requestId: "meet-update-" + Date.now(),
