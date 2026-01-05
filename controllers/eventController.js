@@ -967,6 +967,16 @@ export const updateEvent = async (req, res) => {
                         if (syncResult.success && syncResult.meetingUrl) {
                             existingEvent.videoMeetingUrl = syncResult.meetingUrl;
                             existingEvent.videoMeetingPlatform = syncResult.platform === 'google' ? 'google-meet' : 'microsoft-teams';
+
+                            // Unified Meeting Details Update
+                            existingEvent.meetingDetails = {
+                                platform: existingEvent.videoMeetingPlatform,
+                                guestUrl: syncResult.meetingUrl,
+                                adminUrl: syncResult.meetingUrl, // Google Meet uses same link
+                                startUrl: syncResult.meetingUrl,
+                                meetingId: ""
+                            };
+
                             await existingEvent.save();
                             console.log(`✅ Updated sync with ${provider.provider} and got meeting link: ${syncResult.meetingUrl}`);
                         }

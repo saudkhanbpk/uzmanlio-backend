@@ -21,7 +21,8 @@ export class CalendarSyncService {
       endDateTime: endDateTime.toISOString(),
       timeZone: timeZone,
       attendees: appointment.clientEmail ? [appointment.clientEmail] : [],
-      isOnline: appointment.eventType === 'online' || appointment.location === 'Online'
+      isOnline: appointment.eventType === 'online' || appointment.location === 'Online',
+      createMeetLink: appointment.platform === 'google-meet' || appointment.meetingDetails?.platform === 'google-meet'
     };
   }
 
