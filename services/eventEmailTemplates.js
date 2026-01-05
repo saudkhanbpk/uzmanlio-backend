@@ -370,7 +370,7 @@ export function getClient11SessionTemplate(data) {
     <div class="container">
         <div class="header">
             <img src="https://uzmanlio.com/images/logo.png" alt="Uzmanlio" class="logo">
-            <h1>Randevunuz Onaylandı!</h1>
+            <h1>Randevunuz Oluşturuldu!</h1>
             <p>Randevu detaylarınız aşağıda yer almaktadır</p>
         </div>
         
@@ -446,7 +446,7 @@ export function getClientGroupSessionTemplate(data) {
 
     // Combined template - includes both invite and confirmation info
     return {
-        subject: "Grup Seansı Daveti - Uzmanlio",
+        subject: "Randevunuz Oluşturuldu - Uzmanlio",
         html: `
 <!DOCTYPE html>
 <html lang="tr">
@@ -573,7 +573,7 @@ export function getClientGroupSessionTemplate(data) {
     <div class="container">
         <div class="header">
             <img src="https://uzmanlio.com/images/logo.png" alt="Uzmanlio" class="logo">
-            <h1>👥 Grup Seansı Daveti</h1>
+            <h1>Randevunuz Oluşturuldu!</h1>
             <p>Yeni bir grup seansına davet edildiniz!</p>
         </div>
         
@@ -596,10 +596,12 @@ export function getClientGroupSessionTemplate(data) {
             </div>
             
             ${videoLink ? `
-            <div class="join-group">
+            <div class="join-group" style="border-color: ${videoLink.includes('zoom.us') ? '#2D8CFF' : '#009743'};">
                 <h3>🎥 Grup Seansına Katıl</h3>
                 <p>Seans saatinde aşağıdaki bağlantıya tıklayarak katılabilirsiniz:</p>
-                <a href="${videoLink}" class="group-button" style="color: white;">Grup Seansına Katıl</a>
+                <a href="${videoLink}" class="group-button" style="color: white; background-color: ${videoLink.includes('zoom.us') ? '#2D8CFF' : '#009743'};">
+                    ${videoLink.includes('zoom.us') ? '🔵 Zoom Toplantısına Katıl' : 'Grup Seansına Katıl'}
+                </a>
             </div>
             ` : ''}
             
@@ -1245,7 +1247,7 @@ export function getClientAppointmentCreatedTemplate(data) {
     <div class="container">
         <div class="header">
             <img src="https://uzmanlio.com/images/logo.png" alt="Uzmanlio" class="logo">
-            <h1>Randevunuz Onaylandı!</h1>
+            <h1>Randevunuz Oluşturuldu!</h1>
             <p>Randevu detaylarınız aşağıda yer almaktadır</p>
         </div>
         

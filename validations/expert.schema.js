@@ -74,10 +74,13 @@ export const categorySchema = Joi.object({
 
 export const educationSchema = Joi.object({
     level: Joi.string().max(100).required(),
-    university: Joi.string().max(200).required(),
+    university: Joi.number().allow('', null),
     name: Joi.string().max(200).required(), // Degree name
     department: Joi.string().max(200).allow('', null),
-    graduationYear: Joi.string().max(10).allow('', null),
+    graduationYear: Joi.number().allow('', null),
+    startDate: Joi.date().required(),         // <-- required
+    endDate: Joi.date().allow(null),          // <-- optional
+    current: Joi.boolean().default(false)    // <-- optional
 });
 
 export const updateEducationSchema = Joi.object({
@@ -116,8 +119,11 @@ export const updateCertificatesSchema = Joi.object({
 export const experienceSchema = Joi.object({
     company: Joi.string().max(200).required(),
     position: Joi.string().max(200).required(),
-    start: Joi.string().allow('', null),
-    end: Joi.string().allow('', null),
+    start: Joi.number().allow('', null),
+    end: Joi.number().allow('', null),
+    startDate: Joi.date().allow(null),
+    endDate: Joi.date().allow(null),
+    current: Joi.boolean().default(false),
     stillWork: Joi.boolean().default(false),
     description: Joi.string().max(2000).allow('', null),
     country: Joi.string().max(100).allow('', null),
@@ -141,7 +147,10 @@ export const updateExperienceSchema = Joi.object({
 
 export const skillSchema = Joi.object({
     name: Joi.string().max(100).required(),
-    level: Joi.string().valid('beginner', 'intermediate', 'advanced', 'expert', '').allow('', null),
+    level: Joi.number()
+        .min(0)
+        .max(100)
+        .required(),
     category: Joi.string().max(100).allow('', null),
     description: Joi.string().max(500).allow('', null),
 });
@@ -160,13 +169,7 @@ export const updateSkillsSchema = Joi.object({
 export const availabilitySchema = Joi.object({
     alwaysAvailable: Joi.boolean().default(false),
     selectedSlots: Joi.array().items(
-        Joi.object({
-            id: Joi.string().allow('', null),
-            day: Joi.string().valid('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday').required(),
-            start: Joi.string().pattern(/^([01]?\d|2[0-3]):[0-5]\d$/).required(),
-            end: Joi.string().pattern(/^([01]?\d|2[0-3]):[0-5]\d$/).required(),
-            active: Joi.boolean().default(true),
-        })
+        Joi.string().pattern(/^\d-[0-5]\d:[0-5]\d$/)
     ).default([]),
 });
 

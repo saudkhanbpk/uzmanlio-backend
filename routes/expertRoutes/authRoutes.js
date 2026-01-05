@@ -495,8 +495,26 @@ router.post("/verify-email", validateBody(verifyEmailSchema), async (req, res) =
         user.emailVerificationExpiry = undefined;
         await user.save({ validateBeforeSave: false });
 
+        // Populate user for consistency with login/profile responses
+        const populatedUser = await User.findById(user._id)
+            .populate([
+                {
+                    path: "customers.customerId",
+                    model: "Customer"
+                },
+                {
+                    path: "services",
+                    model: "Service"
+                },
+                {
+                    path: "packages",
+                    model: "Package"
+                }
+            ])
+            .select("-information.password");
+
         return res.status(200).json({
-            user: user,
+            user: populatedUser,
             success: true,
             message: "Email verified successfully"
         });
@@ -539,7 +557,8 @@ router.post("/resend-verification", validateBody(resendVerificationSchema), asyn
 
         // Send verification email
         try {
-            const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${user.emailVerificationToken}`;
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const verificationUrl = `${frontendUrl}/verify-email?token=${user.emailVerificationToken}`;
 
             const verificationEmailTemplate = getEmailVerificationTemplate({
                 name: user.information.name,

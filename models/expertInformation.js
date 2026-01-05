@@ -17,10 +17,13 @@ const Title = new Schema({
 const EducationSchema = new Schema({
   id: { type: String, default: uuidv4 },
   level: { type: String },
-  university: { type: Schema.Types.ObjectId, ref: "University" },
+  university: { type: Schema.Types.ObjectId, ref: "University", default: null },
   name: { type: String },
-  department: { type: String },
-  graduationYear: { type: Number },
+  department: { type: String, default: "" },
+  graduationYear: { type: Number, default: null },
+  startDate: { type: Date },
+  endDate: { type: Date, default: null },
+  current: { type: Boolean, default: false }
 });
 
 const ExperienceSchema = new Schema({
@@ -30,6 +33,9 @@ const ExperienceSchema = new Schema({
   description: { type: String },
   start: { type: Number },
   end: { type: Number, default: null },
+  startDate: { type: Date },
+  endDate: { type: Date, default: null },
+  current: { type: Boolean, default: false },
   stillWork: { type: Boolean, default: false },
   country: { type: String },
   city: { type: String },

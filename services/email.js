@@ -1,93 +1,81 @@
-import nodemailer from 'nodemailer';
+import * as Brevo from '@getbrevo/brevo';
 import { getCustomerEmailTemplate, getExpertEmailTemplate } from "./emailTemplates.js";
 import dotenv from "dotenv";
 dotenv.config();
 
-// SMTP Configuration from environment variables
-const EMAIL_USER = process.env.EMAIL_USER;
-const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD;
-const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com'; // Default to Gmail
-const EMAIL_PORT = process.env.EMAIL_PORT || 587;
-const EMAIL_SECURE = process.env.EMAIL_SECURE === 'true'; // false for TLS, true for SSL
+// Brevo API Configuration from environment variables
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const SENDER_NAME = process.env.SENDER_NAME || "Uzmanlio";
+const SENDER_EMAIL = process.env.SENDER_EMAIL || "luqman.dagai@gmail.com";
 
 // Validate configuration
-if (!EMAIL_USER || !EMAIL_APP_PASSWORD) {
-    console.error("❌ EMAIL_USER or EMAIL_APP_PASSWORD is not set in environment variables!");
-    console.error("⚠️  Please set these in your .env file:");
-    console.error("   EMAIL_USER=your-email@gmail.com");
-    console.error("   EMAIL_APP_PASSWORD=your-app-password");
-    console.error("⚠️  For Gmail, create an App Password at: https://myaccount.google.com/apppasswords");
+if (!BREVO_API_KEY) {
+    console.warn("⚠️ BREVO_API_KEY is not set in environment variables!");
+    console.warn("⚠️ Email sending will fail until this is configured.");
 }
 
-// Create reusable transporter
-let transporter = null;
+// Create reusable Brevo API instance
+let apiInstance = null;
 
 /**
- * Initialize nodemailer transporter
+ * Initialize Brevo API client
  */
-function getTransporter() {
-    if (transporter) {
-        return transporter;
+function getBrevoClient() {
+    if (apiInstance) {
+        return apiInstance;
     }
 
-    if (!EMAIL_USER || !EMAIL_APP_PASSWORD) {
-        throw new Error("Email configuration is missing. Please set EMAIL_USER and EMAIL_APP_PASSWORD in .env");
+    if (!BREVO_API_KEY) {
+        throw new Error("Brevo API Key is missing. Please set BREVO_API_KEY in .env");
     }
 
-    transporter = nodemailer.createTransport({
-        host: EMAIL_HOST,
-        port: EMAIL_PORT,
-        secure: EMAIL_SECURE, // true for 465, false for other ports
-        auth: {
-            user: EMAIL_USER,
-            pass: EMAIL_APP_PASSWORD,
-        },
-    });
+    apiInstance = new Brevo.TransactionalEmailsApi();
+    apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, BREVO_API_KEY);
 
-    console.log("✅ Email transporter initialized");
-    return transporter;
+    console.log("✅ Brevo API client initialized");
+    return apiInstance;
 }
 
 /**
- * Send email using nodemailer SMTP
+ * Send email using Brevo API
  * @param {string} receiver - Email address of the receiver
  * @param {object} emailData - Email data containing subject and body
  */
 async function sendEmail(receiver, emailData) {
     try {
-        console.log("📧 Sending email via SMTP to:", receiver);
+        console.log("📧 Sending email via Brevo API to:", receiver);
 
-        const transport = getTransporter();
+        const api = getBrevoClient();
+        const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
-        const mailOptions = {
-            from: `${SENDER_NAME} <${EMAIL_USER}>`,
-            to: receiver,
-            subject: emailData.subject,
-            text: emailData.text || emailData.body || '',
-            html: emailData.html || `<p>${emailData.body || emailData.text || ''}</p>`,
-        };
+        sendSmtpEmail.subject = emailData.subject;
+        sendSmtpEmail.htmlContent = emailData.html || `<p>${emailData.body || emailData.text || ''}</p>`;
+        sendSmtpEmail.sender = { name: SENDER_NAME, email: SENDER_EMAIL };
+        sendSmtpEmail.to = [{ email: receiver }];
 
-        const info = await transport.sendMail(mailOptions);
+        if (emailData.text || emailData.body) {
+            sendSmtpEmail.textContent = emailData.text || emailData.body;
+        }
 
-        console.log("✅ Email sent successfully:", info.messageId);
+        const data = await api.sendTransacEmail(sendSmtpEmail);
+
+        console.log("✅ Email sent successfully via Brevo API:", data.body.messageId);
         return {
             success: true,
-            messageId: info.messageId,
-            provider: "smtp",
-            response: info.response
+            messageId: data.body.messageId,
+            provider: "brevo-api"
         };
     } catch (error) {
-        console.error("❌ SMTP email error:", error.message);
+        console.error("❌ Brevo API email error:", error.response?.body?.message || error.message || error);
         return {
             success: false,
-            error: `Email sending failed: ${error.message}`
+            error: `Email sending failed: ${error.response?.body?.message || error.message || error}`
         };
     }
 }
 
 /**
- * Send bulk email using nodemailer SMTP
+ * Send bulk email using Brevo API
  * @param {string[]} emails - array of recipient emails
  * @param {string} subject - email subject
  * @param {string} text - plain text body
@@ -99,28 +87,29 @@ async function sendBulkEmail(emails, subject, text, html = null) {
     }
 
     try {
-        const transport = getTransporter();
+        console.log(`📧 Sending bulk email to ${emails.length} recipients via Brevo API`);
+        const api = getBrevoClient();
 
-        const mailOptions = {
-            from: `${SENDER_NAME} <${EMAIL_USER}>`,
-            to: emails.join(', '), // Join multiple recipients
-            subject,
-            text,
-            html: html || `<p>${text}</p>`,
-        };
+        // Brevo allows sending to multiple recipients in one call
+        const sendSmtpEmail = new Brevo.SendSmtpEmail();
+        sendSmtpEmail.subject = subject;
+        sendSmtpEmail.htmlContent = html || `<p>${text}</p>`;
+        sendSmtpEmail.textContent = text;
+        sendSmtpEmail.sender = { name: SENDER_NAME, email: SENDER_EMAIL };
+        sendSmtpEmail.to = emails.map(email => ({ email }));
 
-        const info = await transport.sendMail(mailOptions);
+        const data = await api.sendTransacEmail(sendSmtpEmail);
 
-        console.log("✅ Bulk email sent successfully:", info.messageId);
+        console.log("✅ Bulk email sent successfully via Brevo API:", data.body.messageId);
         return {
             success: true,
-            messageId: info.messageId,
-            provider: "smtp",
+            messageId: data.body.messageId,
+            provider: "brevo-api",
             recipientCount: emails.length
         };
     } catch (error) {
-        console.error("❌ SMTP bulk email error:", error.message);
-        throw new Error(`Bulk email sending failed: ${error.message}`);
+        console.error("❌ Brevo API bulk email error:", error.response?.body?.message || error.message || error);
+        throw new Error(`Bulk email sending failed: ${error.response?.body?.message || error.message || error}`);
     }
 }
 
@@ -174,17 +163,20 @@ async function sendBookingEmails(bookingType, customerData, expertData, bookingD
 }
 
 /**
- * Verify email configuration
+ * Verify Brevo API configuration
  * @returns {Promise<boolean>} True if configuration is valid
  */
 async function verifyEmailConfig() {
     try {
-        const transport = getTransporter();
-        await transport.verify();
-        console.log("✅ Email server is ready to send messages");
+        const api = getBrevoClient();
+        // Try to get account info to verify API key
+        const accountApi = new Brevo.AccountApi();
+        accountApi.setApiKey(Brevo.AccountApiApiKeys.apiKey, BREVO_API_KEY);
+        await accountApi.getAccount();
+        console.log("✅ Brevo API is ready and account is accessible");
         return true;
     } catch (error) {
-        console.error("❌ Email configuration verification failed:", error.message);
+        console.error("❌ Brevo API configuration verification failed:", error.response?.body?.message || error.message || error);
         return false;
     }
 }

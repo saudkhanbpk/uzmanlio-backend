@@ -65,6 +65,9 @@ const EventSchema = new Schema({
     originalEventId: { type: String }, // Reference to original event if this is a repetition
     repetitionNumber: { type: Number }, // Which repetition this is (1, 2, 3, etc.)
     completedRepetitions: { type: Number, default: 0 }, // Number of completed repetitions
+    zoomMeetingId: { type: String },
+    zoomJoinUrl: { type: String },
+    zoomStartUrl: { type: String },
 
     // Video Meeting Information
     videoMeetingUrl: { type: String },
@@ -73,6 +76,16 @@ const EventSchema = new Schema({
     videoMeetingPlatform: { type: String, enum: ["google-meet", "microsoft-teams", "jitsi", "zoom", "other"] },
     videoMeetingId: { type: String }, // Platform-specific meeting ID
     isMeetingStarted: { type: Boolean, default: false }, // Waiting Room Lock
+
+    // Unified Meeting Details
+    meetingDetails: {
+        platform: { type: String, enum: ["zoom", "google-meet", "jitsi", "microsoft-teams", "other"] },
+        meetingId: { type: String },
+        password: { type: String },
+        adminUrl: { type: String }, // URL for the expert/host
+        guestUrl: { type: String }, // URL for the client/guest
+        startUrl: { type: String }, // specific start URL if different from adminUrl
+    },
 
 },
     {

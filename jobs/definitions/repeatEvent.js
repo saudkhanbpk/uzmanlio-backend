@@ -87,7 +87,41 @@ export default function defineRepeatEventJob(agenda) {
                     repetitionNumber: currentRepetition,
                     createdAt: new Date(),
                     updatedAt: new Date(),
+
+                    // Unified Meeting Details
+                    meetingDetails: {
+                        platform: originalEvent.meetingDetails?.platform || originalEvent.platform || 'other',
+                        meetingId: '', // Will be generated if Jitsi
+                        password: '',
+                        adminUrl: '',
+                        guestUrl: '',
+                        startUrl: ''
+                    }
                 };
+
+                // Jitsi Logic: Generate new link for new Event ID
+                if (
+                    (newEventData.meetingDetails.platform?.toLowerCase().includes('jitsi')) ||
+                    (newEventData.platform?.toLowerCase().includes('jitsi')) ||
+                    (newEventData.eventType === 'online' && !newEventData.meetingDetails.platform)
+                ) {
+                    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                    const jitsiRoom = `uzmanlio-${newEventId}`;
+
+                    newEventData.meetingDetails = {
+                        platform: 'jitsi',
+                        meetingId: jitsiRoom,
+                        adminUrl: `${frontendUrl}/meeting/${jitsiRoom}?role=moderator`,
+                        guestUrl: `${frontendUrl}/meeting/${jitsiRoom}`,
+                        startUrl: `${frontendUrl}/meeting/${jitsiRoom}?role=moderator`
+                    };
+
+                    // Maintain backward compatibility
+                    newEventData.videoMeetingPlatform = 'jitsi';
+                    newEventData.videoMeetingUrl = newEventData.meetingDetails.guestUrl;
+                    newEventData.moderatorMeetingUrl = newEventData.meetingDetails.adminUrl;
+                    newEventData.guestMeetingUrl = newEventData.meetingDetails.guestUrl;
+                }
 
                 const createdEvent = await Event.create(newEventData);
                 console.log(`✅ Created repeated event ${createdEvent._id}`);
@@ -99,11 +133,29 @@ export default function defineRepeatEventJob(agenda) {
                     // but it helps keep the job responsive if one sync fails or takes long.
                     for (const provider of providers) {
                         try {
-                            await calendarSyncService.syncAppointmentToProvider(
+                            const syncResult = await calendarSyncService.syncAppointmentToProvider(
                                 userId,
                                 createdEvent,
                                 { providerId: provider.providerId }
                             );
+
+                            if (syncResult.success && syncResult.meetingUrl) {
+                                // Update event with sync result
+                                createdEvent.meetingDetails = {
+                                    platform: syncResult.platform,
+                                    guestUrl: syncResult.meetingUrl,
+                                    adminUrl: syncResult.meetingUrl,
+                                    startUrl: syncResult.meetingUrl,
+                                    meetingId: ""
+                                };
+
+                                // Backward compatibility
+                                createdEvent.videoMeetingUrl = syncResult.meetingUrl;
+                                createdEvent.videoMeetingPlatform = syncResult.platform;
+
+                                await createdEvent.save();
+                            }
+
                             console.log(`✅ Synced repetition to ${provider.provider}`);
                         } catch (syncError) {
                             console.error(`❌ Failed syncing repetition to ${provider.provider}:`, syncError);
@@ -258,6 +310,10 @@ export default function defineRepeatEventJob(agenda) {
                     const meetingType = originalEvent.meetingType;
                     const serviceType = originalEvent.serviceType;
 
+                    // Unified Link Selection
+                    const guestLink = createdEvent.meetingDetails?.guestUrl || createdEvent.guestMeetingUrl || createdEvent.videoMeetingUrl || originalEvent.platform || "";
+                    const adminLink = createdEvent.meetingDetails?.adminUrl || createdEvent.moderatorMeetingUrl || createdEvent.videoMeetingUrl || originalEvent.platform || "";
+
                     console.log(`📧 Sending emails - MeetingType: ${meetingType}, ServiceType: ${serviceType}`);
 
                     if (serviceType === 'service') {
@@ -272,7 +328,7 @@ export default function defineRepeatEventJob(agenda) {
                                     sessionDate: eventData.date,
                                     sessionTime: eventData.time,
                                     sessionDuration: originalEvent.duration,
-                                    videoLink: originalEvent.platform || ''
+                                    videoLink: guestLink
                                 });
 
                                 await sendEmail(client.email, {
@@ -292,7 +348,7 @@ export default function defineRepeatEventJob(agenda) {
                                     sessionDate: eventData.date,
                                     sessionTime: eventData.time,
                                     sessionDuration: originalEvent.duration,
-                                    videoLink: originalEvent.platform || ''
+                                    videoLink: guestLink
                                 });
 
                                 await sendEmail(client.email, {
@@ -305,7 +361,7 @@ export default function defineRepeatEventJob(agenda) {
                                     sessionName: originalEvent.serviceName,
                                     sessionDate: eventData.date,
                                     sessionTime: eventData.time,
-                                    videoLink: originalEvent.platform || ''
+                                    videoLink: guestLink
                                 });
 
                                 await sendEmail(client.email, {
@@ -328,7 +384,7 @@ export default function defineRepeatEventJob(agenda) {
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
                                 sessionDuration: originalEvent.duration,
-                                videoLink: originalEvent.platform || ''
+                                videoLink: guestLink
                             });
 
                             await sendEmail(client.email, {
@@ -342,7 +398,7 @@ export default function defineRepeatEventJob(agenda) {
                                 appointmentDate: eventData.date,
                                 appointmentTime: eventData.time,
                                 appointmentLocation: originalEvent.location || 'Online',
-                                videoLink: originalEvent.platform || ''
+                                videoLink: guestLink
                             });
 
                             await sendEmail(client.email, {
@@ -362,7 +418,7 @@ export default function defineRepeatEventJob(agenda) {
                             eventTime: eventData.time,
                             eventLocation: originalEvent.location,
                             serviceName: originalEvent.serviceName,
-                            videoLink: originalEvent.platform || ''
+                            videoLink: adminLink
                         });
 
                         await sendEmail(expertEmail, {

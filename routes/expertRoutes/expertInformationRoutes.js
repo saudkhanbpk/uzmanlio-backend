@@ -10,6 +10,7 @@ import User from "../../models/expertInformation.js";
 import calendarSyncService from "../../services/calendarSyncService.js";
 import { sendBulkEmail, sendEmail } from "../../services/email.js";
 import { Parser } from "json2csv";
+import bcrypt from "bcrypt";
 import {
   getExpertEventCreatedTemplate, getClient11SessionTemplate,
   getClientGroupSessionTemplate, getClientPackageSessionTemplate,
@@ -487,25 +488,38 @@ router.get("/:userId",
       res.status(400).json({ error: err.message });
     }
   });
-
-router.put("/:userId",
+router.put(
+  "/:userId",
   validateParams(expertSchemas.userIdParams),
   validateBody(expertSchemas.updateProfileSchema),
   verifyAccessToken,
   async (req, res) => {
     try {
-      console.log("Updating profile for userId:", req.params.userId);
-
-      // ⛔ CRITICAL: Prevent password deletion
-      // Passwords should ONLY be changed through dedicated auth routes (signup/reset-password)
+      const { userId } = req.params;
       const updateData = { ...req.body };
-      if (updateData.information) {
-        delete updateData.information.password;
-        console.log("🔒 Password field excluded from profile update");
+
+      // 🔹 Get existing user first
+      const existingUser = await User.findById(userId);
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // 🔐 Password handling
+      if (updateData.information?.password) {
+        // New password provided → hash & update
+        const salt = await bcrypt.genSalt(10);
+        updateData.information.password = await bcrypt.hash(
+          updateData.information.password,
+          salt
+        );
+      } else if (updateData.information) {
+        // No password in request → keep old password
+        updateData.information.password =
+          existingUser.information.password;
       }
 
       const expertInformation = await User.findByIdAndUpdate(
-        req.params.userId,
+        userId,
         updateData,
         {
           new: true,
@@ -513,21 +527,60 @@ router.put("/:userId",
         }
       );
 
-      if (!expertInformation) {
-        console.log("User not found for ID:", req.params.userId);
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      console.log("Profile updated successfully for userId:", req.params.userId);
-      res.json({ message: "Profile updated", expertInformation });
-    } catch (err) {
-      console.error("Update error:", {
-        message: err.message,
-        stack: err.stack
+      res.json({
+        message: "Profile updated successfully",
+        expertInformation,
       });
-      res.status(500).json({ error: "Error updating profile", details: err.message });
+    } catch (err) {
+      console.error("Update error:", err);
+      res.status(500).json({
+        error: "Error updating profile",
+        details: err.message,
+      });
     }
-  });
+  }
+);
+
+// router.put("/:userId",
+//   validateParams(expertSchemas.userIdParams),
+//   validateBody(expertSchemas.updateProfileSchema),
+//   verifyAccessToken,
+//   async (req, res) => {
+//     try {
+//       console.log("Updating profile for userId:", req.params.userId);
+
+//       // ⛔ CRITICAL: Prevent password deletion
+//       // Passwords should ONLY be changed through dedicated auth routes (signup/reset-password)
+//       const updateData = { ...req.body };
+//       if (updateData.information) {
+//         delete updateData.information.password;
+//         console.log("🔒 Password field excluded from profile update");
+//       }
+
+//       const expertInformation = await User.findByIdAndUpdate(
+//         req.params.userId,
+//         updateData,
+//         {
+//           new: true,
+//           runValidators: true,
+//         }
+//       );
+
+//       if (!expertInformation) {
+//         console.log("User not found for ID:", req.params.userId);
+//         return res.status(404).json({ error: "User not found" });
+//       }
+
+//       console.log("Profile updated successfully for userId:", req.params.userId);
+//       res.json({ message: "Profile updated", expertInformation });
+//     } catch (err) {
+//       console.error("Update error:", {
+//         message: err.message,
+//         stack: err.stack
+//       });
+//       res.status(500).json({ error: "Error updating profile", details: err.message });
+//     }
+//   });
 
 router.patch("/:userId",
   validateParams(expertSchemas.userIdParams),
@@ -755,11 +808,20 @@ router.post("/:userId/education",
   verifyAccessToken,
   async (req, res) => {
     try {
-      const { level, university, name, department, graduationYear } = req.body;
+      const { level, university, name, department, graduationYear, startDate, endDate, current } = req.body;
       const user = await findUserById(req.params.userId);
 
       if (!user.resume) {
         user.resume = { education: [] };
+      }
+      const start = startDate ? new Date(startDate) : null;
+      if (!start || isNaN(start.getTime())) {
+        return res.status(400).json({ error: "Start date is invalid or missing" });
+      }
+
+      const end = endDate && !current ? new Date(endDate) : null;
+      if (end && isNaN(end.getTime())) {
+        return res.status(400).json({ error: "End date is invalid" });
       }
 
       const newEducation = {
@@ -768,7 +830,10 @@ router.post("/:userId/education",
         university,
         name,
         department,
-        graduationYear
+        graduationYear,
+        startDate: start,
+        endDate: end,
+        current: !!current
       };
 
       user.resume.education.push(newEducation);
@@ -787,7 +852,7 @@ router.put("/:userId/education/:educationId",
   verifyAccessToken,
   async (req, res) => {
     try {
-      const { level, university, name, department, graduationYear } = req.body;
+      const { level, university, name, department, graduationYear, startDate, endDate, current } = req.body;
       const user = await findUserById(req.params.userId);
 
       if (!user.resume?.education) {
@@ -802,13 +867,27 @@ router.put("/:userId/education/:educationId",
         return res.status(404).json({ error: "Education record not found" });
       }
 
+      const start = startDate ? new Date(startDate) : null;
+      if (!start || isNaN(start.getTime())) {
+        return res.status(400).json({ error: "Start date is invalid or missing" });
+      }
+
+      const end = endDate && !current ? new Date(endDate) : null;
+      if (end && isNaN(end.getTime())) {
+        return res.status(400).json({ error: "End date is invalid" });
+      }
+
+      // Update the education record
       user.resume.education[educationIndex] = {
         ...user.resume.education[educationIndex],
         level,
         university,
         name,
         department,
-        graduationYear
+        graduationYear,
+        startDate: start,
+        endDate: end,
+        current: !!current
       };
 
       await user.save();
@@ -820,6 +899,7 @@ router.put("/:userId/education/:educationId",
       res.status(500).json({ error: error.message });
     }
   });
+
 
 // Delete education
 router.delete("/:userId/education/:educationId",
@@ -967,16 +1047,22 @@ router.post("/:userId/experience",
   verifyAccessToken, // Added verifyAccessToken for security consistency
   async (req, res) => {
     try {
-      const { company, position, start, end, stillWork, description, country, city } = req.body;
+      const { company, position, start, end, stillWork, startDate, endDate, current, description, country, city } = req.body;
       const user = await findUserById(req.params.userId);
+
+      const sDate = startDate ? new Date(startDate) : null;
+      const eDate = endDate && !current ? new Date(endDate) : null;
 
       const newExperience = {
         id: uuidv4(),
         company,
         position,
-        start,
-        end: stillWork ? null : end,
-        stillWork,
+        start: sDate ? sDate.getFullYear() : start,
+        end: current ? null : (eDate ? eDate.getFullYear() : end),
+        startDate: sDate,
+        endDate: eDate,
+        current: !!current,
+        stillWork: !!stillWork || !!current,
         description,
         country,
         city
@@ -998,7 +1084,7 @@ router.put("/:userId/experience/:experienceId",
   verifyAccessToken, // Added verifyAccessToken for security consistency
   async (req, res) => {
     try {
-      const { company, position, description, start, end, stillWork, country, city } = req.body;
+      const { company, position, description, start, end, stillWork, startDate, endDate, current, country, city } = req.body;
       const user = await findUserById(req.params.userId);
 
       const experienceIndex = user.experience.findIndex(
@@ -1009,14 +1095,20 @@ router.put("/:userId/experience/:experienceId",
         return res.status(404).json({ error: "Experience not found" });
       }
 
+      const sDate = startDate ? new Date(startDate) : null;
+      const eDate = endDate && !current ? new Date(endDate) : null;
+
       user.experience[experienceIndex] = {
         ...user.experience[experienceIndex],
         company,
         description,
         position,
-        start,
-        end: stillWork ? null : end,
-        stillWork,
+        start: sDate ? sDate.getFullYear() : start,
+        end: current ? null : (eDate ? eDate.getFullYear() : end),
+        startDate: sDate,
+        endDate: eDate,
+        current: !!current,
+        stillWork: !!stillWork || !!current,
         country,
         city
       };

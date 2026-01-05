@@ -39,7 +39,14 @@ export const verifyAccessToken = async (req, res, next) => {
             req.token = token;
 
             console.log('  - Token userId:', decoded.id);
-            console.log('  - Token matches route:', decoded.id === routeUserId);
+            console.log('  - Token matches route:', routeUserId ? decoded.id === routeUserId : 'N/A (No route userId)');
+
+            // If there's no userId in the route, just verify the token and proceed
+            // Authorization for these routes should be handled in the controller or by other middleware
+            if (!routeUserId) {
+                console.log('  ✅ No route userId - Authentication Verified');
+                return next();
+            }
 
             // If token userId matches route userId, allow access
             if (decoded.id === routeUserId) {

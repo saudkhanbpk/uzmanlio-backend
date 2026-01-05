@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import nodemailer from 'nodemailer';
+import { sendEmail } from './email.js';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import User from '../models/expertInformation.js';
@@ -7,14 +7,6 @@ import Institution from '../models/institution.js';
 import { getMarketingEmailTemplate } from './emailTemplates.js';
 
 dotenv.config();
-
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD
-    }
-});
 
 const scheduledJobs = new Map();
 
@@ -111,15 +103,17 @@ async function sendEmailNow(userId, emailId) {
     const failedRecipients = [];
 
     for (const r of recipients) {
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: r,
-            subject: emailTemplate.subject,
-            html: emailTemplate.html
-        };
         try {
-            await transporter.sendMail(mailOptions);
-            sentCount++;
+            const result = await sendEmail(r, {
+                subject: emailTemplate.subject,
+                html: emailTemplate.html
+            });
+
+            if (result.success) {
+                sentCount++;
+            } else {
+                throw new Error(result.error);
+            }
         } catch (err) {
             failedCount++;
             failedRecipients.push(r);

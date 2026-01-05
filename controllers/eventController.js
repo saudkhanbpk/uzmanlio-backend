@@ -16,8 +16,15 @@ import {
     getGroupSessionConfirmationTemplate,
     getClientAppointmentCreatedTemplate
 } from "../services/eventEmailTemplates.js";
+import {
+    getAppointmentApprovedBireyselTemplate,
+    getGroupSessionApprovedTemplate,
+    getCancellationEmailTemplate,
+    getEventUpdatedTemplate
+} from "../services/emailTemplates.js";
 import { sendSms } from "../services/netgsmService.js";
 import calendarSyncService from "../services/calendarSyncService.js";
+import zoomService from "../services/zoomService.js";
 
 // Helper function to find user by ID
 const findUserById = async (userId) => {
@@ -147,6 +154,27 @@ export const createEvent = async (req, res) => {
             }
         }
         // ===========================================================
+
+        // --- ZOOM MEETING INTEGRATION ---
+        let zoomMeeting = null;
+        let zoomErrorInfo = null;
+        console.log('🔍 Platform Check:', eventData.platform);
+
+        if (eventData.platform?.toLowerCase() === 'zoom') {
+            try {
+                zoomMeeting = await zoomService.createMeeting({
+                    title: eventData.title || eventData.serviceName,
+                    date: eventData.date,
+                    time: eventData.time,
+                    duration: eventData.duration
+                });
+                console.log('✅ Zoom Meeting Result:', !!zoomMeeting);
+            } catch (zoomError) {
+                console.error("❌ Zoom integration failed:", zoomError);
+                zoomErrorInfo = zoomError.message;
+            }
+        }
+
         const event = await Event.create({
             expertId: user._id,
             title: eventData.title || eventData.serviceName,
@@ -159,6 +187,19 @@ export const createEvent = async (req, res) => {
             duration: eventData.duration,
             location: eventData.location,
             platform: eventData.platform,
+            zoomMeetingId: zoomMeeting?.id,
+            zoomJoinUrl: zoomMeeting?.join_url,
+            zoomStartUrl: zoomMeeting?.start_url,
+
+            // Unified Meeting Details
+            meetingDetails: {
+                platform: eventData.platform?.toLowerCase() === 'zoom' ? 'zoom' : (eventData.platform || 'other'),
+                meetingId: zoomMeeting?.id,
+                adminUrl: zoomMeeting?.start_url,
+                guestUrl: zoomMeeting?.join_url,
+                startUrl: zoomMeeting?.start_url
+            },
+
             eventType: eventData.eventType,
             meetingType: eventData.meetingType,
             price: eventData.price,
@@ -427,6 +468,16 @@ export const createEvent = async (req, res) => {
                             // Save to event document
                             savedEvent.videoMeetingUrl = videoMeetingUrl;
                             savedEvent.videoMeetingPlatform = videoMeetingPlatform;
+
+                            // Unified Meeting Details Update
+                            savedEvent.meetingDetails = {
+                                platform: videoMeetingPlatform,
+                                guestUrl: videoMeetingUrl,
+                                adminUrl: videoMeetingUrl,
+                                startUrl: videoMeetingUrl,
+                                meetingId: "" // Usually part of URL for Google Meet
+                            };
+
                             await savedEvent.save();
                             console.log(`✅ Synced with ${provider.provider} and got meeting link: ${videoMeetingUrl}`);
                             break; // Stop after first successful sync that provides a link
@@ -447,6 +498,16 @@ export const createEvent = async (req, res) => {
             savedEvent.moderatorMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}?role=moderator`;
             savedEvent.guestMeetingUrl = `${frontendUrl}/meeting/${jitsiRoom}`;
             savedEvent.videoMeetingPlatform = "jitsi";
+
+            // Unified Meeting Details Update
+            savedEvent.meetingDetails = {
+                platform: 'jitsi',
+                meetingId: jitsiRoom,
+                adminUrl: savedEvent.moderatorMeetingUrl,
+                guestUrl: savedEvent.guestMeetingUrl,
+                startUrl: savedEvent.moderatorMeetingUrl
+            };
+
             await savedEvent.save();
             videoMeetingUrl = savedEvent.videoMeetingUrl;
         }
@@ -457,7 +518,9 @@ export const createEvent = async (req, res) => {
         const sendEmailsAsync = async () => {
             try {
                 const emailPromises = [];
-                const joinUrl = savedEvent.videoMeetingUrl || eventData.platform || "";
+                // Prioritize meetingDetails URLs
+                const guestLink = savedEvent.meetingDetails?.guestUrl || savedEvent.guestMeetingUrl || savedEvent.videoMeetingUrl || eventData.platform || "";
+                const adminLink = savedEvent.meetingDetails?.adminUrl || savedEvent.moderatorMeetingUrl || savedEvent.videoMeetingUrl || eventData.platform || "";
 
                 if (eventData.serviceType === "service") {
                     if (eventData.meetingType === "1-1") {
@@ -470,7 +533,7 @@ export const createEvent = async (req, res) => {
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
                                 sessionDuration: eventData.duration,
-                                videoLink: savedEvent.guestMeetingUrl || joinUrl,
+                                videoLink: guestLink,
                             });
 
                             emailPromises.push(
@@ -488,17 +551,11 @@ export const createEvent = async (req, res) => {
                             eventTime: eventData.time,
                             eventLocation: eventData.location,
                             serviceName: eventData.serviceName,
-                            videoLink: savedEvent.moderatorMeetingUrl || joinUrl,
+                            videoLink: adminLink,
                         });
 
-                        emailPromises.push(
-                            sendEmail(user.information.email, {
-                                subject: expertTemplate.subject,
-                                html: expertTemplate.html,
-                            })
-                        );
                     } else {
-                        // Group session emails
+                        // Group session emails - Send only ONE consolidated email
                         for (const client of formattedClients) {
                             const inviteTemplate = getClientGroupSessionTemplate({
                                 participantName: client.name,
@@ -507,7 +564,7 @@ export const createEvent = async (req, res) => {
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
                                 sessionDuration: eventData.duration,
-                                videoLink: savedEvent.guestMeetingUrl || joinUrl,
+                                videoLink: guestLink,
                             });
 
                             const confirmationTemplate = getGroupSessionConfirmationTemplate({
@@ -515,19 +572,13 @@ export const createEvent = async (req, res) => {
                                 sessionName: eventData.serviceName,
                                 sessionDate: eventData.date,
                                 sessionTime: eventData.time,
-                                videoLink: savedEvent.guestMeetingUrl || joinUrl,
+                                videoLink: guestLink,
                             });
 
                             emailPromises.push(
                                 sendEmail(client.email, {
                                     subject: inviteTemplate.subject,
                                     html: inviteTemplate.html,
-                                })
-                            );
-                            emailPromises.push(
-                                sendEmail(client.email, {
-                                    subject: confirmationTemplate.subject,
-                                    html: confirmationTemplate.html,
                                 })
                             );
                         }
@@ -539,18 +590,12 @@ export const createEvent = async (req, res) => {
                             eventTime: eventData.time,
                             eventLocation: eventData.location,
                             serviceName: eventData.serviceName,
-                            videoLink: savedEvent.moderatorMeetingUrl || joinUrl,
+                            videoLink: adminLink,
                         });
 
-                        emailPromises.push(
-                            sendEmail(user.information.email, {
-                                subject: expertTemplate.subject,
-                                html: expertTemplate.html,
-                            })
-                        );
                     }
                 } else {
-                    // Package emails
+                    // Package emails - Send only ONE consolidated email
                     for (const client of formattedClients) {
                         const packageUsageTemplate = getClientPackageSessionTemplate({
                             participantName: client.name,
@@ -560,7 +605,7 @@ export const createEvent = async (req, res) => {
                             sessionDate: eventData.date,
                             sessionTime: eventData.time,
                             sessionDuration: eventData.duration,
-                            videoLink: savedEvent.guestMeetingUrl || joinUrl,
+                            videoLink: guestLink,
                         });
 
                         const appointmentTemplate = getClientAppointmentCreatedTemplate({
@@ -569,15 +614,8 @@ export const createEvent = async (req, res) => {
                             appointmentDate: eventData.date,
                             appointmentTime: eventData.time,
                             appointmentLocation: eventData.location || "Online",
-                            videoLink: savedEvent.guestMeetingUrl || joinUrl,
+                            videoLink: guestLink,
                         });
-
-                        emailPromises.push(
-                            sendEmail(client.email, {
-                                subject: packageUsageTemplate.subject,
-                                html: packageUsageTemplate.html,
-                            })
-                        );
 
                         emailPromises.push(
                             sendEmail(client.email, {
@@ -594,7 +632,7 @@ export const createEvent = async (req, res) => {
                         eventTime: eventData.time,
                         eventLocation: eventData.location,
                         serviceName: eventData.serviceName,
-                        videoLink: savedEvent.moderatorMeetingUrl || joinUrl,
+                        videoLink: adminLink,
                     });
 
                     emailPromises.push(
@@ -632,13 +670,18 @@ export const createEvent = async (req, res) => {
                 const serviceName = eventData.serviceName;
                 const date = eventData.date;
                 const time = eventData.time;
-                const joinLink = savedEvent.videoMeetingUrl || eventData.platform || "Link yakında paylaşılacak";
+
+                // Unified Link Selection for SMS (Prioritize Guest URL)
+                const joinLink = savedEvent.meetingDetails?.guestUrl ||
+                    savedEvent.guestMeetingUrl ||
+                    savedEvent.videoMeetingUrl ||
+                    eventData.platform ||
+                    "Link yakında paylaşılacak";
 
                 for (const client of formattedClients) {
                     const customerDoc = await Customer.findOne({ email: client.email }).select("phone name");
                     if (customerDoc && customerDoc.phone) {
-                        const smsLink = savedEvent.guestMeetingUrl || joinLink;
-                        const smsMessage = `Merhaba ${client.name}, ${expertName} senin için ${serviceName} randevusu oluşturdu. Tarih: ${date} ${time}. Katılım linki: ${smsLink}`;
+                        const smsMessage = `Merhaba ${client.name}, ${expertName} senin için ${serviceName} randevusu oluşturdu. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
                         try {
                             const result = await sendSms(customerDoc.phone, smsMessage);
                             if (result.success) {
@@ -659,6 +702,7 @@ export const createEvent = async (req, res) => {
         res.status(201).json({
             event: event,
             message: "Event created successfully",
+            zoomError: zoomErrorInfo,
             repetitionsScheduled: repetitionJobIds ? true : false,
         });
     } catch (error) {

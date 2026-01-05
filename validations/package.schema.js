@@ -50,7 +50,7 @@ export const createPackageSchema = Joi.object({
     meetingType: Joi.string().valid(...meetingTypes).allow('', null),
     platform: Joi.string().max(200).allow('', null),
     location: Joi.string().max(500).allow('', null),
-    date: Joi.date().allow(null),
+    date: Joi.string().allow('', null),
     time: Joi.string().max(20).allow('', null),
     maxAttendees: Joi.number().integer().min(1).allow(null),
     icon: Joi.string().max(100).default('📦'),
@@ -60,7 +60,7 @@ export const createPackageSchema = Joi.object({
     isAvailable: Joi.boolean().default(true),
     isPurchased: Joi.boolean().default(false),
     isOfflineEvent: Joi.boolean().default(false),
-    validUntil: Joi.date().allow(null),
+    validUntil: Joi.string().allow(null),
     selectedClients: Joi.array().items(selectedClientSchema).default([]),
 });
 
@@ -80,7 +80,7 @@ export const updatePackageSchema = Joi.object({
     meetingType: Joi.string().valid(...meetingTypes).allow('', null),
     platform: Joi.string().max(200).allow('', null),
     location: Joi.string().max(500).allow('', null),
-    date: Joi.date().allow(null),
+    date: Joi.string().allow('', null),
     time: Joi.string().max(20).allow('', null),
     maxAttendees: Joi.number().integer().min(1).allow(null),
     icon: Joi.string().max(100),
@@ -90,7 +90,7 @@ export const updatePackageSchema = Joi.object({
     isAvailable: Joi.boolean(),
     isPurchased: Joi.boolean(),
     isOfflineEvent: Joi.boolean(),
-    validUntil: Joi.date().allow(null),
+    validUntil: Joi.string().allow(null),
     selectedClients: Joi.array().items(selectedClientSchema),
 }).min(1).messages({
     'object.min': 'At least one field must be provided for update',
