@@ -181,13 +181,30 @@ export const createEvent = async (req, res) => {
         let teamsErrorInfo = null;
         const platformLower = (eventData.platform || '').toLowerCase();
 
-        if (platformLower.includes('microsoft teams') || platformLower === 'teams') {
+        console.log('DEBUG: Platform raw:', eventData.platform);
+        console.log('DEBUG: Platform lower:', platformLower);
+        console.log('DEBUG: Condition check:', platformLower.includes('microsoft teams') || platformLower === 'teams');
+
+        if (platformLower.includes('microsoft teams') || platformLower === 'teams' || platformLower === 'microsoft-teams') {
+            console.log('DEBUG: Entered Teams block');
             try {
                 // Use the expert's email as the organizer
-                const organizerEmail = user.information?.email;
+                // PRIORITY: Check if user has a connected Microsoft Calendar and use that email
+                let organizerEmail = user.information?.email;
+
+                if (user.calendarProviders && user.calendarProviders.length > 0) {
+                    const microsoftProvider = user.calendarProviders.find(p => p.provider === 'microsoft' && p.isActive);
+                    if (microsoftProvider && microsoftProvider.email) {
+                        console.log(`🔹 Found connected Microsoft Calendar email: ${microsoftProvider.email}. Using this for Teams meeting.`);
+                        organizerEmail = microsoftProvider.email;
+                    }
+                }
+
                 if (!organizerEmail) {
                     throw new Error('Expert email not found for Teams meeting creation');
                 }
+
+                console.log(`🚀 Attempting to create Teams meeting for organizer: ${organizerEmail}`);
 
                 teamsMeeting = await teamsService.createMeeting({
                     title: eventData.title || eventData.serviceName,
