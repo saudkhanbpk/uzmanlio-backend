@@ -494,12 +494,17 @@ export const getAvailablePackages = async (req, res) => {
  * POST Validate Coupon
  */
 export const validateCoupon = async (req, res) => {
+    console.log("🎫 [Backend] Starting coupon validation", req.body);
     try {
         // Joi Validation
         const { error, value } = validateCouponSchema.validate(req.body);
-        if (error) return res.status(400).json({ error: error.details[0].message });
+        if (error) {
+            console.error("❌ [Backend] Joi Validation error:", error.details[0].message);
+            return res.status(400).json({ error: error.details[0].message });
+        }
 
         const { customerId, couponCode, expertId } = value;
+        console.log(`🔍 [Backend] Validating coupon: ${couponCode} for expert: ${expertId} and customer: ${customerId}`);
 
         const coupon = await Coupon.findOne({
             owner: expertId,
@@ -507,19 +512,26 @@ export const validateCoupon = async (req, res) => {
             status: "active",
         });
 
-        if (!coupon) return res.status(404).json({ error: "Coupon not found or inactive" });
+        if (!coupon) {
+            console.error("❌ [Backend] Coupon not found or inactive");
+            return res.status(404).json({ error: "Coupon not found or inactive" });
+        }
 
         const now = new Date();
         if (coupon.expiryDate && coupon.expiryDate < now) {
+            console.error("❌ [Backend] Coupon has expired");
             return res.status(400).json({ error: "Coupon has expired" });
         }
 
         if (coupon.usageCount >= coupon.maxUsage) {
+            console.error("❌ [Backend] Coupon usage limit reached");
             return res.status(400).json({ error: "Coupon usage limit reached" });
         }
 
-        res.json({ type: coupon.type, value: coupon.value });
+        console.log("✅ [Backend] Coupon validated successfully", { type: coupon.type, value: coupon.value });
+        res.json({ type: coupon.type, value: coupon.value, code: coupon.code });
     } catch (err) {
+        console.error("💥 [Backend] Validation error:", err.message);
         res.status(500).json({ error: err.message });
     }
 };
