@@ -25,12 +25,12 @@ export const createBlogSchema = Joi.object({
     }),
     content: Joi.string().min(4).max(100000).required().messages({
         'any.required': 'Blog content is required',
-        'string.min': 'Content must be at least 10 characters',
+        'string.min': 'Content must be at least 4 characters',
         'string.max': 'Content is too long',
     }),
     excerpt: Joi.string().max(500).allow('', null),
     category: Joi.string().max(100).allow('', null),
-    tags: Joi.array().items(Joi.string().max(50)).max(10).default([]),
+    keywords: Joi.array().items(Joi.string().max(50)).max(10).default([]),
     featuredImage: Joi.string().max(2048).allow('', null),
     status: Joi.string().valid(...blogStatuses).default('draft'),
     metaTitle: Joi.string().max(70).allow('', null),
@@ -44,10 +44,10 @@ export const createBlogSchema = Joi.object({
 
 export const updateBlogSchema = Joi.object({
     title: title,
-    content: Joi.string().min(10).max(100000),
+    content: Joi.string().min(4).max(100000),
     excerpt: Joi.string().max(500).allow('', null),
     category: Joi.string().max(100).allow('', null),
-    tags: Joi.array().items(Joi.string().max(50)).max(10),
+    keywords: Joi.array().items(Joi.string().max(50)).max(10),
     featuredImage: Joi.string().max(2048).allow('', null),
     status: Joi.string().valid(...blogStatuses),
     metaTitle: Joi.string().max(70).allow('', null),
