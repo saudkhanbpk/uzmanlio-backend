@@ -267,16 +267,16 @@ router.get('/admin/all-experts', verifyAccessToken, attachUser, async (req, res)
         // Get aggregated analytics
         const aggregatedData = await getAggregatedExpertAnalytics(expertIds, dateStart, dateEnd);
 
-        // Enrich with expert names
-        const enrichedExperts = await Promise.all(
-            aggregatedData.experts.map(async (exp) => {
-                const expert = await User.findById(exp.expertId).select('information.name information.surname');
-                return {
-                    ...exp,
-                    name: expert ? `${expert.information?.name || ''} ${expert.information?.surname || ''}`.trim() : 'Unknown'
-                };
-            })
+        // Enrich with expert names in a single query
+        const experts = await User.find({ _id: { $in: expertIds } }).select('information.name information.surname');
+        const nameMap = new Map(
+            experts.map(u => [u._id.toString(), `${u.information?.name || ''} ${u.information?.surname || ''}`.trim()])
         );
+
+        const enrichedExperts = aggregatedData.experts.map(exp => ({
+            ...exp,
+            name: nameMap.get(exp.expertId) || 'Unknown'
+        }));
 
         res.json({
             success: true,

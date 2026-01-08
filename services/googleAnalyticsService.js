@@ -269,7 +269,7 @@ export const getInstitutionProfileViewsByPeriod = async (institutionId, period =
 };
 
 /**
- * Get aggregated analytics for multiple experts (admin view)
+ * Get aggregated analytics for multiple experts (admin view) using a single GA4 request
  * @param {Array} expertIds - Array of expert IDs
  * @param {String} startDate - Start date
  * @param {String} endDate - End date
@@ -297,30 +297,94 @@ export const getAggregatedExpertAnalytics = async (expertIds, startDate, endDate
             };
         }
 
-        // Get analytics for each expert
-        const expertsAnalytics = await Promise.all(
-            expertIds.map(async (expertId) => {
-                const result = await getExpertProfileViews(expertId, startDate, endDate);
-                return {
-                    expertId,
-                    totalViews: result.totalViews || 0,
-                    dailyViews: result.dailyViews || [],
-                    success: result.success
-                };
-            })
-        );
+        // Fetch ALL data for the /expert/ paths in ONE request
+        const [response] = await client.runReport({
+            property: `properties/${propertyId}`,
+            dateRanges: [{ startDate, endDate }],
+            dimensions: [
+                { name: 'pagePath' },
+                { name: 'date' }
+            ],
+            metrics: [
+                { name: 'screenPageViews' },
+                { name: 'sessions' }
+            ],
+            dimensionFilter: {
+                filter: {
+                    fieldName: 'pagePath',
+                    stringFilter: {
+                        matchType: 'CONTAINS',
+                        value: '/expert/'
+                    }
+                }
+            }
+        });
 
-        // Calculate totals
-        const totalViews = expertsAnalytics.reduce((sum, exp) => sum + exp.totalViews, 0);
-        const totalSessions = expertsAnalytics.reduce((sum, exp) => {
-            const sessions = exp.dailyViews.reduce((s, day) => s + (day.sessions || 0), 0);
-            return sum + sessions;
-        }, 0);
+        // Map to store accumulated data for each expert we're interested in
+        const expertMap = new Map();
+        expertIds.forEach(id => {
+            expertMap.set(id, {
+                totalViews: 0,
+                totalSessions: 0,
+                dailyViewsMap: new Map() // date -> {views, sessions}
+            });
+        });
+
+        // Process rows and distribute to specific experts
+        if (response.rows) {
+            response.rows.forEach(row => {
+                const pagePath = row.dimensionValues[0].value;
+                const date = row.dimensionValues[1].value;
+                const views = parseInt(row.metricValues[0].value) || 0;
+                const sessions = parseInt(row.metricValues[1].value) || 0;
+
+                // Extract expertId from path (e.g. "/expert/676eb.../profile" or "/expert/676eb...")
+                const parts = pagePath.split('/expert/');
+                if (parts.length > 1) {
+                    const expertId = parts[1].split('/')[0];
+
+                    if (expertMap.has(expertId)) {
+                        const stats = expertMap.get(expertId);
+                        stats.totalViews += views;
+                        stats.totalSessions += sessions;
+
+                        // Daily detail
+                        const dayStats = stats.dailyViewsMap.get(date) || { views: 0, sessions: 0 };
+                        dayStats.views += views;
+                        dayStats.sessions += sessions;
+                        stats.dailyViewsMap.set(date, dayStats);
+                    }
+                }
+            });
+        }
+
+        // Convert Map back to format expected by frontend
+        let grandTotalViews = 0;
+        let grandTotalSessions = 0;
+
+        const expertsAnalytics = Array.from(expertMap.entries()).map(([expertId, stats]) => {
+            grandTotalViews += stats.totalViews;
+            grandTotalSessions += stats.totalSessions;
+
+            // Convert dailyViewsMap to array
+            const dailyViews = Array.from(stats.dailyViewsMap.entries()).map(([date, dStats]) => ({
+                date,
+                views: dStats.views,
+                sessions: dStats.sessions
+            }));
+
+            return {
+                expertId,
+                totalViews: stats.totalViews,
+                dailyViews,
+                success: true
+            };
+        });
 
         return {
             success: true,
-            totalViews,
-            totalSessions,
+            totalViews: grandTotalViews,
+            totalSessions: grandTotalSessions,
             experts: expertsAnalytics,
             startDate,
             endDate
