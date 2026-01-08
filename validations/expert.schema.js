@@ -42,6 +42,22 @@ export const updateProfileSchema = Joi.object({
         }),
     pp: Joi.string().max(500).allow('', null),
     ppFile: Joi.string().max(500).allow('', null),
+    socialMedia: Joi.object({
+        website: url.allow('', null),
+        linkedin: url.allow('', null),
+        twitter: url.allow('', null),
+        instagram: url.allow('', null),
+        youtube: url.allow('', null),
+        tiktok: url.allow('', null),
+        facebook: url.allow('', null),
+    }).allow({}, null),
+    expertPaymentInfo: Joi.object({
+        type: Joi.boolean().default(false),
+        iban: Joi.string().max(34).allow('', null),
+        owner: Joi.string().max(200).allow('', null),
+        taxNumber: Joi.string().max(20).allow('', null),
+        taxOffice: Joi.string().max(200).allow('', null),
+    }).allow({}, null),
 }).min(1);
 
 // ==================== TITLES SCHEMAS ====================
@@ -215,6 +231,22 @@ export const bulkUpdateProfileSchema = Joi.object({
     education: Joi.array().items(educationSchema.append({ id: Joi.string().allow('', null) })),
     certificates: Joi.array().items(certificateSchema.append({ id: Joi.string().allow('', null) })),
     experience: Joi.array().items(experienceSchema.append({ id: Joi.string().allow('', null) })),
+    socialMedia: Joi.object({
+        website: url.allow('', null),
+        linkedin: url.allow('', null),
+        twitter: url.allow('', null),
+        instagram: url.allow('', null),
+        youtube: url.allow('', null),
+        tiktok: url.allow('', null),
+        facebook: url.allow('', null),
+    }).allow({}, null),
+    expertPaymentInfo: Joi.object({
+        type: Joi.boolean().default(false),
+        iban: Joi.string().max(34).allow('', null),
+        owner: Joi.string().max(200).allow('', null),
+        taxNumber: Joi.string().max(20).allow('', null),
+        taxOffice: Joi.string().max(200).allow('', null),
+    }).allow({}, null),
     services: Joi.array().items(Joi.any()), // Services and packages are complex, validated in their own routes
     packages: Joi.array().items(Joi.any()),
 });

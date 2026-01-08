@@ -32,6 +32,7 @@ const orderSchema = new Schema({
     orderDetails: {
         events: [eventSchema],
         totalAmount: { type: Number, required: true },
+        discountAmount: { type: Number, default: 0 },
         orderDate: { type: Date, default: Date.now }
     },
     paymentInfo: {
@@ -65,7 +66,8 @@ const orderSchema = new Schema({
     },
     status: { type: String, default: 'pending', enum: ['pending', "in-Progress", "completed", "cancelled"] },
     orderSource: { type: String, default: null },
-    couponUsage: { type: Boolean, default: false }
+    couponUsage: { type: Boolean, default: false },
+    appliedCoupon: { type: String }
 }, {
     timestamps: true
 });

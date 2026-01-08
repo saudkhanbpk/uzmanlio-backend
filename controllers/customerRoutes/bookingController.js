@@ -177,6 +177,8 @@ export const submitBooking = async (req, res) => {
             time,
             total,
             subtotal,
+            discount,
+            coupon,
             paymentInfo,
             orderNotes,
             termsAccepted,
@@ -302,6 +304,24 @@ export const submitBooking = async (req, res) => {
             offeringDoc = await Package.findById(selectedOffering.id).session(session);
         }
 
+        // 🎫 Increment Coupon Usage if applied
+        if (coupon && (coupon.code || coupon.couponCode)) {
+            const couponCode = coupon.code || coupon.couponCode;
+            console.log(`🎫 [Backend] Incrementing usage for coupon: ${couponCode}`);
+            const couponDoc = await Coupon.findOne({
+                code: couponCode,
+                owner: providerId,
+            }).session(session);
+
+            if (couponDoc) {
+                couponDoc.usageCount = (couponDoc.usageCount || 0) + 1;
+                await couponDoc.save({ session });
+                console.log(`✅ [Backend] Coupon usage incremented to ${couponDoc.usageCount}`);
+            } else {
+                console.warn(`⚠️ [Backend] Coupon ${couponCode} not found for expert ${providerId}`);
+            }
+        }
+
         // Create Order
         const order = await Order.create([{
             orderDetails: {
@@ -327,6 +347,7 @@ export const submitBooking = async (req, res) => {
                     } : undefined,
                 }],
                 totalAmount: total,
+                discountAmount: discount || 0,
             },
             paymentInfo: {
                 method: paymentInfo?.method || "card",
@@ -354,7 +375,9 @@ export const submitBooking = async (req, res) => {
             },
             customerId: customer._id,
             status: "pending",
-            orderSource: "BookingPage"
+            orderSource: "BookingPage",
+            couponUsage: !!coupon,
+            appliedCoupon: coupon?.code || coupon?.couponCode || null,
         }], { session }).then(res => res[0]);
 
         customer.orders.push(order._id);
@@ -439,7 +462,7 @@ export const submitBooking = async (req, res) => {
         res.status(201).json({
             success: true,
             message: "Booking created successfully",
-            data: { customer, appointment, order, note }
+            data: { customer, event, order, note }
         });
 
     } catch (error) {
@@ -494,12 +517,17 @@ export const getAvailablePackages = async (req, res) => {
  * POST Validate Coupon
  */
 export const validateCoupon = async (req, res) => {
+    console.log("🎫 [Backend] Starting coupon validation", req.body);
     try {
         // Joi Validation
         const { error, value } = validateCouponSchema.validate(req.body);
-        if (error) return res.status(400).json({ error: error.details[0].message });
+        if (error) {
+            console.error("❌ [Backend] Joi Validation error:", error.details[0].message);
+            return res.status(400).json({ error: error.details[0].message });
+        }
 
         const { customerId, couponCode, expertId } = value;
+        console.log(`🔍 [Backend] Validating coupon: ${couponCode} for expert: ${expertId} and customer: ${customerId}`);
 
         const coupon = await Coupon.findOne({
             owner: expertId,
@@ -507,19 +535,26 @@ export const validateCoupon = async (req, res) => {
             status: "active",
         });
 
-        if (!coupon) return res.status(404).json({ error: "Coupon not found or inactive" });
+        if (!coupon) {
+            console.error("❌ [Backend] Coupon not found or inactive");
+            return res.status(404).json({ error: "Coupon not found or inactive" });
+        }
 
         const now = new Date();
         if (coupon.expiryDate && coupon.expiryDate < now) {
+            console.error("❌ [Backend] Coupon has expired");
             return res.status(400).json({ error: "Coupon has expired" });
         }
 
         if (coupon.usageCount >= coupon.maxUsage) {
+            console.error("❌ [Backend] Coupon usage limit reached");
             return res.status(400).json({ error: "Coupon usage limit reached" });
         }
 
-        res.json({ type: coupon.type, value: coupon.value });
+        console.log("✅ [Backend] Coupon validated successfully", { type: coupon.type, value: coupon.value });
+        res.json({ type: coupon.type, value: coupon.value, code: coupon.code });
     } catch (err) {
+        console.error("💥 [Backend] Validation error:", err.message);
         res.status(500).json({ error: err.message });
     }
 };
