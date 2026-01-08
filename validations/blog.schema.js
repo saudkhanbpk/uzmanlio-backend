@@ -23,7 +23,7 @@ export const createBlogSchema = Joi.object({
     title: title.required().messages({
         'any.required': 'Blog title is required',
     }),
-    content: Joi.string().min(10).max(100000).required().messages({
+    content: Joi.string().min(4).max(100000).required().messages({
         'any.required': 'Blog content is required',
         'string.min': 'Content must be at least 10 characters',
         'string.max': 'Content is too long',
