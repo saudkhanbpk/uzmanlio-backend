@@ -263,7 +263,7 @@ app.use("/api/expert/:userId/coupons", doubleCsrfProtection, userCouponsRoutes);
 app.use("/api/expert/:userId/emails", doubleCsrfProtection, userEmailsRoutes);
 
 // Booking Page Routes - CSRF protection
-app.use("/api/booking/customers", doubleCsrfProtection, bookingPage);
+app.use("/api/booking/customers", bookingPage);
 
 
 

@@ -67,6 +67,8 @@ const selectedOfferingSchema = Joi.object({
     createdAt: Joi.string().allow('', null),
     updatedAt: Joi.string().allow('', null),
     _id: Joi.string().allow('', null),
+    expertId: Joi.string().allow('', null),
+    __v: Joi.number().allow(null),
     isPurchased: Joi.boolean().allow(null),
     validUntil: Joi.string().allow(null),
     purchasedBy: Joi.array().items(Joi.any()).optional(),

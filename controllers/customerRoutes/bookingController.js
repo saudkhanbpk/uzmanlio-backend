@@ -439,7 +439,7 @@ export const submitBooking = async (req, res) => {
         res.status(201).json({
             success: true,
             message: "Booking created successfully",
-            data: { customer, appointment, order, note }
+            data: { customer, event, order, note }
         });
 
     } catch (error) {

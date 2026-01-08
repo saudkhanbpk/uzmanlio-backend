@@ -40,6 +40,8 @@ export const bookingDataSchema = Joi.object({
         createdAt: Joi.string().allow('', null),
         updatedAt: Joi.string().allow('', null),
         _id: Joi.string().allow('', null),
+        expertId: Joi.string().allow('', null),
+        __v: Joi.number().allow(null),
 
         // 🔽 ADDED (from latest payload)
         isPurchased: Joi.boolean().allow(null),
