@@ -25,6 +25,7 @@ import {
 import { sendSms } from "../services/netgsmService.js";
 import calendarSyncService from "../services/calendarSyncService.js";
 import zoomService from "../services/zoomService.js";
+import teamsService from "../services/teamsService.js";
 
 // Helper function to find user by ID
 const findUserById = async (userId) => {
@@ -175,6 +176,49 @@ export const createEvent = async (req, res) => {
             }
         }
 
+        // --- MICROSOFT TEAMS MEETING INTEGRATION ---
+        let teamsMeeting = null;
+        let teamsErrorInfo = null;
+        const platformLower = (eventData.platform || '').toLowerCase();
+
+        console.log('DEBUG: Platform raw:', eventData.platform);
+        console.log('DEBUG: Platform lower:', platformLower);
+        console.log('DEBUG: Condition check:', platformLower.includes('microsoft teams') || platformLower === 'teams');
+
+        if (platformLower.includes('microsoft teams') || platformLower === 'teams' || platformLower === 'microsoft-teams') {
+            console.log('DEBUG: Entered Teams block');
+            try {
+                // Use the expert's email as the organizer
+                // PRIORITY: Check if user has a connected Microsoft Calendar and use that email
+                let organizerEmail = user.information?.email;
+
+                if (user.calendarProviders && user.calendarProviders.length > 0) {
+                    const microsoftProvider = user.calendarProviders.find(p => p.provider === 'microsoft' && p.isActive);
+                    if (microsoftProvider && microsoftProvider.email) {
+                        console.log(`🔹 Found connected Microsoft Calendar email: ${microsoftProvider.email}. Using this for Teams meeting.`);
+                        organizerEmail = microsoftProvider.email;
+                    }
+                }
+
+                if (!organizerEmail) {
+                    throw new Error('Expert email not found for Teams meeting creation');
+                }
+
+                console.log(`🚀 Attempting to create Teams meeting for organizer: ${organizerEmail}`);
+
+                teamsMeeting = await teamsService.createMeeting({
+                    title: eventData.title || eventData.serviceName,
+                    date: eventData.date,
+                    time: eventData.time,
+                    duration: eventData.duration
+                }, organizerEmail);
+                console.log('✅ Microsoft Teams Meeting Result:', !!teamsMeeting);
+            } catch (teamsError) {
+                console.error("❌ Microsoft Teams integration failed:", teamsError);
+                teamsErrorInfo = teamsError.message;
+            }
+        }
+
         const event = await Event.create({
             expertId: user._id,
             title: eventData.title || eventData.serviceName,
@@ -191,13 +235,29 @@ export const createEvent = async (req, res) => {
             zoomJoinUrl: zoomMeeting?.join_url,
             zoomStartUrl: zoomMeeting?.start_url,
 
-            // Unified Meeting Details
-            meetingDetails: {
-                platform: eventData.platform?.toLowerCase() === 'zoom' ? 'zoom' : (eventData.platform || 'other'),
-                meetingId: zoomMeeting?.id,
-                adminUrl: zoomMeeting?.start_url,
-                guestUrl: zoomMeeting?.join_url,
-                startUrl: zoomMeeting?.start_url
+            // Teams Meeting Fields
+            teamsMeetingId: teamsMeeting?.id,
+            teamsJoinUrl: teamsMeeting?.join_url,
+
+            // Unified Meeting Details - prioritize Teams, then Zoom
+            meetingDetails: teamsMeeting ? {
+                platform: 'microsoft-teams',
+                meetingId: teamsMeeting.id,
+                adminUrl: teamsMeeting.start_url,
+                guestUrl: teamsMeeting.join_url,
+                startUrl: teamsMeeting.start_url
+            } : zoomMeeting ? {
+                platform: 'zoom',
+                meetingId: zoomMeeting.id,
+                adminUrl: zoomMeeting.start_url,
+                guestUrl: zoomMeeting.join_url,
+                startUrl: zoomMeeting.start_url
+            } : {
+                platform: eventData.platform || 'other',
+                meetingId: null,
+                adminUrl: null,
+                guestUrl: null,
+                startUrl: null
             },
 
             eventType: eventData.eventType,
@@ -452,7 +512,19 @@ export const createEvent = async (req, res) => {
         let videoMeetingPlatform = "other";
 
         if (user.calendarProviders && user.calendarProviders.length > 0) {
-            const activeProviders = user.calendarProviders.filter(cp => cp.isActive);
+            let activeProviders = user.calendarProviders.filter(cp => cp.isActive);
+
+            // Prioritize Microsoft provider if platform is Microsoft Teams
+            const platformLower = (eventData.platform || '').toLowerCase();
+            if (platformLower.includes('microsoft teams') || platformLower.includes('teams')) {
+                activeProviders = activeProviders.sort((a, b) => {
+                    if (a.provider === 'microsoft' && b.provider !== 'microsoft') return -1;
+                    if (a.provider !== 'microsoft' && b.provider === 'microsoft') return 1;
+                    return 0;
+                });
+                console.log('🔵 Microsoft Teams selected - prioritizing Microsoft calendar provider');
+            }
+
             if (activeProviders.length > 0) {
                 for (const provider of activeProviders) {
                     try {
@@ -703,6 +775,7 @@ export const createEvent = async (req, res) => {
             event: event,
             message: "Event created successfully",
             zoomError: zoomErrorInfo,
+            teamsError: teamsErrorInfo,
             repetitionsScheduled: repetitionJobIds ? true : false,
         });
     } catch (error) {
@@ -1460,77 +1533,14 @@ export const updateEventStatus = async (req, res) => {
                     }
 
 
+                    // Expert email notification removed as per requirement (only customer gets email)
+                    /*
                     // Send email to expert for each customer
                     for (const recipient of recipients) {
-                        const expertEmailBody = `${recipient.name} ile ${serviceName} randevu talebin onaylandı. Tarih: ${date} ${time}. Katılım linki: ${joinLink}`;
-
-                        // Enhanced HTML template for expert
-                        const expertEmailHTML = `
-                 <!DOCTYPE html>
-                 <html lang="tr">
-                 <head>
-                     <meta charset="UTF-8">
-                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                     <style>
-                         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc; }
-                         .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
-                         .header { background: #4CAF50; padding: 40px 30px; text-align: center; color: white; }
-                         .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
-                         .content { padding: 40px 30px; }
-                         .appointment-card { background: #F3F7F6; border-radius: 12px; padding: 25px; margin: 25px 0; border-left: 4px solid #4CAF50; }
-                         .detail-item { margin: 12px 0; font-size: 15px; }
-                         .detail-label { font-weight: 500; color: #374151; }
-                         .detail-value { color: #1f2937; }
-                         .join-link { background: #4CAF50; color: white; padding: 15px 25px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 500; margin: 20px 0; }
-                         .footer { background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 14px; color: #6b7280; }
-                     </style>
-                 </head>
-                 <body>
-                     <div class="container">
-                         <div class="header">
-                             <h1>✅ Randevu Onaylandı</h1>
-                             <p>Randevu talebi onaylandı</p>
-                         </div>
-                         <div class="content">
-                             <p>Merhaba <strong>${expertName}</strong>,</p>
-                             <p><strong>${recipient.name}</strong> ile <strong>${serviceName}</strong> randevu talebiniz onaylandı.</p>
-                             <div class="appointment-card">
-                                 <div class="detail-item">
-                                     <span class="detail-label">Danışan:</span>
-                                     <span class="detail-value">${recipient.name}</span>
-                                 </div>
-                                 <div class="detail-item">
-                                     <span class="detail-label">Tarih:</span>
-                                     <span class="detail-value">${date}</span>
-                                 </div>
-                                 <div class="detail-item">
-                                     <span class="detail-label">Saat:</span>
-                                     <span class="detail-value">${time}</span>
-                                 </div>
-                                 <div class="detail-item">
-                                     <span class="detail-label">Katılım Linki:</span>
-                                     <span class="detail-value">${joinLink}</span>
-                                 </div>
-                             </div>
-                         </div>
-                         <div class="footer">
-                             <p>Bu otomatik bir mesajdır, lütfen yanıtlamayınız.</p>
-                         </div>
-                     </div>
-                 </body>
-                 </html>
-               `;
-
-
-
-                        await sendEmail(user.information.email, {
-                            subject: 'Randevu Onaylandı',
-                            body: expertEmailBody,
-                            html: expertEmailHTML
-                        });
+                        // ... code removed ...
                     }
+                    */
 
-                    console.log(`✅ Approval email sent to expert: ${user.information.email}`);
 
                 } catch (emailError) {
                     console.error("Error sending approval emails:", emailError);

@@ -1303,6 +1303,13 @@ router.put("/:userId/availability",
       });
     } catch (error) {
       console.error("❌ [Availability Update] Error:", error);
+
+      // Check if it's a Joi validation error (handled by middleware usually, but just in case)
+      if (error.isJoi) {
+        console.error("   - Validation Details:", error.details);
+        return res.status(400).json({ error: "Validation failed", details: error.details });
+      }
+
       res.status(500).json({ error: error.message });
     }
   });
