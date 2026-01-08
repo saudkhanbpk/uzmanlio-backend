@@ -677,13 +677,19 @@ router.post("/refresh-token", validateBody(refreshTokenSchema), async (req, res)
         // Compare with stored token
         if (user.refreshToken !== refreshToken) {
             console.log("  ❌ Token mismatch!");
-            console.log("  - Incoming:", refreshToken.substring(0, 15) + "...");
-            console.log("  - Stored:  ", user.refreshToken ? user.refreshToken.substring(0, 15) + "..." : "NULL");
+            console.log("  - Incoming (length " + refreshToken.length + "):", refreshToken.substring(0, 20) + "..." + refreshToken.substring(refreshToken.length - 10));
+            console.log("  - Stored   (length " + (user.refreshToken ? user.refreshToken.length : 0) + "): ", user.refreshToken ? (user.refreshToken.substring(0, 20) + "..." + user.refreshToken.substring(user.refreshToken.length - 10)) : "NULL");
+
+            // Check if it's the right secret but maybe an old rotation?
+            const incomingPayload = jwt.decode(refreshToken);
+            const storedPayload = user.refreshToken ? jwt.decode(user.refreshToken) : null;
+            console.log("  - Incoming iat:", incomingPayload?.iat);
+            console.log("  - Stored iat:  ", storedPayload?.iat);
 
             return res.status(401).json({
                 success: false,
-                message: "Refresh token has been revoked",
-                code: "TOKEN_REVOKED"
+                message: "Refresh token has been revoked or is out of sync",
+                code: "TOKEN_MISMATCH"
             });
         }
 
