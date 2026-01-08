@@ -138,9 +138,9 @@ export const createCouponSchema = Joi.object({
             'string.max': 'Coupon code must not exceed 30 characters',
             'string.pattern.base': 'Coupon code can only contain uppercase letters, numbers, underscores, and hyphens',
         }),
-    type: Joi.string().valid('percentage', 'fixed').required().messages({
+    type: Joi.string().valid('percentage', 'amount').required().messages({
         'any.required': 'Coupon type is required',
-        'any.only': 'Coupon type must be either "percentage" or "fixed"',
+        'any.only': 'Coupon type must be either "percentage" or "amount"',
     }),
     value: Joi.number().min(0).required().messages({
         'any.required': 'Coupon value is required',
@@ -159,7 +159,7 @@ export const updateCouponSchema = Joi.object({
         .min(3)
         .max(30)
         .pattern(/^[A-Z0-9_-]+$/),
-    type: Joi.string().valid('percentage', 'fixed'),
+    type: Joi.string().valid('percentage', 'amount'),
     value: Joi.number().min(0),
     maxUsage: Joi.number().integer().min(0),
     expiryDate: Joi.date().allow(null),

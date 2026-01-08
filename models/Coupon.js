@@ -5,7 +5,7 @@ const { Schema } = mongoose;
 const CouponSchema = new Schema(
   {
     code: { type: String, required: true },
-    type: { type: String, enum: ["percentage", "fixed"], required: true },
+    type: { type: String, enum: ["percentage", "amount"], required: true },
     value: { type: Number, required: true, min: 0 },
     usageCount: { type: Number, default: 0 },
     maxUsage: { type: Number, default: 0 },
