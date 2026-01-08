@@ -54,7 +54,7 @@ const app = express();
 
 // Cors must be first - Consolidated configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL, // Strictly allow only the specified frontend URL
+  origin: [process.env.FRONTEND_URL, process.env.FRONTEND_URL_2],
   credentials: true
 }));
 
