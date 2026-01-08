@@ -130,7 +130,9 @@ export const getExpertDetails = async (req, res) => {
             .populate("information.country", "name")
             .populate("information.city", "name")
             .populate("information.district", "name")
-            .populate("expertInformation.category", "name");
+            .populate("expertInformation.category", "name")
+            .populate("services")
+            .populate("packages");
 
         if (!user) {
             return res.status(404).json({ error: "User not found" });
