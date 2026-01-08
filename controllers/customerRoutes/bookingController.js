@@ -177,6 +177,8 @@ export const submitBooking = async (req, res) => {
             time,
             total,
             subtotal,
+            discount,
+            coupon,
             paymentInfo,
             orderNotes,
             termsAccepted,
@@ -302,6 +304,24 @@ export const submitBooking = async (req, res) => {
             offeringDoc = await Package.findById(selectedOffering.id).session(session);
         }
 
+        // 🎫 Increment Coupon Usage if applied
+        if (coupon && (coupon.code || coupon.couponCode)) {
+            const couponCode = coupon.code || coupon.couponCode;
+            console.log(`🎫 [Backend] Incrementing usage for coupon: ${couponCode}`);
+            const couponDoc = await Coupon.findOne({
+                code: couponCode,
+                owner: providerId,
+            }).session(session);
+
+            if (couponDoc) {
+                couponDoc.usageCount = (couponDoc.usageCount || 0) + 1;
+                await couponDoc.save({ session });
+                console.log(`✅ [Backend] Coupon usage incremented to ${couponDoc.usageCount}`);
+            } else {
+                console.warn(`⚠️ [Backend] Coupon ${couponCode} not found for expert ${providerId}`);
+            }
+        }
+
         // Create Order
         const order = await Order.create([{
             orderDetails: {
@@ -327,6 +347,7 @@ export const submitBooking = async (req, res) => {
                     } : undefined,
                 }],
                 totalAmount: total,
+                discountAmount: discount || 0,
             },
             paymentInfo: {
                 method: paymentInfo?.method || "card",
@@ -354,7 +375,9 @@ export const submitBooking = async (req, res) => {
             },
             customerId: customer._id,
             status: "pending",
-            orderSource: "BookingPage"
+            orderSource: "BookingPage",
+            couponUsage: !!coupon,
+            appliedCoupon: coupon?.code || coupon?.couponCode || null,
         }], { session }).then(res => res[0]);
 
         customer.orders.push(order._id);
