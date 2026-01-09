@@ -52,10 +52,38 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Cors must be first - Consolidated configuration
+// Cors configuration with validation
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL_2,
+  'https://uzmanlio-v2-frontend.vercel.app',
+  'https://uzmanlio.com',
+  'http://localhost:3000',
+  'http://localhost:5173'
+].filter(origin => origin && origin !== 'undefined');
+
+console.log('🌐 Allowed CORS Origins:', allowedOrigins);
+
 app.use(cors({
-  origin: [process.env.FRONTEND_URL, process.env.FRONTEND_URL_2],
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or same-origin)
+    if (!origin) return callback(null, true);
+
+    const isAllowed = allowedOrigins.some(allowedOrigin =>
+      origin === allowedOrigin ||
+      (allowedOrigin.includes('vercel.app') && origin.endsWith('vercel.app'))
+    );
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`🔒 CORS Blocked: Origin ${origin} not in whitelist`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token', 'X-Requested-With']
 }));
 
 // Performance middleware - must be early in stack
@@ -160,14 +188,27 @@ app.get('/debug/find-file', (req, res) => {
   res.json({ searchName, results });
 });
 
-// MongoDB connection
+// MongoDB connection with improved options for production
 const mongoUrl = process.env.MONGO_URL || "mongodb://localhost:27017";
 const dbName = process.env.DB_NAME || "uzmanlio";
 
+console.log(`🔌 Attempting to connect to MongoDB: ${mongoUrl.split('@').pop()} (DB: ${dbName})`);
+
 mongoose
-  .connect(mongoUrl, { dbName })
+  .connect(mongoUrl, {
+    dbName,
+    serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+    socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+  })
   .then(() => console.log("✅ Connected to MongoDB"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err.message);
+    // In production, we might want to exit if we can't connect to DB
+    if (process.env.NODE_ENV === 'production') {
+      console.error("FATAL: Could not connect to MongoDB in production. Exiting...");
+      // process.exit(1); 
+    }
+  });
 
 // After successful connection, load scheduled emails
 mongoose.connection.once('open', () => {
@@ -319,12 +360,30 @@ app.use((err, req, res, next) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error("Server error:", {
+  const statusCode = err.status || 500;
+  console.error(`🔴 Server Error [${statusCode}]:`, {
     message: err.message,
-    stack: err.stack,
-    url: req.originalUrl
+    url: req.originalUrl,
+    method: req.method,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });
-  res.status(500).json({ error: "Internal Server Error", details: err.message });
+
+  res.status(statusCode).json({
+    success: false,
+    error: statusCode === 500 ? "Internal Server Error" : err.message,
+    details: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Global process error handlers to prevent silent crashes
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("💥 Unhandled Rejection at:", promise, "reason:", reason);
+  // Optional: Graceful shutdown if needed
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("💥 Uncaught Exception:", err);
+  // Optional: Graceful shutdown if needed
 });
 // Start Server
 const PORT = process.env.PORT || 4000;

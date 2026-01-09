@@ -2,6 +2,8 @@ import { BetaAnalyticsDataClient } from '@google-analytics/data';
 import dotenv from 'dotenv';
 
 dotenv.config();
+import path from 'path';
+import fs from 'fs';
 
 /**
  * Google Analytics Service
@@ -29,15 +31,27 @@ const initializeClient = () => {
     const credentialsPath = process.env.GOOGLE_ANALYTICS_CREDENTIALS;
 
     if (!credentialsPath) {
-        console.warn('Google Analytics credentials not configured. Set GOOGLE_ANALYTICS_CREDENTIALS in .env');
+        console.warn('⚠️ Google Analytics credentials not configured. Set GOOGLE_ANALYTICS_CREDENTIALS in .env');
         return null;
     }
 
     try {
+        // Log the absolute path we're trying to use (for debugging)
+        const absolutePath = path.isAbsolute(credentialsPath)
+            ? credentialsPath
+            : path.join(process.cwd(), credentialsPath);
+
+        console.log(`🔍 Initializing GA4 client with: ${absolutePath}`);
+
+        if (!fs.existsSync(absolutePath)) {
+            console.error(`❌ GA4 Credentials file not found at: ${absolutePath}`);
+            return null;
+        }
+
         analyticsDataClient = new BetaAnalyticsDataClient({
-            keyFilename: credentialsPath
+            keyFilename: absolutePath
         });
-        console.log('✅ Google Analytics client initialized');
+        console.log('✅ Google Analytics client initialized successfully');
         return analyticsDataClient;
     } catch (error) {
         console.error('❌ Failed to initialize Google Analytics client:', error.message);
